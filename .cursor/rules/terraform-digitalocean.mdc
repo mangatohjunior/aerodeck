@@ -1,0 +1,83 @@
+---
+description: Terraform / IaC guardrails for AeroDeck. DigitalOcean is the only cloud provider; state must live in an S3-compatible backend (DigitalOcean Spaces). AWS and GCP modules are forbidden.
+globs: packages/iac-engine/**/*.tf,packages/iac-engine/**/*.tfvars,packages/iac-engine/**/*.hcl,**/*.tf
+alwaysApply: false
+---
+
+# Terraform (DigitalOcean) Guardrails
+
+AeroDeck is a GitOps-driven platform that provisions **DigitalOcean only**. All
+infrastructure code lives under `packages/iac-engine/` and is applied by CI, never
+from a laptop. These rules constrain what the IaC engine is allowed to generate.
+
+## 1. Provider allow-list (hard constraint)
+
+- The **only** cloud provider permitted is `digitalocean/digitalocean` (source `digitalocean/digitalocean`, version `>= 2.100.0, < 3.0.0`).
+- Utility providers are allowed when needed: `hashicorp/random`, `hashicorp/tls`, `hashicorp/null`, `hashicorp/time`, `hashicorp/local`, `hashicorp/external`, `hashicorp/http`, `hashicorp/kubernetes`, `hashicorp/helm`, `cloudflare/cloudflare` (DNS only).
+- **Forbidden** — never emit any of the following, even when a user prompt asks for an "equivalent" resource:
+  - Providers: `hashicorp/aws`, `hashicorp/google`, `hashicorp/google-beta`, `hashicorp/azurerm`, `hashicorp/azuread`, `oracle/oci`, `linode/linode`, `vultr/vultr`, `hetznercloud/hcloud`.
+  - Resources/data sources prefixed `aws_`, `google_`, `azurerm_`, `azuread_`, `oci_`.
+  - Registry modules whose source starts with `terraform-aws-modules/`, `terraform-google-modules/`, `Azure/`, `GoogleCloudPlatform/`, or any `cloudposse/*` module that targets AWS.
+- If a request cannot be satisfied with DigitalOcean primitives, stop and explain the gap instead of substituting another cloud.
+
+## 2. Remote state — S3-compatible backend is mandatory
+
+- Every root module MUST declare `backend "s3" {}` (partial configuration) in its `terraform {}` block. Local state (`backend "local"` or no backend) is forbidden outside of `examples/` and unit tests.
+- The backend target is a **DigitalOcean Spaces** bucket. Configure it via a `backend.hcl` file passed with `terraform init -backend-config=backend.hcl`, never by hard-coding credentials in `.tf` files:
+
+```hcl
+# backend.hcl (committed; contains no secrets)
+bucket                      = "aerodeck-tfstate"
+key                         = "<env>/<stack>/terraform.tfstate"
+region                      = "us-east-1"            # placeholder required by the s3 backend; Spaces ignores it
+endpoints                   = { s3 = "https://nyc3.digitaloceanspaces.com" }
+skip_credentials_validation = true
+skip_requesting_account_id  = true
+skip_metadata_api_check     = true
+skip_region_validation      = true
+skip_s3_checksum            = true
+use_path_style              = false
+```
+
+- Credentials are supplied **only** through `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` environment variables (populated from the Spaces access key in CI). Never write `access_key`/`secret_key` into `.tf`, `.tfvars`, or `backend.hcl`.
+- Note: the `s3` backend is built into Terraform core and does not pull the AWS provider; using it does **not** violate rule 1.
+- State keys are namespaced `<environment>/<stack>/terraform.tfstate`. One state file per environment per stack — never share state across environments.
+- Enable bucket versioning on the Spaces bucket (documented in the bootstrap runbook, not managed by the stack that uses it).
+
+## 3. Module & file structure
+
+```
+packages/iac-engine/
+├── main.tf          # terraform {}, backend, provider, root resources/modules
+├── variables.tf     # all inputs, each with description + type + validation where sensible
+├── outputs.tf       # all outputs, each with description
+├── locals.tf        # naming/tagging conventions (optional)
+├── backend.hcl      # non-secret backend config
+├── envs/
+│   ├── dev.tfvars
+│   ├── staging.tfvars
+│   └── prod.tfvars
+└── modules/
+    └── <name>/      # same main/variables/outputs triplet; no nested backends or providers
+```
+
+- Child modules under `modules/` MUST NOT declare `provider` or `backend` blocks; they inherit from the root.
+- Pin `required_version` to `>= 1.6.0, < 2.0.0`. Pin every provider with both lower and upper bounds.
+- Prefer `for_each` over `count` for any collection of resources so additions/removals do not re-index.
+- No `provisioner` blocks (`remote-exec`, `local-exec`) in committed code. Bootstrap via `user_data`/cloud-init or a separate pipeline step.
+
+## 4. Variables, secrets, and tagging
+
+- Every variable has `description` and `type`. Secrets are marked `sensitive = true` and have **no default**.
+- `do_token` is read from `TF_VAR_do_token` / `DIGITALOCEAN_TOKEN` in CI; never committed, never given a default.
+- Constrain free-form inputs with `validation {}` blocks (e.g. `environment` ∈ `dev|staging|prod`, `region` ∈ a known DigitalOcean slug list).
+- All taggable resources get the baseline tags from `local.common_tags`: `aerodeck`, `env:<environment>`, `managed-by:terraform`, `stack:<name>`. DigitalOcean tags are plain strings, so use the `key:value` convention.
+- Resource names follow `aerodeck-<environment>-<component>`.
+
+## 5. Safety rails
+
+- Never generate `terraform apply -auto-approve` for `prod` in pipelines; `prod` applies require a plan artifact and a manual approval environment.
+- Add `lifecycle { prevent_destroy = true }` to stateful resources: `digitalocean_database_cluster`, `digitalocean_spaces_bucket`, `digitalocean_volume`, `digitalocean_kubernetes_cluster`.
+- Database clusters MUST have `private_network_uuid` set (VPC-only); public exposure requires an explicit `digitalocean_database_firewall`.
+- Droplets and clusters MUST be placed in a `digitalocean_vpc`; the default VPC is not acceptable for non-dev environments.
+- Run `terraform fmt -check`, `terraform validate`, and `tflint` (with the `terraform-linters/tflint-ruleset-digitalocean` plugin where available) in CI before plan.

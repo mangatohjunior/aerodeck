@@ -1,0 +1,6 @@
+# Enforce the Epic -> Story taxonomy: every issue must be created from a template.
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/mangatohjunior/aerodeck/security/advisories/new
+    about: Report security issues privately via GitHub Security Advisories, not as public issues.

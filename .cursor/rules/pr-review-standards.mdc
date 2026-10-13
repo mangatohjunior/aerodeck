@@ -1,0 +1,106 @@
+---
+description: Code-quality rubric that the automated AI PR reviewer (.github/workflows/ai-pr-review.yml) enforces on every pull request. Covers SOLID, security, DRY, testing, and IaC hygiene. Also use when a human asks for a code review.
+globs:
+alwaysApply: false
+---
+
+# AeroDeck PR Review Standards
+
+This rubric is the single source of truth for automated and human code review.
+The AI reviewer MUST evaluate every pull request against each section below and
+report findings using the output format in §8. Reviewers do not rewrite code;
+they report, cite, and recommend.
+
+Severity scale:
+
+- **BLOCKER** — must be fixed before merge (security, data loss, broken contract, forbidden provider).
+- **MAJOR** — should be fixed before merge unless the author justifies it in the PR.
+- **MINOR** — style/maintainability; fix now or in a follow-up.
+- **NIT** — optional polish.
+
+## 1. Scope & change hygiene
+
+- The diff does one thing. Unrelated refactors, formatting churn, or drive-by changes → MAJOR; ask to split.
+- PR description references an Issue (`Closes #123`) created from `.github/ISSUE_TEMPLATE/`. Missing link → MINOR.
+- No commented-out code, debug prints, `TODO` without an issue reference, or leftover `breakpoint()` → MINOR (MAJOR if shipped to a runtime path).
+- Generated files, lockfiles, and vendored code are changed only together with their source.
+
+## 2. SOLID principles
+
+- **S — Single Responsibility:** a module/class/function has one reason to change. Routers that contain business logic, or services that format HTTP responses → MAJOR.
+- **O — Open/Closed:** extend behaviour via new classes, strategies, or registrations rather than editing `if/elif` chains on type flags → MINOR (MAJOR if the chain is in a hot path or already > 3 branches).
+- **L — Liskov Substitution:** subclasses/implementations must honour the base contract (no narrowed input types, no `NotImplementedError` in required methods) → MAJOR.
+- **I — Interface Segregation:** dependencies accept the narrowest protocol they need (`typing.Protocol`, ABCs), not god-objects → MINOR.
+- **D — Dependency Inversion:** high-level code depends on abstractions injected via FastAPI `Depends` or constructor args, never on concrete clients instantiated inline → MAJOR.
+
+## 3. DRY & maintainability
+
+- Duplicated logic (≥ ~5 semantically identical lines, or the same validation/mapping in two places) → MAJOR; propose the shared helper and where it should live.
+- Magic numbers/strings used more than once must be named constants or settings → MINOR.
+- Functions > ~50 lines or > 5 parameters → MINOR; suggest decomposition or a parameter object.
+- Public functions/classes have type hints on all parameters and return values → MINOR.
+- Naming follows the project conventions (`snake_case` Python, `kebab-case` resource names, `aerodeck-<env>-<component>` in Terraform) → NIT.
+
+## 4. Security checks (default to BLOCKER)
+
+- Hard-coded secrets, tokens, API keys, private keys, connection strings, or `.env` contents committed → BLOCKER.
+- Injection surfaces: string-built SQL (`f"SELECT ... {x}"`), `shell=True` / string-built shell commands, `eval`/`exec`, unsafe `yaml.load`, `pickle` on untrusted input → BLOCKER.
+- Authentication/authorization bypass: new endpoint without the auth dependency when siblings have it; object access without ownership/tenant check → BLOCKER.
+- Logging sensitive data (passwords, tokens, PII, full request bodies) → MAJOR.
+- Unbounded input: missing `max_length`/`le` constraints on user-supplied fields; file uploads without size/type limits → MAJOR.
+- Insecure defaults: `allow_origins=["*"]`, `verify=False`, `debug=True`, HTTP (not HTTPS) endpoints for external calls → MAJOR (BLOCKER in production config).
+- Dependency changes: new runtime dependency without an upper-bound pin, or a dependency with known critical CVEs → MAJOR.
+- Dockerfiles: running as root, `latest` base tags, secrets passed via `ARG`/`ENV`, missing `HEALTHCHECK` → MAJOR.
+- GitHub Actions: unpinned third-party actions (not SHA-pinned), overly broad `permissions:`, `pull_request_target` with checkout of the PR head → MAJOR (BLOCKER if secrets are exposed to fork code).
+
+## 5. FastAPI / Python specifics
+
+Apply `.cursor/rules/fastapi-architecture.mdc` in full. In particular:
+
+- Pydantic V1 API usage (`class Config`, `@validator`, `.dict()`, `orm_mode`) → MAJOR.
+- Sync DB calls or blocking I/O inside `async def` → MAJOR.
+- Routes missing `response_model` / `status_code`, or returning raw dicts/ORM objects → MINOR.
+- Env vars read outside `Settings` → MAJOR.
+- Business logic in routers; ORM imported in routers → MAJOR.
+
+## 6. Terraform / IaC specifics
+
+Apply `.cursor/rules/terraform-digitalocean.mdc` in full. In particular:
+
+- Any non-DigitalOcean cloud provider, `aws_*`/`google_*`/`azurerm_*` resource, or AWS/GCP registry module → BLOCKER.
+- Missing or local backend; credentials in `.tf`/`.tfvars`/`backend.hcl` → BLOCKER.
+- Unpinned provider/Terraform versions, `count` where `for_each` fits, missing `description` on variables/outputs → MINOR.
+- Stateful resources without `prevent_destroy`; databases without `private_network_uuid` → MAJOR.
+- `-auto-approve` for `prod` in a pipeline → BLOCKER.
+
+## 7. Tests & observability
+
+- Behaviour changes ship with tests (new route → new test module; bug fix → regression test). Missing tests → MAJOR.
+- Tests assert behaviour, not implementation details; no network calls or real cloud resources in unit tests → MINOR.
+- New external calls or background jobs have structured log lines and error handling that preserves the stack (`raise ... from e`) → MINOR.
+- Swallowed exceptions (`except Exception: pass`) → MAJOR.
+
+## 8. Required reviewer output format
+
+The reviewer MUST respond in GitHub-flavoured Markdown using exactly this structure. Keep it concise; one bullet per finding; cite `path:line` from the diff.
+
+```markdown
+## AeroDeck AI Review
+
+**Verdict:** APPROVE | COMMENT | REQUEST_CHANGES
+**Summary:** <2–3 sentences on what the PR does and overall quality>
+
+### Blockers
+- `path/to/file.py:42` — <finding> → <concrete fix>
+
+### Major
+- ...
+
+### Minor / Nits
+- ...
+
+### Rules checked
+- [x] Scope & hygiene  - [x] SOLID  - [x] DRY  - [x] Security  - [x] FastAPI  - [x] Terraform  - [x] Tests
+```
+
+Verdict mapping: any BLOCKER → `REQUEST_CHANGES`; only MAJOR → `REQUEST_CHANGES` unless justified in the PR body; only MINOR/NIT → `COMMENT`; nothing of note → `APPROVE`. If a section has no findings, write `- None`. Do not pad the review with praise or restate the diff.
