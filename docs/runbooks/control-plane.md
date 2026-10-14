@@ -34,7 +34,7 @@ python -c "import hashlib,sys; print(hashlib.sha256(sys.argv[1].encode()).hexdig
 ```bash
 cd apps/control-plane
 alembic upgrade head
-alembic current          # expect 0006 (head)
+alembic current          # expect 0007 (head)
 ```
 
 Without `AERODECK_DATABASE_URL`, `/readyz` reports `database: skipped` and

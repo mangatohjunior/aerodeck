@@ -33,6 +33,8 @@ class Hypervisor(Protocol):
 
     def stop(self, vm_id: str) -> None: ...
 
+    def for_api(self, api_url: str) -> "Hypervisor": ...
+
 
 def image_paths(image: str, image_root: str) -> tuple[Path, Path]:
     """Resolve kernel and rootfs for a declared image. Rejects path traversal."""
@@ -59,6 +61,9 @@ class MemoryHypervisor:
 
     def stop(self, vm_id: str) -> None:
         self.booted.pop(vm_id, None)
+
+    def for_api(self, api_url: str) -> "MemoryHypervisor":
+        return self
 
 
 class FirecrackerHypervisor:
@@ -105,3 +110,6 @@ class FirecrackerHypervisor:
         response = self._client.put(path, json=body)
         if response.status_code >= 400:
             raise SandboxError(f"Firecracker refused {path}: HTTP {response.status_code}")
+
+    def for_api(self, api_url: str) -> "FirecrackerHypervisor":
+        return FirecrackerHypervisor(api_url=api_url, image_root=self._image_root)

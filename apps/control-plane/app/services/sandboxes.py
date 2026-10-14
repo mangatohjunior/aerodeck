@@ -9,8 +9,9 @@ from app.core.logging import get_logger
 from app.models.sandbox import Sandbox, SandboxStatus
 from app.repositories.sandboxes import SandboxRepository
 from app.schemas.sandbox import SandboxCreate
-from app.services.hypervisor import Hypervisor
+from app.services.hypervisor import Hypervisor, SandboxUnavailableError
 from app.services.projects import ProjectService
+from app.services.sandbox_hosts import SandboxHostService
 
 logger = get_logger("services.sandboxes")
 
@@ -24,13 +25,27 @@ def is_expired(expires_at: datetime, *, now: datetime) -> bool:
 
 
 class SandboxService:
-    def __init__(self, sandboxes: SandboxRepository, projects: ProjectService, hypervisor: Hypervisor) -> None:
+    def __init__(
+        self,
+        sandboxes: SandboxRepository,
+        projects: ProjectService,
+        hypervisor: Hypervisor,
+        hosts: SandboxHostService,
+        *,
+        require_host: bool,
+    ) -> None:
         self._sandboxes = sandboxes
         self._projects = projects
         self._hypervisor = hypervisor
+        self._hosts = hosts
+        self._require_host = require_host
 
     async def create(self, project_id: uuid.UUID, data: SandboxCreate) -> Sandbox:
         await self._projects.get(project_id)
+        host = await self._hosts.pick_enrolled()
+        if host is None and self._require_host:
+            raise SandboxUnavailableError("No enrolled sandbox host is available")
+        hypervisor = self._hypervisor.for_api(host.api_url) if host is not None else self._hypervisor
         now = datetime.now(UTC)
         sandbox = await self._sandboxes.add(
             Sandbox(
@@ -41,17 +56,19 @@ class SandboxService:
                 ttl_seconds=data.ttl_seconds,
                 expires_at=now + timedelta(seconds=data.ttl_seconds),
                 status=SandboxStatus.running,
+                host_id=host.id if host is not None else None,
             )
         )
         machine = await run_in_threadpool(
-            self._hypervisor.boot, sandbox.id, sandbox.image, sandbox.vcpu, sandbox.memory_mib
+            hypervisor.boot, sandbox.id, sandbox.image, sandbox.vcpu, sandbox.memory_mib
         )
         sandbox.hypervisor_vm_id = machine.vm_id
         logger.info(
-            "booted sandbox %s image=%s vm=%s ttl=%ds",
+            "booted sandbox %s image=%s vm=%s host=%s ttl=%ds",
             sandbox.id,
             sandbox.image,
             machine.vm_id,
+            host.name if host is not None else "memory",
             sandbox.ttl_seconds,
         )
         return sandbox

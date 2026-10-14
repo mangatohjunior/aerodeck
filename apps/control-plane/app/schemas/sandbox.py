@@ -40,5 +40,6 @@ class SandboxRead(BaseModel):
     ttl_seconds: int
     expires_at: datetime
     status: SandboxStatus
+    host_id: uuid.UUID | None
     created_at: datetime
     updated_at: datetime

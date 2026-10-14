@@ -21,6 +21,7 @@ from app.repositories.environments import EnvironmentRepository
 from app.repositories.jobs import CeleryJobDispatcher
 from app.repositories.projects import ProjectRepository
 from app.repositories.routes import RouteRepository
+from app.repositories.sandbox_hosts import SandboxHostRepository
 from app.repositories.sandboxes import SandboxRepository
 from app.services.acme import AcmeIssuer, FakeAcmeIssuer
 from app.services.auth import AuthenticatedClient, AuthService
@@ -38,6 +39,7 @@ from app.services.hypervisor import FirecrackerHypervisor, Hypervisor, MemoryHyp
 from app.services.jobs import JobDispatcher, JobService
 from app.services.projects import ProjectService
 from app.services.routes import RouteService
+from app.services.sandbox_hosts import SandboxHostService
 from app.services.sandboxes import SandboxService
 
 SettingsDep = Annotated[Settings, Depends(get_settings)]
@@ -79,10 +81,27 @@ def get_hypervisor(settings: SettingsDep) -> Hypervisor:
 HypervisorDep = Annotated[Hypervisor, Depends(get_hypervisor)]
 
 
+def get_sandbox_host_service(session: SessionDep) -> SandboxHostService:
+    return SandboxHostService(SandboxHostRepository(session), SandboxRepository(session))
+
+
+SandboxHostServiceDep = Annotated[SandboxHostService, Depends(get_sandbox_host_service)]
+
+
 def get_sandbox_service(
-    session: SessionDep, projects: ProjectServiceDep, hypervisor: HypervisorDep
+    session: SessionDep,
+    projects: ProjectServiceDep,
+    hypervisor: HypervisorDep,
+    hosts: SandboxHostServiceDep,
+    settings: SettingsDep,
 ) -> SandboxService:
-    return SandboxService(SandboxRepository(session), projects, hypervisor)
+    return SandboxService(
+        SandboxRepository(session),
+        projects,
+        hypervisor,
+        hosts,
+        require_host=settings.sandbox_hypervisor == "firecracker",
+    )
 
 
 SandboxServiceDep = Annotated[SandboxService, Depends(get_sandbox_service)]

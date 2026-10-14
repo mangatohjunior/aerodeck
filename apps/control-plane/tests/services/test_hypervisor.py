@@ -24,6 +24,18 @@ def test_image_paths_rejects_traversal() -> None:
         image_paths("a\\b", "/var/lib/aerodeck/images")
 
 
+def test_memory_for_api_returns_self() -> None:
+    hypervisor = MemoryHypervisor()
+    assert hypervisor.for_api("http://10.0.20.4:8080") is hypervisor
+
+
+def test_firecracker_for_api_binds_the_host_url() -> None:
+    hypervisor = FirecrackerHypervisor(api_url="http://unused", image_root="/var/lib/aerodeck/images")
+    bound = hypervisor.for_api("http://10.0.20.4:8080")
+    assert bound is not hypervisor
+    assert bound._api_url == "http://10.0.20.4:8080"
+
+
 def test_memory_hypervisor_boots_and_stops() -> None:
     hypervisor = MemoryHypervisor()
     sandbox_id = uuid4()

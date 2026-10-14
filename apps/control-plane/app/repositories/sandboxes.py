@@ -38,3 +38,17 @@ class SandboxRepository:
             .order_by(Sandbox.expires_at)
         )
         return rows.all()
+
+    async def count_running_on_host(self, host_id: uuid.UUID) -> int:
+        total = await self._session.scalar(
+            select(func.count()).where(Sandbox.host_id == host_id, Sandbox.status == SandboxStatus.running)
+        )
+        return int(total or 0)
+
+    async def count_running_by_host(self) -> dict[uuid.UUID, int]:
+        rows = await self._session.execute(
+            select(Sandbox.host_id, func.count())
+            .where(Sandbox.status == SandboxStatus.running, Sandbox.host_id.is_not(None))
+            .group_by(Sandbox.host_id)
+        )
+        return {host_id: count for host_id, count in rows.all() if host_id is not None}
