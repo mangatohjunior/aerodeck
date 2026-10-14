@@ -21,7 +21,9 @@ Follow the runbooks; do not invent a parallel procedure.
    versioning. Procedure: [docs/runbooks/terraform-state.md](docs/runbooks/terraform-state.md).
 2. **Local API:** [docs/runbooks/control-plane.md](docs/runbooks/control-plane.md)
    (venv, `.env`, `alembic upgrade head`, uvicorn, Celery worker).
-3. **Board:** [docs/runbooks/issue-workflow.md](docs/runbooks/issue-workflow.md).
+3. **Network:** [docs/runbooks/platform-network.md](docs/runbooks/platform-network.md)
+   (project + private VPC per environment; apply waits for #8).
+4. **Board:** [docs/runbooks/issue-workflow.md](docs/runbooks/issue-workflow.md).
 
 ## Guardrails
 
@@ -33,6 +35,6 @@ Follow the runbooks; do not invent a parallel procedure.
 
 ## Status
 
-Epic 1 (control plane: auth, persistence, Celery/Redis) is on `main`. Epic 2
-starts at storing Terraform state in Spaces (#6), then a project and VPC per
-environment (#7), then CI-only applies (#8).
+Epic 1 (control plane) and #6 (Spaces state) are on `main`. #7 declares the
+project and private VPC per environment (code only; apply waits for a
+DigitalOcean account and #8). Next: CI-only applies (#8).

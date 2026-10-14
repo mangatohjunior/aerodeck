@@ -6,6 +6,9 @@ Remote state: DigitalOcean Spaces via the built-in `s3` backend.
 How to bootstrap the bucket, initialise a stack, and recover a lock:
 **[docs/runbooks/terraform-state.md](../../docs/runbooks/terraform-state.md)**.
 
+Project and private VPC per environment:
+**[docs/runbooks/platform-network.md](../../docs/runbooks/platform-network.md)**.
+
 ```bash
 terraform fmt -check
 terraform init -backend=false

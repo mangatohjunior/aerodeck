@@ -55,25 +55,14 @@ locals {
 }
 
 # --------------------------------------------------------------------------- #
-# Foundational resources
+# Foundational resources — one project and one private VPC per environment
 # --------------------------------------------------------------------------- #
 
-# One DigitalOcean Project per environment. All other resources created by this
-# stack (and by downstream stacks) should attach to it via `project_id`.
-resource "digitalocean_project" "platform" {
-  name        = local.name_prefix
-  description = "AeroDeck ${var.environment} platform resources (managed by Terraform)"
-  purpose     = "Web Application"
-  environment = var.do_project_environment
-}
+module "network" {
+  source = "./modules/network"
 
-# Private network boundary for the environment. Every Droplet, database cluster
-# and Kubernetes cluster MUST be placed in this VPC (never the default VPC).
-resource "digitalocean_vpc" "platform" {
-  name        = "${local.name_prefix}-vpc"
-  region      = var.region
-  ip_range    = var.vpc_ip_range
-  description = "AeroDeck ${var.environment} VPC"
+  name_prefix            = local.name_prefix
+  do_project_environment = var.do_project_environment
+  region                 = var.region
+  vpc_ip_range           = var.vpc_ip_range
 }
-
-# Outputs live in outputs.tf.

@@ -112,5 +112,5 @@ Copy `backend.hcl`, keep the same bucket, change only the `key` at init.
 ## Related stories
 
 - #6 (this runbook) — state in Spaces.
-- #7 — project and private VPC per environment (resources already declared).
+- #7 — project and private VPC per environment ([platform-network.md](platform-network.md)).
 - #8 — apply only from CI; prod requires a stored plan and a human approval.
