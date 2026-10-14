@@ -39,5 +39,5 @@ Follow the runbooks; do not invent a parallel procedure.
 ## Status
 
 Epics 1–2 are on `main` (applies skip until DigitalOcean secrets exist).
-Edge routing (#10) and TLS via DNS-01 (#11) do not need a cloud account
-(fake ACME until Let's Encrypt is configured).
+Edge routing (#10–#12) does not need a cloud account: Traefik routes, fake
+ACME, and in-memory DNS records. Next: Firecracker sandboxes (Epic 4).

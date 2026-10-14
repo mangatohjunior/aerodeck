@@ -73,6 +73,12 @@ class Settings(BaseSettings):
     acme_lifetime_days: int = Field(default=90, ge=1, le=366)
     certificate_renew_before_days: int = Field(default=30, ge=1, le=60)
 
+    # Public address record created and deleted with each route.
+    dns_records_provider: Literal["memory", "digitalocean"] = "memory"
+    dns_record_type: Literal["A", "AAAA", "CNAME"] = "CNAME"
+    dns_record_target: str = "edge.example.com"
+    dns_record_ttl: int = Field(default=300, ge=30, le=86_400)
+
     @field_validator("auth_clients")
     @classmethod
     def _secret_hashes_are_sha256_hex(cls, clients: dict[str, str]) -> dict[str, str]:

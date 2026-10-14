@@ -6,6 +6,7 @@ from app.api.deps import CertificateServiceDep, PaginationDep, RouteServiceDep
 from app.schemas.auth import ErrorResponse
 from app.schemas.certificate import CertificateRead
 from app.schemas.common import Page
+from app.schemas.dns_record import DnsRecordRead
 from app.schemas.route import RouteCreate, RouteRead, RouteUpdate
 
 router = APIRouter(prefix="/projects/{project_id}/routes", tags=["routes"])
@@ -75,6 +76,17 @@ async def update_route(
 )
 async def delete_route(project_id: uuid.UUID, route_id: uuid.UUID, routes: RouteServiceDep) -> None:
     await routes.delete(project_id, route_id)
+
+
+@router.get(
+    "/{route_id}/dns",
+    response_model=DnsRecordRead,
+    status_code=status.HTTP_200_OK,
+    summary="Get the public DNS record for a route",
+    responses=_NOT_FOUND,
+)
+async def get_route_dns(project_id: uuid.UUID, route_id: uuid.UUID, routes: RouteServiceDep) -> DnsRecordRead:
+    return DnsRecordRead.model_validate(await routes.dns_record(project_id, route_id))
 
 
 @router.get(

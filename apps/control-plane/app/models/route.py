@@ -31,3 +31,6 @@ class Route(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     certificate: Mapped["Certificate | None"] = relationship(
         back_populates="route", cascade="all, delete-orphan", uselist=False, passive_deletes=True
     )
+    dns_record: Mapped["DnsRecord | None"] = relationship(
+        back_populates="route", cascade="all, delete-orphan", uselist=False, passive_deletes=True
+    )

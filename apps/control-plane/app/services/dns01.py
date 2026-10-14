@@ -23,19 +23,31 @@ class Dns01Provider(Protocol):
     def cleanup(self, hostname: str) -> None: ...
 
 
-def dns01_target(hostname: str) -> tuple[str, str]:
-    """Return (zone, TXT name) for `_acme-challenge` on hostname.
+def split_zone(hostname: str) -> tuple[str, str]:
+    """Return (zone, relative prefix). Prefix is empty for the zone apex.
 
-    `payments.example.com` → (`example.com`, `_acme-challenge.payments`)
-    `example.com` → (`example.com`, `_acme-challenge`)
+    `payments.example.com` → (`example.com`, `payments`)
+    `example.com` → (`example.com`, ``)
     """
     labels = hostname.rstrip(".").lower().split(".")
     if len(labels) < 2:
-        raise Dns01Error(f"Hostname {hostname!r} has no registrable domain for DNS-01")
+        raise Dns01Error(f"Hostname {hostname!r} has no registrable domain")
     zone = ".".join(labels[-2:])
     prefix = ".".join(labels[:-2])
+    return zone, prefix
+
+
+def dns01_target(hostname: str) -> tuple[str, str]:
+    """Return (zone, TXT name) for `_acme-challenge` on hostname."""
+    zone, prefix = split_zone(hostname)
     name = f"_acme-challenge.{prefix}" if prefix else "_acme-challenge"
     return zone, name
+
+
+def address_record_name(hostname: str) -> tuple[str, str]:
+    """Return (zone, record name) for an A/AAAA/CNAME. Apex uses `@`."""
+    zone, prefix = split_zone(hostname)
+    return zone, prefix if prefix else "@"
 
 
 class MemoryDns01:
