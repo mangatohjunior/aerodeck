@@ -5,6 +5,7 @@ from app.models.certificate import Certificate, CertificateStatus
 from app.models.dns_record import DnsRecord, DnsRecordStatus, DnsRecordType
 from app.models.project import Environment, EnvironmentKind, Project
 from app.models.route import Route
+from app.models.sandbox import Sandbox, SandboxStatus
 
 __all__ = [
     "Base",
@@ -17,4 +18,6 @@ __all__ = [
     "EnvironmentKind",
     "Project",
     "Route",
+    "Sandbox",
+    "SandboxStatus",
 ]

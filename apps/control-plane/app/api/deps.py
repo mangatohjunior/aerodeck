@@ -21,6 +21,7 @@ from app.repositories.environments import EnvironmentRepository
 from app.repositories.jobs import CeleryJobDispatcher
 from app.repositories.projects import ProjectRepository
 from app.repositories.routes import RouteRepository
+from app.repositories.sandboxes import SandboxRepository
 from app.services.acme import AcmeIssuer, FakeAcmeIssuer
 from app.services.auth import AuthenticatedClient, AuthService
 from app.services.certificates import CertificateService
@@ -33,9 +34,11 @@ from app.services.dns_records import (
     MemoryDnsRecords,
 )
 from app.services.environments import EnvironmentService
+from app.services.hypervisor import FirecrackerHypervisor, Hypervisor, MemoryHypervisor, SandboxUnavailableError
 from app.services.jobs import JobDispatcher, JobService
 from app.services.projects import ProjectService
 from app.services.routes import RouteService
+from app.services.sandboxes import SandboxService
 
 SettingsDep = Annotated[Settings, Depends(get_settings)]
 SessionDep = Annotated[AsyncSession, Depends(get_session)]
@@ -62,6 +65,27 @@ def get_project_service(session: SessionDep) -> ProjectService:
 
 
 ProjectServiceDep = Annotated[ProjectService, Depends(get_project_service)]
+
+
+def get_hypervisor(settings: SettingsDep) -> Hypervisor:
+    if settings.sandbox_hypervisor == "firecracker":
+        url = settings.firecracker_api_url.strip()
+        if not url:
+            raise SandboxUnavailableError("AERODECK_FIRECRACKER_API_URL is unset")
+        return FirecrackerHypervisor(api_url=url, image_root=settings.sandbox_image_root)
+    return MemoryHypervisor()
+
+
+HypervisorDep = Annotated[Hypervisor, Depends(get_hypervisor)]
+
+
+def get_sandbox_service(
+    session: SessionDep, projects: ProjectServiceDep, hypervisor: HypervisorDep
+) -> SandboxService:
+    return SandboxService(SandboxRepository(session), projects, hypervisor)
+
+
+SandboxServiceDep = Annotated[SandboxService, Depends(get_sandbox_service)]
 
 
 def get_environment_service(session: SessionDep, projects: ProjectServiceDep) -> EnvironmentService:

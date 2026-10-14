@@ -22,6 +22,7 @@ Follow the runbooks; do not invent a parallel procedure.
 2. **Local API:** [docs/runbooks/control-plane.md](docs/runbooks/control-plane.md)
    (venv, `.env`, `alembic upgrade head`, uvicorn, Celery worker).
    Traefik routes: [docs/runbooks/edge-routing.md](docs/runbooks/edge-routing.md).
+   Sandboxes: [docs/runbooks/sandboxes.md](docs/runbooks/sandboxes.md).
 3. **Network:** [docs/runbooks/platform-network.md](docs/runbooks/platform-network.md)
    (project + private VPC per environment).
 4. **Apply:** [docs/runbooks/iac-apply.md](docs/runbooks/iac-apply.md)
@@ -39,5 +40,5 @@ Follow the runbooks; do not invent a parallel procedure.
 ## Status
 
 Epics 1–2 are on `main` (applies skip until DigitalOcean secrets exist).
-Edge routing (#10–#12) does not need a cloud account: Traefik routes, fake
-ACME, and in-memory DNS records. Next: Firecracker sandboxes (Epic 4).
+Edge routing (#10–#12) and sandbox boot (#14) do not need a cloud account.
+Next: destroy sandboxes on TTL (#15), then enroll hypervisor hosts (#16).
