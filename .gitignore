@@ -33,6 +33,11 @@ override.tf.json
 *.auto.tfvars
 secrets.tfvars
 
+# --- Node (apps/dashboard) ---
+node_modules/
+.next/
+out/
+
 # --- CI artefacts ---
 .aerodeck-review/
 
