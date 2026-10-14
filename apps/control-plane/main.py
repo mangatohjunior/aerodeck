@@ -8,61 +8,26 @@ Run locally:
     uvicorn main:app --reload --port 8000
 """
 
-import logging
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Mapping
 from contextlib import asynccontextmanager
-from functools import lru_cache
-from typing import Annotated, Literal
+from typing import Literal
 
-from fastapi import APIRouter, Depends, FastAPI, Request, status
+from fastapi import APIRouter, FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, ConfigDict, Field
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import BaseModel, ConfigDict
 
-logger = logging.getLogger("aerodeck.control_plane")
+from app.api.deps import SettingsDep
+from app.api.v1.router import api_v1_router
+from app.core.config import Settings, get_settings
+from app.core.errors import AppError
+from app.core.logging import configure_logging, get_logger
+from app.schemas.auth import ErrorResponse
 
-# --------------------------------------------------------------------------- #
-# Settings (the ONLY place environment variables are read)
-# --------------------------------------------------------------------------- #
-
-
-class Settings(BaseSettings):
-    """Runtime configuration, loaded from ``AERODECK_*`` env vars or ``.env``."""
-
-    model_config = SettingsConfigDict(
-        env_prefix="AERODECK_",
-        env_file=".env",
-        env_file_encoding="utf-8",
-        extra="ignore",
-    )
-
-    app_name: str = "AeroDeck Control Plane"
-    version: str = "0.1.0"
-    env: Literal["local", "dev", "staging", "production"] = "local"
-    log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
-
-    # Explicit allow-list; wildcard is only tolerated for local development.
-    cors_origins: list[str] = Field(default_factory=list)
-
-    # Async SQLAlchemy URL, e.g. postgresql+asyncpg://user:pass@host:5432/aerodeck
-    # Optional at this stage; the readiness probe reports "skipped" when unset.
-    database_url: str | None = None
-
-    @property
-    def docs_enabled(self) -> bool:
-        return self.env != "production"
-
-
-@lru_cache
-def get_settings() -> Settings:
-    return Settings()
-
-
-SettingsDep = Annotated[Settings, Depends(get_settings)]
+logger = get_logger("control_plane")
 
 # --------------------------------------------------------------------------- #
-# Schemas (Pydantic V2)
+# Health schemas
 # --------------------------------------------------------------------------- #
 
 
@@ -82,13 +47,6 @@ class ReadinessResponse(BaseModel):
     checks: dict[str, Literal["ok", "failed", "skipped"]]
 
 
-class ErrorResponse(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    detail: str
-    code: str
-
-
 # --------------------------------------------------------------------------- #
 # Lifespan — create/dispose long-lived resources here (DB engine, HTTP clients)
 # --------------------------------------------------------------------------- #
@@ -96,16 +54,12 @@ class ErrorResponse(BaseModel):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    settings = get_settings()
-    logging.basicConfig(
-        level=settings.log_level,
-        format="%(asctime)s %(levelname)s %(name)s %(message)s",
-    )
+    settings: Settings = app.state.settings
+    configure_logging(settings.log_level)
     logger.info("starting %s v%s (env=%s)", settings.app_name, settings.version, settings.env)
 
-    # TODO(control-plane): initialise the async SQLAlchemy engine in app/core/db.py
+    # TODO(#3): initialise the async SQLAlchemy engine in app/core/db.py
     # and store it on app.state.engine; dispose it after yield.
-    app.state.settings = settings
     try:
         yield
     finally:
@@ -139,8 +93,8 @@ async def healthz(settings: SettingsDep) -> HealthResponse:
 async def readyz(settings: SettingsDep) -> JSONResponse:
     checks: dict[str, Literal["ok", "failed", "skipped"]] = {}
 
-    # TODO(control-plane): replace with a real `SELECT 1` through the async
-    # session dependency once app/core/db.py exists.
+    # TODO(#3): replace with a real `SELECT 1` through the async session
+    # dependency once app/core/db.py exists.
     checks["database"] = "skipped" if settings.database_url is None else "ok"
 
     ready = all(v != "failed" for v in checks.values())
@@ -152,14 +106,18 @@ async def readyz(settings: SettingsDep) -> JSONResponse:
 
 
 # --------------------------------------------------------------------------- #
-# Versioned API surface — mount feature routers here (app/api/v1/router.py)
-# --------------------------------------------------------------------------- #
-
-api_v1_router = APIRouter(prefix="/api/v1")
-
-# --------------------------------------------------------------------------- #
 # Application factory
 # --------------------------------------------------------------------------- #
+
+
+def _error_response(
+    status_code: int, detail: str, code: str, headers: Mapping[str, str] | None = None
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=status_code,
+        content=ErrorResponse(detail=detail, code=code).model_dump(),
+        headers=dict(headers) if headers else None,
+    )
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -179,6 +137,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             status.HTTP_500_INTERNAL_SERVER_ERROR: {"model": ErrorResponse},
         },
     )
+    # Dependencies read settings via get_settings(); lifespan reads this so an
+    # injected Settings (tests, tooling) is honoured everywhere.
+    app.state.settings = settings
 
     if settings.cors_origins:
         app.add_middleware(
@@ -189,13 +150,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             allow_headers=["Authorization", "Content-Type"],
         )
 
+    @app.exception_handler(AppError)
+    async def app_error_handler(request: Request, exc: AppError) -> JSONResponse:
+        return _error_response(exc.status_code, exc.detail, exc.code, exc.headers)
+
+    @app.exception_handler(HTTPException)
+    async def http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:
+        return _error_response(exc.status_code, str(exc.detail), f"http_{exc.status_code}", exc.headers)
+
     @app.exception_handler(Exception)
     async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
         logger.exception("unhandled error on %s %s", request.method, request.url.path)
-        return JSONResponse(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            content=ErrorResponse(detail="Internal server error", code="internal_error").model_dump(),
-        )
+        return _error_response(status.HTTP_500_INTERNAL_SERVER_ERROR, "Internal server error", "internal_error")
 
     app.include_router(health_router)
     app.include_router(api_v1_router)
