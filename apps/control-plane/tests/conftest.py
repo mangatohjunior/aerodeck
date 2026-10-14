@@ -1,3 +1,4 @@
+import os
 from collections.abc import AsyncIterator, Callable
 from pathlib import Path
 
@@ -27,10 +28,16 @@ def make_settings(database_url: str | None) -> Settings:
     )
 
 
+# Set AERODECK_TEST_DATABASE_URL (CI does, to a PostgreSQL service) to run the
+# suite against the production driver. Unset, each test gets a file-backed
+# SQLite database so "survives a restart" can still use two app instances.
+TEST_DATABASE_URL = os.environ.get("AERODECK_TEST_DATABASE_URL")
+
+
 @pytest.fixture
 def database_url(tmp_path: Path) -> str:
-    # A file-backed SQLite database so "survives a restart" can be tested with
-    # two separate application instances.
+    if TEST_DATABASE_URL:
+        return TEST_DATABASE_URL
     return f"sqlite+aiosqlite:///{(tmp_path / 'control-plane.db').as_posix()}"
 
 
@@ -53,9 +60,16 @@ def app_factory() -> Callable[[Settings], FastAPI]:
 async def app(settings: Settings, app_factory: Callable[[Settings], FastAPI]) -> AsyncIterator[FastAPI]:
     application = app_factory(settings)
     async with LifespanManager(application):
-        async with application.state.engine.begin() as connection:
+        engine = application.state.engine
+        async with engine.begin() as connection:
+            await connection.run_sync(Base.metadata.drop_all)
             await connection.run_sync(Base.metadata.create_all)
-        yield application
+        try:
+            yield application
+        finally:
+            # A shared PostgreSQL database must be left empty for the next test.
+            async with engine.begin() as connection:
+                await connection.run_sync(Base.metadata.drop_all)
 
 
 @pytest.fixture
