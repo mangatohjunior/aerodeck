@@ -90,8 +90,9 @@ curl -s http://127.0.0.1:8000/api/v1/jobs/<job-id> \
   -H "authorization: Bearer $TOKEN"
 ```
 
-Until the IaC engine is wired (#5/#6), the worker's `NoopProvisioner` succeeds
-and reports `changed: false`.
+The worker's `NoopProvisioner` still succeeds and reports `changed: false`.
+The IaC engine exists, but the worker does not invoke it yet. Deploy leftovers:
+[deploy.md](deploy.md).
 
 Without `AERODECK_REDIS_URL`, job routes return `503 queue_unavailable` and
 `/readyz` reports `queue: skipped`.

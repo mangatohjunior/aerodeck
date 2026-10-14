@@ -225,9 +225,71 @@ EOF
 
 link_epic "${EPIC4}" "${EPIC4_BODY}" "${S4_1}" "${S4_2}" "${S4_3}"
 
+# --------------------------------------------------------------------------- #
+# Epic 5 — Production runtime & hardening
+# --------------------------------------------------------------------------- #
+
+EPIC5_BODY="$(cat <<'EOF'
+Stand up the missing production runtime: compute, data stores, a published image, a real edge, and the operational loops the first four epics left to the operator.
+
+In scope: DigitalOcean compute + Postgres + Redis in the environment VPC, image publish from CI, wiring the worker to the IaC engine, Traefik with real DNS and Let's Encrypt, authenticated reads, scheduled sandbox reap, private-key handling, metrics/alerts, and API-database backups.
+Out of scope: a second cloud provider (no Hetzner/AWS/GCP in packages/iac-engine). Sandbox KVM hosts stay API-enrolled (ADR 0001). Laptop applies stay forbidden.
+EOF
+)"
+
+EPIC5="$(ensure_issue "[EPIC] Production runtime & hardening" "type: epic" "${EPIC5_BODY}")"
+
+S5_1="$(ensure_issue "[STORY] Provision compute, Postgres, and Redis in the environment VPC" "type: story" "$(cat <<'EOF'
+As a platform engineer, I want a Droplet (or App Platform service), managed PostgreSQL, and Redis created in each environment VPC so that the control plane has a place to run without a hand-built box.
+EOF
+)")"
+
+S5_2="$(ensure_issue "[STORY] Publish the control-plane image from CI" "type: story" "$(cat <<'EOF'
+As an SRE, I want apps/control-plane built and pushed on main, tagged by git SHA, so that the environment runtime pulls an immutable image instead of a laptop docker build.
+EOF
+)")"
+
+S5_3="$(ensure_issue "[STORY] Run environment provision jobs through the IaC engine" "type: story" "$(cat <<'EOF'
+As an SRE, I want POST /api/v1/projects/{id}/environments/{id}/provision to run the IaC engine from the worker so that environment jobs change real infrastructure instead of reporting changed: false.
+EOF
+)")"
+
+S5_4="$(ensure_issue "[STORY] Run Traefik in the VPC with real DNS and Let's Encrypt" "type: story" "$(cat <<'EOF'
+As an application developer, I want Traefik running in the environment VPC with DigitalOcean DNS and Let's Encrypt so that published hostnames terminate real HTTPS without the fake ACME issuer.
+EOF
+)")"
+
+S5_5="$(ensure_issue "[STORY] Require a token on control-plane reads" "type: story" "$(cat <<'EOF'
+As a platform engineer, I want GET of projects, routes, sandboxes, and related resources to require a token so that the API is safe to put on the internet.
+EOF
+)")"
+
+S5_6="$(ensure_issue "[STORY] Reap expired sandboxes on a schedule" "type: story" "$(cat <<'EOF'
+As an SRE, I want expired sandboxes torn down on a schedule so that hypervisor capacity returns without someone calling POST /sandboxes/reap-expired.
+EOF
+)")"
+
+S5_7="$(ensure_issue "[STORY] Keep certificate private keys off the API database" "type: story" "$(cat <<'EOF'
+As a platform engineer, I want TLS private keys stored where Traefik can read them, not in the control-plane database, so that a database dump does not leak every issued key.
+EOF
+)")"
+
+S5_8="$(ensure_issue "[STORY] Emit metrics and alerts for readiness, applies, and reaps" "type: story" "$(cat <<'EOF'
+As an SRE, I want metrics and alerts on /readyz, IaC apply failures, and sandbox reap errors so that a silent outage is visible without tailing container logs.
+EOF
+)")"
+
+S5_9="$(ensure_issue "[STORY] Back up the control-plane database" "type: story" "$(cat <<'EOF'
+As an SRE, I want a versioned backup of the control-plane PostgreSQL database so that API state can be restored the same way Terraform state is restored from Spaces.
+EOF
+)")"
+
+link_epic "${EPIC5}" "${EPIC5_BODY}" "${S5_1}" "${S5_2}" "${S5_3}" "${S5_4}" "${S5_5}" "${S5_6}" "${S5_7}" "${S5_8}" "${S5_9}"
+
 echo
 echo "Backlog ready in ${REPO}:"
 echo "  Epic #${EPIC1}  stories #${S1_1} #${S1_2} #${S1_3}"
 echo "  Epic #${EPIC2}  stories #${S2_1} #${S2_2} #${S2_3}"
 echo "  Epic #${EPIC3}  stories #${S3_1} #${S3_2} #${S3_3}"
 echo "  Epic #${EPIC4}  stories #${S4_1} #${S4_2} #${S4_3}"
+echo "  Epic #${EPIC5}  stories #${S5_1} #${S5_2} #${S5_3} #${S5_4} #${S5_5} #${S5_6} #${S5_7} #${S5_8} #${S5_9}"

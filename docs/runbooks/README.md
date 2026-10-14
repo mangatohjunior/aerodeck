@@ -5,6 +5,7 @@ chat history.
 
 | Runbook | When to use it |
 | ------- | -------------- |
+| [Deploy](deploy.md) | What is left to get this into DigitalOcean; operator checklist and production gaps. |
 | [Control plane](control-plane.md) | Run the API, worker, and tests locally; apply Alembic migrations. |
 | [Edge routing](edge-routing.md) | Declare hostnames; Traefik snapshot, DNS records, DNS-01 certs. |
 | [Sandboxes](sandboxes.md) | Boot a Firecracker microVM; reap on TTL; enroll hypervisor hosts. |

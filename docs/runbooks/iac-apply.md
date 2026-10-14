@@ -21,6 +21,9 @@ If `DIGITALOCEAN_TOKEN`, `SPACES_ACCESS_KEY_ID`, and `SPACES_SECRET_ACCESS_KEY`
 are all unset, plan and apply **skip** so pull requests stay green. If only
 some of them are set, the workflow fails (misconfiguration).
 
+Full operator sequence (account → secrets → first apply → runtime that is
+not in Terraform yet): [deploy.md](deploy.md).
+
 ## Operator setup (once)
 
 1. Create the `aerodeck-tfstate` Spaces bucket with versioning

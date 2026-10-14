@@ -8,6 +8,7 @@ in a DigitalOcean Spaces bucket. Applies run in CI, never from a laptop.
 
 ```
 apps/control-plane/     FastAPI API, Celery worker, Alembic migrations
+apps/dashboard/         Next.js operator UI (TypeScript, App Router, Tailwind)
 packages/iac-engine/    Terraform root module (DigitalOcean + Spaces backend)
 docs/runbooks/          How to run, recover, and operate the platform
 .github/workflows/      Tests, IaC validate, issue board, AI PR review
@@ -17,16 +18,22 @@ docs/runbooks/          How to run, recover, and operate the platform
 
 Follow the runbooks; do not invent a parallel procedure.
 
-1. **Operator, once:** create the `aerodeck-tfstate` Spaces bucket with
-   versioning. Procedure: [docs/runbooks/terraform-state.md](docs/runbooks/terraform-state.md).
+Stories #1–#16 are on `main`. The backlog is empty; the platform is not
+deployed until an operator finishes
+[docs/runbooks/deploy.md](docs/runbooks/deploy.md).
+
+1. **Deploy (operator):** [docs/runbooks/deploy.md](docs/runbooks/deploy.md)
+   — DigitalOcean account, Spaces bucket, GitHub secrets, first apply
+   (project + VPC only), then the control-plane runtime that Terraform
+   does not create yet.
 2. **Local API:** [docs/runbooks/control-plane.md](docs/runbooks/control-plane.md)
    (venv, `.env`, `alembic upgrade head`, uvicorn, Celery worker).
    Traefik routes: [docs/runbooks/edge-routing.md](docs/runbooks/edge-routing.md).
    Sandboxes: [docs/runbooks/sandboxes.md](docs/runbooks/sandboxes.md).
-3. **Network:** [docs/runbooks/platform-network.md](docs/runbooks/platform-network.md)
-   (project + private VPC per environment).
-4. **Apply:** [docs/runbooks/iac-apply.md](docs/runbooks/iac-apply.md)
-   (plan in Actions; apply only on main; prod needs approval).
+3. **Dashboard (local):** `cd apps/dashboard && npm install && npm run dev`
+   — Next.js on http://localhost:3000. Not wired to the control plane yet.
+4. **Network / apply detail:** [platform-network.md](docs/runbooks/platform-network.md),
+   [iac-apply.md](docs/runbooks/iac-apply.md).
 5. **Board:** [docs/runbooks/issue-workflow.md](docs/runbooks/issue-workflow.md).
 
 ## Guardrails
@@ -39,7 +46,7 @@ Follow the runbooks; do not invent a parallel procedure.
 
 ## Status
 
-Epics 1–2 are on `main` (applies skip until DigitalOcean secrets exist).
-Edge routing (#10–#12) and sandboxes (#14–#16) do not need a cloud account.
-Host enrollment is an API call; do not add Hetzner (or any other cloud) to
-`packages/iac-engine`.
+Stories #1–#16 are on `main`. Production gaps are Epic
+[#31](https://github.com/mangatohjunior/aerodeck/issues/31)
+([docs/runbooks/deploy.md](docs/runbooks/deploy.md)). IaC plan/apply
+**skips** until DigitalOcean and Spaces secrets exist.
