@@ -44,12 +44,12 @@ assignees: []
 
 <!-- Implementation guidance for whoever (human or AI) picks this up. Be concrete about where code lands. -->
 
-- **Affected components:** `apps/control-plane` / `packages/iac-engine` / `.github/workflows` (delete as appropriate)
+- **Affected components:** `apps/control-plane` / `apps/dashboard` / `packages/iac-engine` / `.github/workflows` (delete as appropriate)
 - **API changes:** <new/changed endpoints under /api/v1, request/response schemas>
 - **Data model / migrations:** <tables, Alembic migration needed?>
 - **Infrastructure:** <DigitalOcean resources, Terraform variables, state key>
 - **Config / secrets:** <new `AERODECK_*` settings or CI secrets; never commit values>
-- **Guardrails to respect:** `.cursor/rules/fastapi-architecture.mdc`, `.cursor/rules/terraform-digitalocean.mdc`
+- **Guardrails to respect:** `.cursor/rules/fastapi-architecture.mdc`, `.cursor/rules/nextjs-dashboard.mdc`, `.cursor/rules/terraform-digitalocean.mdc`
 - **Open questions:**
 
 ## Test plan

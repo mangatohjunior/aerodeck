@@ -39,7 +39,8 @@ deployed until an operator finishes
 ## Guardrails
 
 - `.cursor/rules/fastapi-architecture.mdc` — Pydantic V2, async sessions,
-  router → service → repository.
+  Celery/Redis, SSE logs, router → service → repository.
+- `.cursor/rules/nextjs-dashboard.mdc` — App Router, shadcn/ui, mock-first UI.
 - `.cursor/rules/terraform-digitalocean.mdc` — DigitalOcean only, Spaces
   backend, no AWS/GCP modules.
 - `.cursor/rules/pr-review-standards.mdc` — rubric for the AI PR reviewer.

@@ -10,7 +10,17 @@ obtains a token in the first place. Its ``/me`` route protects itself.
 from fastapi import APIRouter
 
 from app.api.deps import MUTATION_GUARD
-from app.api.v1.routers import auth, edge, environments, jobs, projects, routes, sandbox_hosts, sandboxes
+from app.api.v1.routers import (
+    auth,
+    deployments,
+    edge,
+    environments,
+    jobs,
+    projects,
+    routes,
+    sandbox_hosts,
+    sandboxes,
+)
 
 api_v1_router = APIRouter(prefix="/api/v1")
 api_v1_router.include_router(auth.router)
@@ -22,3 +32,4 @@ api_v1_router.include_router(sandboxes.platform_router, dependencies=MUTATION_GU
 api_v1_router.include_router(sandbox_hosts.router, dependencies=MUTATION_GUARD)
 api_v1_router.include_router(edge.router)
 api_v1_router.include_router(jobs.router)
+api_v1_router.include_router(deployments.router)

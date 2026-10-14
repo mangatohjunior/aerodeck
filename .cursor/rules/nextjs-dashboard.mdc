@@ -1,0 +1,59 @@
+---
+description: Next.js operator dashboard guardrails. Enforces App Router, Tailwind, shadcn/ui, and mock-first UI (simulate deploy state and SSE logs before wiring FastAPI).
+globs: apps/dashboard/**/*.{ts,tsx,css,json}
+alwaysApply: false
+---
+
+# Next.js Dashboard Guardrails
+
+These rules apply to `apps/dashboard`. They are non-negotiable unless an ADR
+in `docs/adr/` explicitly supersedes them.
+
+## 1. Stack
+
+- **Next.js App Router only.** No `pages/` directory, no `getServerSideProps`, no `getInitialProps`.
+- TypeScript strict. Path alias `@/*` → `src/*`.
+- Styling: Tailwind CSS. Components: **shadcn/ui** (`Button`, `Card`, `Input`, `Label`, `Badge`, `Separator`, and later additions). Do not invent a parallel component kit.
+- Icons: `lucide-react`. Do not add a second icon package.
+- Fonts: the project Geist / Geist Mono CSS variables already wired in `src/app/layout.tsx`.
+
+## 2. Layout & routing
+
+```
+apps/dashboard/src/
+├── app/                    # routes, layout, globals.css
+├── components/             # feature components + components/ui (shadcn)
+└── lib/                    # utils, mock clients, typed domain objects
+```
+
+- Shell (sidebar + main) wraps the operator console. Navigation is explicit: New Deployment, Deployment Status, later Projects / Sandboxes.
+- Interactive deploy state lives in Client Components. Do not mark the root layout `"use client"` just to hold form state.
+- Responsive: sidebar is a fixed column on `md+`; hamburger + overlay on smaller viewports.
+
+## 3. Mock-first development (hard constraint)
+
+The dashboard **simulates** control-plane behaviour until a Story says to wire FastAPI.
+
+- **Forbidden until that Story ships:** `fetch` / `axios` / `ky` to the FastAPI origin, EventSource against `/api/v1`, embedding `AERODECK_*` API URLs in client bundles, or copying JWT handling into the browser.
+- **Required instead:** a typed mock in `src/lib/` (e.g. `mockCreateDeployment`) that `await`s a `setTimeout` and returns a `Deployment`. Treat this as the contract the real client will later honour.
+- Clicking **Deploy** must transition local React state from the New Deployment form to the Deployment Status view. Do not navigate away with a full page load for that transition.
+- The **Terminal** component simulates an SSE stream with `useEffect` + `setTimeout` (or an async generator). Same event shape as the control-plane stub: lines such as `Initializing Terraform...`, `Provisioning K3s...`, `Done`.
+- When the real SSE endpoint is wired, replace only the mock client. The Terminal still renders `data:` lines; it does not grow FastAPI-specific parsing.
+
+## 4. UI conventions
+
+- New Deployment: GitHub URL `Input` + **Deploy** `Button` inside a `Card`. Validate `github.com` / `www.github.com` owner/repo locally before the mock POST.
+- Deployment Status: id, repo, started-at, status `Badge`, and the Terminal (black background, monospace green text, `role="log"`).
+- Empty / error / submitting states are first-class. Do not leave a spinner as the only feedback.
+- No hardcoded secrets, tokens, or DigitalOcean credentials in client code or `.env*` committed to git.
+
+## 5. Data types
+
+- Domain types (`Deployment`, `DeploymentStatus`, log events) live in `src/lib/`, not inline in JSX.
+- Prefer discriminated unions for view state (`"new" | "status"`) over boolean flags.
+- Do not reuse API response shapes from the control plane until the wire-up Story; keep the mock types small and documented.
+
+## 6. Testing & verification
+
+- Behaviour changes are verified in the browser (form → mock POST → status → streamed lines → Succeeded) and on a narrow viewport (hamburger nav).
+- When a test runner is added, mock the lib client; do not hit localhost:8000 from unit tests.
