@@ -13,16 +13,25 @@ from app.core.config import Settings, get_settings
 from app.core.db import get_session
 from app.core.errors import InvalidTokenError, QueueUnavailableError
 from app.core.queue import create_celery_app
+from app.models.dns_record import DnsRecordType
+from app.repositories.certificates import CertificateRepository
 from app.repositories.clients import ClientRepository, SettingsClientRepository
+from app.repositories.dns_records import DnsRecordRepository
 from app.repositories.environments import EnvironmentRepository
 from app.repositories.jobs import CeleryJobDispatcher
 from app.repositories.projects import ProjectRepository
-from app.repositories.certificates import CertificateRepository
 from app.repositories.routes import RouteRepository
 from app.services.acme import AcmeIssuer, FakeAcmeIssuer
 from app.services.auth import AuthenticatedClient, AuthService
 from app.services.certificates import CertificateService
 from app.services.dns01 import DigitalOceanDns01, Dns01Provider, Dns01UnavailableError, MemoryDns01
+from app.services.dns_records import (
+    DigitalOceanDnsRecords,
+    DnsRecordPublisher,
+    DnsRecordService,
+    DnsRecordUnavailableError,
+    MemoryDnsRecords,
+)
 from app.services.environments import EnvironmentService
 from app.services.jobs import JobDispatcher, JobService
 from app.services.projects import ProjectService
@@ -62,10 +71,42 @@ def get_environment_service(session: SessionDep, projects: ProjectServiceDep) ->
 EnvironmentServiceDep = Annotated[EnvironmentService, Depends(get_environment_service)]
 
 
+def get_dns_record_publisher(settings: SettingsDep) -> DnsRecordPublisher:
+    if settings.dns_records_provider == "digitalocean":
+        token = settings.digitalocean_token
+        if token is None:
+            raise DnsRecordUnavailableError("AERODECK_DIGITALOCEAN_TOKEN is unset")
+        return DigitalOceanDnsRecords(token.get_secret_value())
+    return MemoryDnsRecords()
+
+
+DnsRecordPublisherDep = Annotated[DnsRecordPublisher, Depends(get_dns_record_publisher)]
+
+
+def get_dns_record_service(
+    session: SessionDep, publisher: DnsRecordPublisherDep, settings: SettingsDep
+) -> DnsRecordService:
+    return DnsRecordService(
+        DnsRecordRepository(session),
+        publisher,
+        record_type=DnsRecordType(settings.dns_record_type),
+        data=settings.dns_record_target,
+        ttl=settings.dns_record_ttl,
+    )
+
+
+DnsRecordServiceDep = Annotated[DnsRecordService, Depends(get_dns_record_service)]
+
+
 def get_route_service(
-    session: SessionDep, projects: ProjectServiceDep, environments: EnvironmentServiceDep
+    session: SessionDep,
+    projects: ProjectServiceDep,
+    environments: EnvironmentServiceDep,
+    dns_records: DnsRecordServiceDep,
 ) -> RouteService:
-    return RouteService(RouteRepository(session), projects, environments, CertificateRepository(session))
+    return RouteService(
+        RouteRepository(session), projects, environments, CertificateRepository(session), dns_records
+    )
 
 
 RouteServiceDep = Annotated[RouteService, Depends(get_route_service)]

@@ -6,10 +6,12 @@ from sqlalchemy.exc import IntegrityError
 from app.core.errors import ConflictError, NotFoundError
 from app.core.logging import get_logger
 from app.models.certificate import Certificate, CertificateStatus
+from app.models.dns_record import DnsRecord
 from app.models.route import Route
 from app.repositories.certificates import CertificateRepository
 from app.repositories.routes import RouteRepository
 from app.schemas.route import RouteCreate, RouteUpdate, TraefikConfiguration
+from app.services.dns_records import DnsRecordService
 from app.services.environments import EnvironmentService
 from app.services.projects import ProjectService
 from app.services.traefik import TlsMaterial, render_traefik_http
@@ -24,11 +26,13 @@ class RouteService:
         projects: ProjectService,
         environments: EnvironmentService,
         certificates: CertificateRepository,
+        dns_records: DnsRecordService,
     ) -> None:
         self._routes = routes
         self._projects = projects
         self._environments = environments
         self._certificates = certificates
+        self._dns = dns_records
 
     async def create(self, project_id: uuid.UUID, data: RouteCreate) -> Route:
         await self._projects.get(project_id)
@@ -42,6 +46,8 @@ class RouteService:
         await self._certificates.add(
             Certificate(route_id=route.id, hostname=route.hostname, status=CertificateStatus.pending)
         )
+        if route.enabled:
+            await self._dns.publish(route)
         logger.info("created route %s (%s)", route.hostname, route.id)
         return route
 
@@ -64,10 +70,16 @@ class RouteService:
             existing = await self._routes.get_by_hostname(new_hostname)
             if existing is not None and existing.id != route.id:
                 raise ConflictError(f"Hostname {new_hostname!r} is already routed")
+        hostname_changed = new_hostname is not None and new_hostname != route.hostname
+        enabled_changed = "enabled" in changes and changes["enabled"] != route.enabled
+        if hostname_changed or (enabled_changed and route.enabled):
+            await self._dns.unpublish(route)
         for field, value in changes.items():
             setattr(route, field, value)
-        if new_hostname is not None:
+        if hostname_changed:
             await self._reset_certificate(route)
+        if route.enabled and (hostname_changed or enabled_changed):
+            await self._dns.publish(route)
         return route
 
     async def _reset_certificate(self, route: Route) -> None:
@@ -87,8 +99,13 @@ class RouteService:
 
     async def delete(self, project_id: uuid.UUID, route_id: uuid.UUID) -> None:
         route = await self.get(project_id, route_id)
+        await self._dns.unpublish(route)
         await self._routes.delete(route)
         logger.info("deleted route %s (%s)", route.hostname, route.id)
+
+    async def dns_record(self, project_id: uuid.UUID, route_id: uuid.UUID) -> DnsRecord:
+        await self.get(project_id, route_id)
+        return await self._dns.require_for_route(route_id)
 
     async def traefik_configuration(self) -> TraefikConfiguration:
         routes = await self._routes.list_enabled()

@@ -1,8 +1,9 @@
 # Edge routing (Traefik)
 
 The control plane is the source of Traefik routes. Declare a hostname on a
-project; Traefik pulls the HTTP provider snapshot. Certificates are issued
-through DNS-01 (this runbook). DNS *address* records are #12.
+project; Traefik pulls the HTTP provider snapshot. Certificates use DNS-01.
+Creating or deleting a route also publishes or withdraws the public address
+record so DNS matches what the API (and Git) declared.
 
 No DigitalOcean account is required. Traefik can run against a laptop API.
 
@@ -25,7 +26,8 @@ curl -s -X POST http://127.0.0.1:8000/api/v1/projects/<project-id>/routes \
 ```
 
 Hostnames are unique platform-wide. `enabled: false` keeps the row but drops it
-from Traefik. Mutations need a token; `GET /api/v1/projects/{id}/routes` does not.
+from Traefik and withdraws the public DNS record. Mutations need a token;
+`GET /api/v1/projects/{id}/routes` does not.
 
 ## Traefik HTTP provider
 
@@ -56,6 +58,27 @@ providers:
 
 Point `backend_host` at a name or address Traefik can reach (Docker service
 name, private VPC IP). Until DigitalOcean exists, use a local process.
+
+## Public DNS records
+
+Creating an enabled route publishes an address record for its hostname.
+Deleting the route, renaming it, or setting `enabled: false` withdraws that
+record. Inspect it:
+
+```bash
+curl -s http://127.0.0.1:8000/api/v1/projects/<project-id>/routes/<route-id>/dns
+```
+
+| Setting | Default | Role |
+| ------- | ------- | ---- |
+| `AERODECK_DNS_RECORDS_PROVIDER` | `memory` | In-process store, or `digitalocean` |
+| `AERODECK_DNS_RECORD_TYPE` | `CNAME` | `A`, `AAAA`, or `CNAME` |
+| `AERODECK_DNS_RECORD_TARGET` | `edge.example.com` | Value the hostname should resolve to (Traefik) |
+| `AERODECK_DNS_RECORD_TTL` | `300` | TTL in seconds |
+| `AERODECK_DIGITALOCEAN_TOKEN` | unset | Required when the provider is `digitalocean` |
+
+`memory` needs no cloud account. DigitalOcean uses the Domains API
+(`POST/DELETE /v2/domains/{zone}/records`). Apex hostnames use `@`.
 
 ## Certificates (DNS-01)
 
@@ -90,7 +113,6 @@ the fake issuer still exercises the DNS-01 path.
 
 ## What this does not do
 
-- Create A/AAAA DNS records (#12).
 - Talk to Let's Encrypt until an account is configured.
 - `terraform apply` a Traefik Droplet. Applies stay in CI
   ([iac-apply.md](iac-apply.md)).
@@ -98,5 +120,5 @@ the fake issuer still exercises the DNS-01 path.
 ## Related
 
 - #10 — route declarations.
-- #11 — TLS from DNS (this section).
-- #12 — DNS record lifecycle.
+- #11 — TLS from DNS-01.
+- #12 — public DNS records (this section).
