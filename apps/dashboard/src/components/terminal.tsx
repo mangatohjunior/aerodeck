@@ -2,11 +2,10 @@
 
 import { useEffect, useRef, useState } from "react";
 
-import { DEPLOY_LOG_EVENTS } from "@/lib/mock-deploy";
 import { cn } from "@/lib/utils";
 
 type TerminalProps = {
-  active: boolean;
+  streamUrl: string;
   className?: string;
   onComplete?: () => void;
 };
@@ -16,7 +15,7 @@ function stamp(text: string) {
   return `${time}  ${text}`;
 }
 
-export function Terminal({ active, className, onComplete }: TerminalProps) {
+export function Terminal({ streamUrl, className, onComplete }: TerminalProps) {
   const [lines, setLines] = useState<string[]>([]);
   const [streaming, setStreaming] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -24,49 +23,29 @@ export function Terminal({ active, className, onComplete }: TerminalProps) {
   onCompleteRef.current = onComplete;
 
   useEffect(() => {
-    if (!active) {
-      setLines([]);
-      setStreaming(false);
-      return;
-    }
-
     setLines([]);
     setStreaming(true);
 
-    let cancelled = false;
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    let index = 0;
+    const source = new EventSource(streamUrl);
 
-    const printNext = () => {
-      if (cancelled) {
-        return;
-      }
-      if (index >= DEPLOY_LOG_EVENTS.length) {
+    source.onmessage = (event) => {
+      setLines((prev) => [...prev, stamp(event.data)]);
+      if (event.data === "Done") {
         setStreaming(false);
+        source.close();
         onCompleteRef.current?.();
-        return;
       }
-
-      const event = DEPLOY_LOG_EVENTS[index];
-      timer = setTimeout(() => {
-        if (cancelled) {
-          return;
-        }
-        setLines((prev) => [...prev, stamp(event.text)]);
-        index += 1;
-        printNext();
-      }, event.delayMs);
     };
 
-    printNext();
+    source.onerror = () => {
+      setStreaming(false);
+      source.close();
+    };
 
     return () => {
-      cancelled = true;
-      if (timer) {
-        clearTimeout(timer);
-      }
+      source.close();
     };
-  }, [active]);
+  }, [streamUrl]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -75,16 +54,16 @@ export function Terminal({ active, className, onComplete }: TerminalProps) {
   return (
     <section
       className={cn(
-        "flex min-h-64 flex-col overflow-hidden rounded-xl border border-emerald-500/20 bg-black shadow-[inset_0_0_80px_rgba(16,185,129,0.06)]",
+        "flex min-h-64 flex-col overflow-hidden rounded-xl border border-primary/20 bg-black shadow-[inset_0_0_80px_oklch(0.78_0.13_195/0.07)]",
         className,
       )}
     >
       <header className="flex items-center gap-2 border-b border-white/10 bg-zinc-950 px-3 py-2">
         <span className="size-2.5 rounded-full bg-red-500/80" />
-        <span className="size-2.5 rounded-full bg-amber-400/80" />
-        <span className="size-2.5 rounded-full bg-emerald-500/80" />
+        <span className="size-2.5 rounded-full bg-runway/80" />
+        <span className="size-2.5 rounded-full bg-primary/80" />
         <p className="ml-2 font-mono text-[11px] tracking-wide text-zinc-400">
-          deploy.log · mock SSE
+          deploy.log · SSE {streamUrl}
         </p>
       </header>
       <pre
@@ -98,7 +77,7 @@ export function Terminal({ active, className, onComplete }: TerminalProps) {
         ))}
         {streaming ? (
           <div>
-            <span className="terminal-caret text-emerald-300">█</span>
+            <span className="terminal-caret text-primary">█</span>
           </div>
         ) : null}
         <div ref={bottomRef} />
