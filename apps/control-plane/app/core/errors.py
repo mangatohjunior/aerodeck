@@ -42,3 +42,8 @@ class ConflictError(AppError):
 class DatabaseUnavailableError(AppError):
     status_code = 503
     code = "database_unavailable"
+
+
+class QueueUnavailableError(AppError):
+    status_code = 503
+    code = "queue_unavailable"

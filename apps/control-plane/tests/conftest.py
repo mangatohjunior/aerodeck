@@ -17,7 +17,7 @@ CLIENT_SECRET = "a-test-secret-that-is-long-enough-to-be-realistic"
 SIGNING_KEY = "unit-test-signing-key-0123456789abcdef-0123456789"
 
 
-def make_settings(database_url: str | None) -> Settings:
+def make_settings(database_url: str | None, **overrides: object) -> Settings:
     return Settings(
         _env_file=None,
         env="local",
@@ -25,6 +25,7 @@ def make_settings(database_url: str | None) -> Settings:
         auth_signing_key=SIGNING_KEY,
         auth_token_ttl_seconds=300,
         auth_clients={CLIENT_ID: hash_client_secret(CLIENT_SECRET)},
+        **overrides,
     )
 
 
