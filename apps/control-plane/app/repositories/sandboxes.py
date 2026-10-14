@@ -1,10 +1,11 @@
 import uuid
 from collections.abc import Sequence
+from datetime import datetime
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.sandbox import Sandbox
+from app.models.sandbox import Sandbox, SandboxStatus
 
 
 class SandboxRepository:
@@ -29,3 +30,11 @@ class SandboxRepository:
             base.order_by(Sandbox.created_at, Sandbox.image).limit(limit).offset(offset)
         )
         return rows.all(), int(total or 0)
+
+    async def list_expired(self, now: datetime) -> Sequence[Sandbox]:
+        rows = await self._session.scalars(
+            select(Sandbox)
+            .where(Sandbox.status == SandboxStatus.running, Sandbox.expires_at <= now)
+            .order_by(Sandbox.expires_at)
+        )
+        return rows.all()

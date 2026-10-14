@@ -40,5 +40,5 @@ Follow the runbooks; do not invent a parallel procedure.
 ## Status
 
 Epics 1–2 are on `main` (applies skip until DigitalOcean secrets exist).
-Edge routing (#10–#12) and sandbox boot (#14) do not need a cloud account.
-Next: destroy sandboxes on TTL (#15), then enroll hypervisor hosts (#16).
+Edge routing (#10–#12) and sandboxes (#14–#15) do not need a cloud account.
+Next: enroll hypervisor hosts (#16).
