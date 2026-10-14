@@ -55,3 +55,6 @@ jobs:
 
       - name: backend.hcl has no secrets
         run: python tests/test_backend_hcl.py
+
+      - name: network module shape
+        run: python tests/test_network.py

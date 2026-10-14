@@ -7,6 +7,7 @@ chat history.
 | ------- | -------------- |
 | [Control plane](control-plane.md) | Run the API, worker, and tests locally; apply Alembic migrations. |
 | [Terraform remote state](terraform-state.md) | Bootstrap the Spaces bucket, initialise a stack, recover a locked state file. |
+| [Platform network](platform-network.md) | Project and private VPC per environment; how later stacks attach. |
 | [Issue workflow](issue-workflow.md) | How Epics and Stories move across the board. |
 
 Applies still belong to CI (#8). Do not `terraform apply` against shared state

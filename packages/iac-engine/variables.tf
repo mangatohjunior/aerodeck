@@ -81,7 +81,7 @@ variable "region" {
 }
 
 variable "vpc_ip_range" {
-  description = "CIDR block for the environment VPC. Must be RFC1918, /16–/24, and must not overlap other VPCs in the same region."
+  description = "CIDR block for the environment VPC. Must be RFC1918, /16–/24, unique per environment, and must not overlap other VPCs in the same DigitalOcean region."
   type        = string
   default     = "10.10.0.0/16"
 
@@ -96,6 +96,25 @@ variable "vpc_ip_range" {
       tonumber(split("/", var.vpc_ip_range)[1]) <= 24
     )
     error_message = "vpc_ip_range prefix length must be between /16 and /24 (DigitalOcean VPC limits)."
+  }
+
+  validation {
+    condition = (
+      cidrsubnet(var.vpc_ip_range, 0, 0) == var.vpc_ip_range &&
+      (
+        can(cidrhost(var.vpc_ip_range, 0)) &&
+        (
+          split(".", var.vpc_ip_range)[0] == "10" ||
+          (split(".", var.vpc_ip_range)[0] == "192" && split(".", var.vpc_ip_range)[1] == "168") ||
+          (
+            split(".", var.vpc_ip_range)[0] == "172" &&
+            tonumber(split(".", var.vpc_ip_range)[1]) >= 16 &&
+            tonumber(split(".", var.vpc_ip_range)[1]) <= 31
+          )
+        )
+      )
+    )
+    error_message = "vpc_ip_range must be RFC1918 (10.0.0.0/8, 172.16.0.0/12, or 192.168.0.0/16)."
   }
 }
 
