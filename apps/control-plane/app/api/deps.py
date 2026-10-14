@@ -1,16 +1,54 @@
 """Shared ``Depends()`` providers."""
 
+from dataclasses import dataclass
 from typing import Annotated
 
-from fastapi import Depends, Request
+from fastapi import Depends, Query, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings, get_settings
+from app.core.db import get_session
 from app.core.errors import InvalidTokenError
 from app.repositories.clients import ClientRepository, SettingsClientRepository
+from app.repositories.environments import EnvironmentRepository
+from app.repositories.projects import ProjectRepository
 from app.services.auth import AuthenticatedClient, AuthService
+from app.services.environments import EnvironmentService
+from app.services.projects import ProjectService
 
 SettingsDep = Annotated[Settings, Depends(get_settings)]
+SessionDep = Annotated[AsyncSession, Depends(get_session)]
+
+
+@dataclass(frozen=True, slots=True)
+class PaginationParams:
+    limit: int
+    offset: int
+
+
+def get_pagination(
+    limit: Annotated[int, Query(ge=1, le=200, description="Page size")] = 50,
+    offset: Annotated[int, Query(ge=0, description="Items to skip")] = 0,
+) -> PaginationParams:
+    return PaginationParams(limit=limit, offset=offset)
+
+
+PaginationDep = Annotated[PaginationParams, Depends(get_pagination)]
+
+
+def get_project_service(session: SessionDep) -> ProjectService:
+    return ProjectService(ProjectRepository(session))
+
+
+ProjectServiceDep = Annotated[ProjectService, Depends(get_project_service)]
+
+
+def get_environment_service(session: SessionDep, projects: ProjectServiceDep) -> EnvironmentService:
+    return EnvironmentService(EnvironmentRepository(session), projects)
+
+
+EnvironmentServiceDep = Annotated[EnvironmentService, Depends(get_environment_service)]
 
 MUTATING_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 

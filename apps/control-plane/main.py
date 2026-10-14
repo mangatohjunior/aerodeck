@@ -20,6 +20,7 @@ from pydantic import BaseModel, ConfigDict
 from app.api.deps import SettingsDep
 from app.api.v1.router import api_v1_router
 from app.core.config import Settings, get_settings
+from app.core.db import bind_engine, create_engine, ping, unbind_engine
 from app.core.errors import AppError
 from app.core.logging import configure_logging, get_logger
 from app.schemas.auth import ErrorResponse
@@ -58,11 +59,19 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     configure_logging(settings.log_level)
     logger.info("starting %s v%s (env=%s)", settings.app_name, settings.version, settings.env)
 
-    # TODO(#3): initialise the async SQLAlchemy engine in app/core/db.py
-    # and store it on app.state.engine; dispose it after yield.
+    engine = create_engine(settings.database_url) if settings.database_url else None
+    app.state.engine = engine
+    if engine is not None:
+        bind_engine(engine)
+    else:
+        logger.warning("AERODECK_DATABASE_URL is unset; routes that need the database will return 503")
+
     try:
         yield
     finally:
+        unbind_engine()
+        if engine is not None:
+            await engine.dispose()
         logger.info("shutting down %s", settings.app_name)
 
 
@@ -90,12 +99,19 @@ async def healthz(settings: SettingsDep) -> HealthResponse:
     responses={status.HTTP_503_SERVICE_UNAVAILABLE: {"model": ReadinessResponse}},
     summary="Readiness probe",
 )
-async def readyz(settings: SettingsDep) -> JSONResponse:
+async def readyz(request: Request) -> JSONResponse:
     checks: dict[str, Literal["ok", "failed", "skipped"]] = {}
 
-    # TODO(#3): replace with a real `SELECT 1` through the async session
-    # dependency once app/core/db.py exists.
-    checks["database"] = "skipped" if settings.database_url is None else "ok"
+    engine = getattr(request.app.state, "engine", None)
+    if engine is None:
+        checks["database"] = "skipped"
+    else:
+        try:
+            await ping(engine)
+            checks["database"] = "ok"
+        except Exception:
+            logger.exception("database readiness check failed")
+            checks["database"] = "failed"
 
     ready = all(v != "failed" for v in checks.values())
     payload = ReadinessResponse(status="ready" if ready else "degraded", checks=checks)

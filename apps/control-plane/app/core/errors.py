@@ -27,3 +27,18 @@ class InvalidClientError(AuthenticationError):
 
 class InvalidTokenError(AuthenticationError):
     code = "invalid_token"
+
+
+class NotFoundError(AppError):
+    status_code = 404
+    code = "not_found"
+
+
+class ConflictError(AppError):
+    status_code = 409
+    code = "conflict"
+
+
+class DatabaseUnavailableError(AppError):
+    status_code = 503
+    code = "database_unavailable"

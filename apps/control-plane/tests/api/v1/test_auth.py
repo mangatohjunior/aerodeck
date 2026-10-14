@@ -1,3 +1,4 @@
+import uuid
 from datetime import UTC, datetime, timedelta
 
 from httpx import AsyncClient
@@ -121,8 +122,10 @@ async def test_token_for_unenrolled_client_is_rejected(client: AsyncClient, sett
 
 
 async def test_mutations_require_a_token(client: AsyncClient) -> None:
-    post = await client.post("/api/v1/probe")
-    delete = await client.delete("/api/v1/probe/abc")
+    body = {"slug": "guarded", "name": "Guarded"}
+
+    post = await client.post("/api/v1/projects", json=body)
+    delete = await client.delete(f"/api/v1/projects/{uuid.uuid4()}")
 
     assert post.status_code == 401
     assert delete.status_code == 401
@@ -130,18 +133,18 @@ async def test_mutations_require_a_token(client: AsyncClient) -> None:
 
 
 async def test_mutations_succeed_with_a_valid_token(client: AsyncClient, token: str) -> None:
-    post = await client.post("/api/v1/probe", headers=bearer(token))
-    delete = await client.delete("/api/v1/probe/abc", headers=bearer(token))
+    post = await client.post("/api/v1/projects", json={"slug": "guarded", "name": "Guarded"}, headers=bearer(token))
+    delete = await client.delete(f"/api/v1/projects/{post.json()['id']}", headers=bearer(token))
 
     assert post.status_code == 201
     assert delete.status_code == 204
 
 
 async def test_reads_do_not_require_a_token(client: AsyncClient) -> None:
-    response = await client.get("/api/v1/probe")
+    response = await client.get("/api/v1/projects")
 
     assert response.status_code == 200
-    assert response.json() == {"ok": "read"}
+    assert response.json()["items"] == []
 
 
 async def test_health_endpoints_stay_open(client: AsyncClient) -> None:

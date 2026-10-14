@@ -1,12 +1,14 @@
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
+from pathlib import Path
 
 import pytest
-from fastapi import APIRouter, FastAPI, status
+from asgi_lifespan import LifespanManager
+from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
-from app.api.deps import MUTATION_GUARD
 from app.core.config import Settings, get_settings
 from app.core.security import hash_client_secret
+from app.models import Base
 from main import create_app
 
 CLIENT_ID = "ci-deployer"
@@ -14,11 +16,11 @@ CLIENT_SECRET = "a-test-secret-that-is-long-enough-to-be-realistic"
 SIGNING_KEY = "unit-test-signing-key-0123456789abcdef-0123456789"
 
 
-@pytest.fixture
-def settings() -> Settings:
+def make_settings(database_url: str | None) -> Settings:
     return Settings(
         _env_file=None,
         env="local",
+        database_url=database_url,
         auth_signing_key=SIGNING_KEY,
         auth_token_ttl_seconds=300,
         auth_clients={CLIENT_ID: hash_client_secret(CLIENT_SECRET)},
@@ -26,27 +28,34 @@ def settings() -> Settings:
 
 
 @pytest.fixture
-def app(settings: Settings) -> FastAPI:
-    application = create_app(settings)
-    application.dependency_overrides[get_settings] = lambda: settings
+def database_url(tmp_path: Path) -> str:
+    # A file-backed SQLite database so "survives a restart" can be tested with
+    # two separate application instances.
+    return f"sqlite+aiosqlite:///{(tmp_path / 'control-plane.db').as_posix()}"
 
-    # Stand-in for a future resource router, included the same way real ones will be.
-    probe = APIRouter(prefix="/probe", tags=["probe"])
 
-    @probe.get("", status_code=status.HTTP_200_OK)
-    async def read_probe() -> dict[str, str]:
-        return {"ok": "read"}
+@pytest.fixture
+def settings(database_url: str) -> Settings:
+    return make_settings(database_url)
 
-    @probe.post("", status_code=status.HTTP_201_CREATED)
-    async def write_probe() -> dict[str, str]:
-        return {"ok": "write"}
 
-    @probe.delete("/{item_id}", status_code=status.HTTP_204_NO_CONTENT)
-    async def delete_probe(item_id: str) -> None:
-        return None
+@pytest.fixture
+def app_factory() -> Callable[[Settings], FastAPI]:
+    def build(settings: Settings) -> FastAPI:
+        application = create_app(settings)
+        application.dependency_overrides[get_settings] = lambda: settings
+        return application
 
-    application.include_router(probe, prefix="/api/v1", dependencies=MUTATION_GUARD)
-    return application
+    return build
+
+
+@pytest.fixture
+async def app(settings: Settings, app_factory: Callable[[Settings], FastAPI]) -> AsyncIterator[FastAPI]:
+    application = app_factory(settings)
+    async with LifespanManager(application):
+        async with application.state.engine.begin() as connection:
+            await connection.run_sync(Base.metadata.create_all)
+        yield application
 
 
 @pytest.fixture
@@ -55,11 +64,20 @@ async def client(app: FastAPI) -> AsyncIterator[AsyncClient]:
         yield http
 
 
-@pytest.fixture
-async def token(client: AsyncClient) -> str:
+async def obtain_token(client: AsyncClient) -> str:
     response = await client.post(
         "/api/v1/auth/token",
         json={"client_id": CLIENT_ID, "client_secret": CLIENT_SECRET},
     )
     assert response.status_code == 200, response.text
     return response.json()["access_token"]
+
+
+@pytest.fixture
+async def token(client: AsyncClient) -> str:
+    return await obtain_token(client)
+
+
+@pytest.fixture
+def auth(token: str) -> dict[str, str]:
+    return {"Authorization": f"Bearer {token}"}
