@@ -1,5 +1,5 @@
 ---
-description: FastAPI service architecture for AeroDeck control-plane services. Enforces Pydantic V2 schemas, async DB dependency injection, and the standard project layout.
+description: FastAPI service architecture for AeroDeck control-plane services. Enforces Pydantic V2 schemas, async DB dependency injection, and strict separation of routers, services, and repositories.
 globs: apps/**/*.py,apps/**/requirements*.txt,apps/**/pyproject.toml
 alwaysApply: false
 ---
@@ -34,13 +34,16 @@ apps/<service>/
 │   │   └── security.py     # auth primitives (hashing, token verification)
 │   ├── models/             # SQLAlchemy 2.x ORM models (DeclarativeBase, Mapped[])
 │   ├── schemas/            # Pydantic V2 request/response models
-│   └── services/           # business logic; receives a session, returns domain objects
+│   ├── repositories/       # persistence only; the only layer that queries models/
+│   └── services/           # business logic; calls repositories, returns domain objects
 ├── tests/                  # pytest + httpx.AsyncClient; mirrors app/ structure
 ├── requirements.txt
 └── Dockerfile
 ```
 
-- Routers never import from `models/` directly; they call `services/` and return `schemas/`.
+- Routers parse the request, call one service, and return a schema. They never import `models/` or `repositories/`, and they never contain business rules.
+- Services own business rules. They call repositories and return domain objects. They never build `JSONResponse`s or read `os.environ`.
+- Repositories are the only modules that query `models/`. Each method is `async def`, receives the injected session, and returns rows or domain objects to a service — never to a router.
 - `main.py` must not define endpoints other than `/healthz` and `/readyz`.
 - No module-level side effects (DB connections, HTTP clients) outside of `lifespan`.
 
