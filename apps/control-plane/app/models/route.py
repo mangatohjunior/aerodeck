@@ -28,3 +28,6 @@ class Route(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
     project: Mapped[Project] = relationship()
     environment: Mapped[Environment] = relationship(back_populates="routes")
+    certificate: Mapped["Certificate | None"] = relationship(
+        back_populates="route", cascade="all, delete-orphan", uselist=False, passive_deletes=True
+    )

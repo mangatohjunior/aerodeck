@@ -2,6 +2,7 @@
 
 import secrets
 from dataclasses import dataclass
+from datetime import timedelta
 from typing import Annotated
 
 from fastapi import Depends, Query, Request
@@ -16,8 +17,12 @@ from app.repositories.clients import ClientRepository, SettingsClientRepository
 from app.repositories.environments import EnvironmentRepository
 from app.repositories.jobs import CeleryJobDispatcher
 from app.repositories.projects import ProjectRepository
+from app.repositories.certificates import CertificateRepository
 from app.repositories.routes import RouteRepository
+from app.services.acme import AcmeIssuer, FakeAcmeIssuer
 from app.services.auth import AuthenticatedClient, AuthService
+from app.services.certificates import CertificateService
+from app.services.dns01 import DigitalOceanDns01, Dns01Provider, Dns01UnavailableError, MemoryDns01
 from app.services.environments import EnvironmentService
 from app.services.jobs import JobDispatcher, JobService
 from app.services.projects import ProjectService
@@ -60,10 +65,43 @@ EnvironmentServiceDep = Annotated[EnvironmentService, Depends(get_environment_se
 def get_route_service(
     session: SessionDep, projects: ProjectServiceDep, environments: EnvironmentServiceDep
 ) -> RouteService:
-    return RouteService(RouteRepository(session), projects, environments)
+    return RouteService(RouteRepository(session), projects, environments, CertificateRepository(session))
 
 
 RouteServiceDep = Annotated[RouteService, Depends(get_route_service)]
+
+
+def get_dns01_provider(settings: SettingsDep) -> Dns01Provider:
+    if settings.dns01_provider == "digitalocean":
+        token = settings.digitalocean_token
+        if token is None:
+            raise Dns01UnavailableError("AERODECK_DIGITALOCEAN_TOKEN is unset")
+        return DigitalOceanDns01(token.get_secret_value())
+    return MemoryDns01()
+
+
+Dns01ProviderDep = Annotated[Dns01Provider, Depends(get_dns01_provider)]
+
+
+def get_acme_issuer(dns: Dns01ProviderDep, settings: SettingsDep) -> AcmeIssuer:
+    return FakeAcmeIssuer(dns, lifetime=timedelta(days=settings.acme_lifetime_days))
+
+
+AcmeIssuerDep = Annotated[AcmeIssuer, Depends(get_acme_issuer)]
+
+
+def get_certificate_service(
+    session: SessionDep, routes: RouteServiceDep, issuer: AcmeIssuerDep, settings: SettingsDep
+) -> CertificateService:
+    return CertificateService(
+        CertificateRepository(session),
+        routes,
+        issuer,
+        renew_before=timedelta(days=settings.certificate_renew_before_days),
+    )
+
+
+CertificateServiceDep = Annotated[CertificateService, Depends(get_certificate_service)]
 
 
 def get_job_dispatcher(settings: SettingsDep) -> JobDispatcher:

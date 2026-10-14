@@ -39,4 +39,5 @@ Follow the runbooks; do not invent a parallel procedure.
 ## Status
 
 Epics 1–2 are on `main` (applies skip until DigitalOcean secrets exist).
-Next: Traefik hostnames (#10) without a cloud account.
+Edge routing (#10) and TLS via DNS-01 (#11) do not need a cloud account
+(fake ACME until Let's Encrypt is configured).

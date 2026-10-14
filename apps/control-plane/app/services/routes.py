@@ -5,12 +5,14 @@ from sqlalchemy.exc import IntegrityError
 
 from app.core.errors import ConflictError, NotFoundError
 from app.core.logging import get_logger
+from app.models.certificate import Certificate, CertificateStatus
 from app.models.route import Route
+from app.repositories.certificates import CertificateRepository
 from app.repositories.routes import RouteRepository
 from app.schemas.route import RouteCreate, RouteUpdate, TraefikConfiguration
 from app.services.environments import EnvironmentService
 from app.services.projects import ProjectService
-from app.services.traefik import render_traefik_http
+from app.services.traefik import TlsMaterial, render_traefik_http
 
 logger = get_logger("services.routes")
 
@@ -21,10 +23,12 @@ class RouteService:
         routes: RouteRepository,
         projects: ProjectService,
         environments: EnvironmentService,
+        certificates: CertificateRepository,
     ) -> None:
         self._routes = routes
         self._projects = projects
         self._environments = environments
+        self._certificates = certificates
 
     async def create(self, project_id: uuid.UUID, data: RouteCreate) -> Route:
         await self._projects.get(project_id)
@@ -35,6 +39,9 @@ class RouteService:
             route = await self._routes.add(Route(project_id=project_id, **data.model_dump()))
         except IntegrityError as exc:
             raise ConflictError(f"Hostname {data.hostname!r} is already routed") from exc
+        await self._certificates.add(
+            Certificate(route_id=route.id, hostname=route.hostname, status=CertificateStatus.pending)
+        )
         logger.info("created route %s (%s)", route.hostname, route.id)
         return route
 
@@ -59,7 +66,24 @@ class RouteService:
                 raise ConflictError(f"Hostname {new_hostname!r} is already routed")
         for field, value in changes.items():
             setattr(route, field, value)
+        if new_hostname is not None:
+            await self._reset_certificate(route)
         return route
+
+    async def _reset_certificate(self, route: Route) -> None:
+        certificate = await self._certificates.get_for_route(route.id)
+        if certificate is None:
+            await self._certificates.add(
+                Certificate(route_id=route.id, hostname=route.hostname, status=CertificateStatus.pending)
+            )
+            return
+        certificate.hostname = route.hostname
+        certificate.status = CertificateStatus.pending
+        certificate.not_after = None
+        certificate.fingerprint_sha256 = None
+        certificate.certificate_pem = None
+        certificate.private_key_pem = None
+        certificate.last_error = None
 
     async def delete(self, project_id: uuid.UUID, route_id: uuid.UUID) -> None:
         route = await self.get(project_id, route_id)
@@ -67,4 +91,10 @@ class RouteService:
         logger.info("deleted route %s (%s)", route.hostname, route.id)
 
     async def traefik_configuration(self) -> TraefikConfiguration:
-        return render_traefik_http(await self._routes.list_enabled())
+        routes = await self._routes.list_enabled()
+        materials = [
+            TlsMaterial(hostname=row.hostname, certificate_pem=row.certificate_pem, private_key_pem=row.private_key_pem)
+            for row in await self._certificates.list_issued()
+            if row.certificate_pem and row.private_key_pem
+        ]
+        return render_traefik_http(routes, materials)

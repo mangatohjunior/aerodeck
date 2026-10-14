@@ -66,6 +66,13 @@ class Settings(BaseSettings):
     # When unset, any enrolled API client token is accepted instead.
     traefik_provider_token: SecretStr | None = None
 
+    # DNS-01 TXT publisher. "memory" is the fake used in tests and local laptops.
+    dns01_provider: Literal["memory", "digitalocean"] = "memory"
+    digitalocean_token: SecretStr | None = None
+    # Fake ACME lifetime. Real Let's Encrypt is not wired until an account exists.
+    acme_lifetime_days: int = Field(default=90, ge=1, le=366)
+    certificate_renew_before_days: int = Field(default=30, ge=1, le=60)
+
     @field_validator("auth_clients")
     @classmethod
     def _secret_hashes_are_sha256_hex(cls, clients: dict[str, str]) -> dict[str, str]:

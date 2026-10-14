@@ -20,6 +20,9 @@ alembic>=1.13,<2.0
 # Outbound HTTP (DigitalOcean API, webhooks).
 httpx>=0.27,<1.0
 
+# Fake ACME certificates (self-signed) until Let's Encrypt is configured.
+cryptography>=43.0,<46.0
+
 # Background work. The API process does not run the worker; the orchestrator
 # starts `celery -A app.worker worker` as a separate container.
 celery>=5.4,<6.0
