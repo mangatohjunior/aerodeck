@@ -2,7 +2,7 @@
 name: "Epic"
 about: "A large body of work that delivers a platform capability and is broken down into linked User Stories."
 title: "[EPIC] <capability name>"
-labels: ["type:epic"]
+labels: ["type: epic"]
 assignees: []
 ---
 
@@ -12,7 +12,7 @@ assignees: []
   Keep this issue updated — it is the single source of truth for the capability.
 -->
 
-## Goal
+## Objective
 
 <!-- One or two sentences: what capability exists when this Epic is complete, and for whom. -->
 
@@ -38,7 +38,7 @@ assignees: []
 | ------ | -------- | ------ |
 |        |          |        |
 
-## Linked Stories (required)
+## Scope & User Stories
 
 <!--
   Every Story that belongs to this Epic MUST be listed here as a task-list item so GitHub tracks progress.

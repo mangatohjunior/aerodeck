@@ -2,7 +2,7 @@
 name: "User Story"
 about: "A single, independently shippable increment of user-facing or platform value, linked to a parent Epic."
 title: "[STORY] <short outcome>"
-labels: ["type:story"]
+labels: ["type: story"]
 assignees: []
 ---
 
@@ -40,7 +40,7 @@ assignees: []
 - [ ] Error / edge case: <what happens when input is invalid, provider API fails, etc.>
 - [ ] Non-functional: <latency, security, observability requirement>
 
-## Technical notes (required)
+## Technical Implementation Notes
 
 <!-- Implementation guidance for whoever (human or AI) picks this up. Be concrete about where code lands. -->
 
