@@ -79,6 +79,11 @@ class Settings(BaseSettings):
     dns_record_target: str = "edge.example.com"
     dns_record_ttl: int = Field(default=300, ge=30, le=86_400)
 
+    # Firecracker microVMs. "memory" is the fake used in tests and local laptops.
+    sandbox_hypervisor: Literal["memory", "firecracker"] = "memory"
+    sandbox_image_root: str = "/var/lib/aerodeck/images"
+    firecracker_api_url: str = "http://127.0.0.1:8080"
+
     @field_validator("auth_clients")
     @classmethod
     def _secret_hashes_are_sha256_hex(cls, clients: dict[str, str]) -> dict[str, str]:

@@ -25,6 +25,9 @@ class Project(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     environments: Mapped[list["Environment"]] = relationship(
         back_populates="project", cascade="all, delete-orphan", passive_deletes=True
     )
+    sandboxes: Mapped[list["Sandbox"]] = relationship(
+        back_populates="project", cascade="all, delete-orphan", passive_deletes=True
+    )
 
 
 class Environment(UUIDPrimaryKeyMixin, TimestampMixin, Base):
