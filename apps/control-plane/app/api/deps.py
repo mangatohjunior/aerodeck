@@ -1,5 +1,6 @@
 """Shared ``Depends()`` providers."""
 
+import secrets
 from dataclasses import dataclass
 from typing import Annotated
 
@@ -15,10 +16,12 @@ from app.repositories.clients import ClientRepository, SettingsClientRepository
 from app.repositories.environments import EnvironmentRepository
 from app.repositories.jobs import CeleryJobDispatcher
 from app.repositories.projects import ProjectRepository
+from app.repositories.routes import RouteRepository
 from app.services.auth import AuthenticatedClient, AuthService
 from app.services.environments import EnvironmentService
 from app.services.jobs import JobDispatcher, JobService
 from app.services.projects import ProjectService
+from app.services.routes import RouteService
 
 SettingsDep = Annotated[Settings, Depends(get_settings)]
 SessionDep = Annotated[AsyncSession, Depends(get_session)]
@@ -52,6 +55,15 @@ def get_environment_service(session: SessionDep, projects: ProjectServiceDep) ->
 
 
 EnvironmentServiceDep = Annotated[EnvironmentService, Depends(get_environment_service)]
+
+
+def get_route_service(
+    session: SessionDep, projects: ProjectServiceDep, environments: EnvironmentServiceDep
+) -> RouteService:
+    return RouteService(RouteRepository(session), projects, environments)
+
+
+RouteServiceDep = Annotated[RouteService, Depends(get_route_service)]
 
 
 def get_job_dispatcher(settings: SettingsDep) -> JobDispatcher:
@@ -109,3 +121,22 @@ async def require_client_for_mutations(request: Request, credentials: BearerDep,
 
 
 MUTATION_GUARD = [Depends(require_client_for_mutations)]
+
+
+def _bearer_matches(provided: str, expected: str) -> bool:
+    if len(provided) != len(expected):
+        return False
+    return secrets.compare_digest(provided, expected)
+
+
+async def require_edge_reader(credentials: BearerDep, auth: AuthServiceDep, settings: SettingsDep) -> None:
+    """Traefik (static provider token) or any enrolled API client may read the snapshot."""
+    if credentials is None:
+        raise InvalidTokenError("Missing bearer token")
+    provider = settings.traefik_provider_token
+    if provider is not None and _bearer_matches(credentials.credentials, provider.get_secret_value()):
+        return
+    await auth.authenticate(credentials.credentials)
+
+
+EdgeReaderDep = Annotated[None, Depends(require_edge_reader)]

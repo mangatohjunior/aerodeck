@@ -2,5 +2,6 @@
 
 from app.models.base import Base
 from app.models.project import Environment, EnvironmentKind, Project
+from app.models.route import Route
 
-__all__ = ["Base", "Environment", "EnvironmentKind", "Project"]
+__all__ = ["Base", "Environment", "EnvironmentKind", "Project", "Route"]

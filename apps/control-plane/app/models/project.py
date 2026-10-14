@@ -42,3 +42,6 @@ class Environment(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     region: Mapped[str] = mapped_column(String(16), nullable=False, default="nyc3")
 
     project: Mapped[Project] = relationship(back_populates="environments")
+    routes: Mapped[list["Route"]] = relationship(
+        back_populates="environment", cascade="all, delete-orphan", passive_deletes=True
+    )

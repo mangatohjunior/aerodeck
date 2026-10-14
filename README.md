@@ -21,6 +21,7 @@ Follow the runbooks; do not invent a parallel procedure.
    versioning. Procedure: [docs/runbooks/terraform-state.md](docs/runbooks/terraform-state.md).
 2. **Local API:** [docs/runbooks/control-plane.md](docs/runbooks/control-plane.md)
    (venv, `.env`, `alembic upgrade head`, uvicorn, Celery worker).
+   Traefik routes: [docs/runbooks/edge-routing.md](docs/runbooks/edge-routing.md).
 3. **Network:** [docs/runbooks/platform-network.md](docs/runbooks/platform-network.md)
    (project + private VPC per environment).
 4. **Apply:** [docs/runbooks/iac-apply.md](docs/runbooks/iac-apply.md)
@@ -37,6 +38,5 @@ Follow the runbooks; do not invent a parallel procedure.
 
 ## Status
 
-Epic 1, #6 (Spaces state), and #7 (project + VPC) are on `main`. Applies run
-from GitHub Actions only ([iac-apply.md](docs/runbooks/iac-apply.md)); they
-stay skipped until DigitalOcean and Spaces secrets exist.
+Epics 1–2 are on `main` (applies skip until DigitalOcean secrets exist).
+Next: Traefik hostnames (#10) without a cloud account.

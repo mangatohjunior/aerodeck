@@ -62,6 +62,10 @@ class Settings(BaseSettings):
     # Results are kept in Redis this long so GET /api/v1/jobs/{id} can report them.
     job_result_ttl_seconds: int = Field(default=86_400, ge=60)
 
+    # Optional static bearer Traefik sends when polling GET /api/v1/edge/traefik.
+    # When unset, any enrolled API client token is accepted instead.
+    traefik_provider_token: SecretStr | None = None
+
     @field_validator("auth_clients")
     @classmethod
     def _secret_hashes_are_sha256_hex(cls, clients: dict[str, str]) -> dict[str, str]:
