@@ -4,10 +4,8 @@
 # (see .cursor/rules/terraform-digitalocean.mdc). State is stored in a
 # DigitalOcean Spaces bucket via Terraform's built-in S3-compatible backend.
 #
-# Initialise (CI does this; do not run from a laptop against shared state):
-#   export AWS_ACCESS_KEY_ID=<spaces access key>
-#   export AWS_SECRET_ACCESS_KEY=<spaces secret key>
-#   export TF_VAR_do_token=<digitalocean api token>
+# Initialise (CI does this; do not run from a laptop against shared state).
+# Full procedure: docs/runbooks/terraform-state.md
 #   terraform init -backend-config=backend.hcl -backend-config="key=${ENV}/platform/terraform.tfstate"
 #   terraform plan -var-file=envs/${ENV}.tfvars
 
@@ -21,19 +19,9 @@ terraform {
     }
   }
 
-  # Partial backend configuration. Non-secret values are supplied from
-  # backend.hcl at `terraform init`; credentials come from the environment.
-  #
-  # backend.hcl (committed, no secrets):
-  #   bucket                      = "aerodeck-tfstate"
-  #   region                      = "us-east-1"   # placeholder; Spaces ignores it
-  #   endpoints                   = { s3 = "https://nyc3.digitaloceanspaces.com" }
-  #   skip_credentials_validation = true
-  #   skip_requesting_account_id  = true
-  #   skip_metadata_api_check     = true
-  #   skip_region_validation      = true
-  #   skip_s3_checksum            = true
-  #   use_path_style              = false
+  # Partial backend. Non-secret values live in backend.hcl; the state key is
+  # supplied at init as <environment>/platform/terraform.tfstate. Credentials
+  # are AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY (Spaces access keys in CI).
   backend "s3" {}
 }
 
@@ -88,21 +76,4 @@ resource "digitalocean_vpc" "platform" {
   description = "AeroDeck ${var.environment} VPC"
 }
 
-# --------------------------------------------------------------------------- #
-# Outputs (kept here until outputs.tf is introduced)
-# --------------------------------------------------------------------------- #
-
-output "project_id" {
-  description = "ID of the DigitalOcean project for this environment."
-  value       = digitalocean_project.platform.id
-}
-
-output "vpc_id" {
-  description = "ID of the environment VPC."
-  value       = digitalocean_vpc.platform.id
-}
-
-output "vpc_ip_range" {
-  description = "CIDR range of the environment VPC."
-  value       = digitalocean_vpc.platform.ip_range
-}
+# Outputs live in outputs.tf.

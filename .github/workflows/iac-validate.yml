@@ -1,0 +1,57 @@
+name: IaC validate
+
+# Format and validate the Terraform root module without talking to Spaces or
+# DigitalOcean. A real plan against the remote state lands with #8.
+
+on:
+  pull_request:
+    paths:
+      - "packages/iac-engine/**"
+      - ".github/workflows/iac-validate.yml"
+  push:
+    branches: [main]
+    paths:
+      - "packages/iac-engine/**"
+      - ".github/workflows/iac-validate.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: iac-validate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: terraform fmt and validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: packages/iac-engine
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9.8"
+
+      - name: Format
+        run: terraform fmt -check -recursive
+
+      - name: Init without a backend
+        run: terraform init -backend=false
+
+      - name: Validate
+        env:
+          # Required by the variable; validate never calls the provider.
+          TF_VAR_do_token: ci-dummy-token-not-a-secret
+        run: terraform validate
+
+      - name: backend.hcl has no secrets
+        run: python tests/test_backend_hcl.py
