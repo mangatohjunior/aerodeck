@@ -52,6 +52,16 @@ class Settings(BaseSettings):
     # client_id -> SHA-256 hex digest of the client secret. See module docstring.
     auth_clients: dict[str, str] = Field(default_factory=dict)
 
+    # Celery broker and result backend, e.g. redis://localhost:6379/0.
+    # Optional at this stage; job routes return 503 when unset.
+    redis_url: str | None = None
+    job_queue: str = "aerodeck"
+    # Transient failures retry with exponential backoff and jitter up to this many times.
+    job_max_retries: int = Field(default=5, ge=0, le=20)
+    job_retry_backoff_max_seconds: int = Field(default=600, ge=1, le=3600)
+    # Results are kept in Redis this long so GET /api/v1/jobs/{id} can report them.
+    job_result_ttl_seconds: int = Field(default=86_400, ge=60)
+
     @field_validator("auth_clients")
     @classmethod
     def _secret_hashes_are_sha256_hex(cls, clients: dict[str, str]) -> dict[str, str]:

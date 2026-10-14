@@ -65,4 +65,7 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
 
 # Single uvicorn process per container; scale horizontally via the orchestrator.
 # --proxy-headers / --forwarded-allow-ips trust the ingress/load balancer for scheme and client IP.
+#
+# The same image runs the job worker; override the command:
+#   celery -A app.worker worker --queues aerodeck --loglevel INFO
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers", "--forwarded-allow-ips=*", "--no-server-header"]

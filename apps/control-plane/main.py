@@ -23,6 +23,7 @@ from app.core.config import Settings, get_settings
 from app.core.db import bind_engine, create_engine, ping, unbind_engine
 from app.core.errors import AppError
 from app.core.logging import configure_logging, get_logger
+from app.core.queue import ping_broker
 from app.schemas.auth import ErrorResponse
 
 logger = get_logger("control_plane")
@@ -99,7 +100,7 @@ async def healthz(settings: SettingsDep) -> HealthResponse:
     responses={status.HTTP_503_SERVICE_UNAVAILABLE: {"model": ReadinessResponse}},
     summary="Readiness probe",
 )
-async def readyz(request: Request) -> JSONResponse:
+async def readyz(request: Request, settings: SettingsDep) -> JSONResponse:
     checks: dict[str, Literal["ok", "failed", "skipped"]] = {}
 
     engine = getattr(request.app.state, "engine", None)
@@ -112,6 +113,16 @@ async def readyz(request: Request) -> JSONResponse:
         except Exception:
             logger.exception("database readiness check failed")
             checks["database"] = "failed"
+
+    if settings.redis_url is None:
+        checks["queue"] = "skipped"
+    else:
+        try:
+            await ping_broker(settings.redis_url)
+            checks["queue"] = "ok"
+        except Exception:
+            logger.exception("queue readiness check failed")
+            checks["queue"] = "failed"
 
     ready = all(v != "failed" for v in checks.values())
     payload = ReadinessResponse(status="ready" if ready else "degraded", checks=checks)

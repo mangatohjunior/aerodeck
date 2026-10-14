@@ -9,12 +9,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings, get_settings
 from app.core.db import get_session
-from app.core.errors import InvalidTokenError
+from app.core.errors import InvalidTokenError, QueueUnavailableError
+from app.core.queue import create_celery_app
 from app.repositories.clients import ClientRepository, SettingsClientRepository
 from app.repositories.environments import EnvironmentRepository
+from app.repositories.jobs import CeleryJobDispatcher
 from app.repositories.projects import ProjectRepository
 from app.services.auth import AuthenticatedClient, AuthService
 from app.services.environments import EnvironmentService
+from app.services.jobs import JobDispatcher, JobService
 from app.services.projects import ProjectService
 
 SettingsDep = Annotated[Settings, Depends(get_settings)]
@@ -49,6 +52,22 @@ def get_environment_service(session: SessionDep, projects: ProjectServiceDep) ->
 
 
 EnvironmentServiceDep = Annotated[EnvironmentService, Depends(get_environment_service)]
+
+
+def get_job_dispatcher(settings: SettingsDep) -> JobDispatcher:
+    if settings.redis_url is None:
+        raise QueueUnavailableError("Job queue is not configured (AERODECK_REDIS_URL is unset)")
+    return CeleryJobDispatcher(create_celery_app(settings))
+
+
+JobDispatcherDep = Annotated[JobDispatcher, Depends(get_job_dispatcher)]
+
+
+def get_job_service(dispatcher: JobDispatcherDep, environments: EnvironmentServiceDep) -> JobService:
+    return JobService(dispatcher, environments)
+
+
+JobServiceDep = Annotated[JobService, Depends(get_job_service)]
 
 MUTATING_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 
