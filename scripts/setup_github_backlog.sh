@@ -286,6 +286,37 @@ EOF
 
 link_epic "${EPIC5}" "${EPIC5_BODY}" "${S5_1}" "${S5_2}" "${S5_3}" "${S5_4}" "${S5_5}" "${S5_6}" "${S5_7}" "${S5_8}" "${S5_9}"
 
+# --------------------------------------------------------------------------- #
+# Epic 6 — User Dashboard (foundational operator UI)
+# --------------------------------------------------------------------------- #
+
+EPIC6_BODY="$(cat <<'EOF'
+Give operators a Next.js App Router console: a GitHub URL deploy form, a deployment-status view, and a live log terminal. The UI is mock-first — it simulates the create-deployment POST and SSE stream before FastAPI is wired.
+
+In scope: apps/dashboard shell (sidebar + main), shadcn/ui form, mock POST, Terminal that paces fake SSE lines, later a typed client against GET /api/v1/deployments/{id}/logs.
+Out of scope: putting DigitalOcean tokens in the browser; calling FastAPI from the client until a Story replaces the mock; a second cloud provider.
+EOF
+)"
+
+EPIC6="$(ensure_issue "[EPIC] User Dashboard" "type: epic" "${EPIC6_BODY}")"
+
+S6_1="$(ensure_issue "[STORY] Collect a GitHub URL and start a mocked deploy" "type: story" "$(cat <<'EOF'
+As an application developer, I want to paste a GitHub repository URL and click Deploy so that the console accepts the repo and transitions to a deployment-status view without calling FastAPI yet.
+EOF
+)")"
+
+S6_2="$(ensure_issue "[STORY] Stream fake provisioner logs in a terminal" "type: story" "$(cat <<'EOF'
+As an application developer, I want a black, monospace terminal that slowly prints mock SSE lines (Initializing Terraform..., Provisioning K3s..., Done) so that I can see deploy progress before the control-plane stream exists.
+EOF
+)")"
+
+S6_3="$(ensure_issue "[STORY] Wire the dashboard terminal to control-plane SSE" "type: story" "$(cat <<'EOF'
+As an application developer, I want the terminal to consume GET /api/v1/deployments/{id}/logs as text/event-stream so that the same UI shows real worker output once the mock client is replaced.
+EOF
+)")"
+
+link_epic "${EPIC6}" "${EPIC6_BODY}" "${S6_1}" "${S6_2}" "${S6_3}"
+
 echo
 echo "Backlog ready in ${REPO}:"
 echo "  Epic #${EPIC1}  stories #${S1_1} #${S1_2} #${S1_3}"
@@ -293,3 +324,4 @@ echo "  Epic #${EPIC2}  stories #${S2_1} #${S2_2} #${S2_3}"
 echo "  Epic #${EPIC3}  stories #${S3_1} #${S3_2} #${S3_3}"
 echo "  Epic #${EPIC4}  stories #${S4_1} #${S4_2} #${S4_3}"
 echo "  Epic #${EPIC5}  stories #${S5_1} #${S5_2} #${S5_3} #${S5_4} #${S5_5} #${S5_6} #${S5_7} #${S5_8} #${S5_9}"
+echo "  Epic #${EPIC6}  stories #${S6_1} #${S6_2} #${S6_3}"

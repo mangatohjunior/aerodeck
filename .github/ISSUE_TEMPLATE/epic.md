@@ -53,7 +53,7 @@ assignees: []
 
 <!-- Links to ADRs (docs/adr/), diagrams, API contracts, Terraform stacks affected. Call out which .cursor/rules apply. -->
 
-- Affected areas: `apps/control-plane` / `packages/iac-engine` / `.github/workflows` (delete as appropriate)
+- Affected areas: `apps/control-plane` / `apps/dashboard` / `packages/iac-engine` / `.github/workflows` (delete as appropriate)
 - ADRs:
 - Diagrams:
 

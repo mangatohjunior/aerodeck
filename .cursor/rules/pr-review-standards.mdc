@@ -1,5 +1,5 @@
 ---
-description: Code-quality rubric that the automated AI PR reviewer (.github/workflows/ai-pr-review.yml) enforces on every pull request. Covers SOLID, security, DRY, testing, and IaC hygiene. Also use when a human asks for a code review.
+description: Code-quality rubric that the automated AI PR reviewer (.github/workflows/ai-pr-review.yml) enforces on every pull request. Covers SOLID, security, DRY, testing, FastAPI, Next.js, and IaC hygiene. Also use when a human asks for a code review.
 globs:
 alwaysApply: false
 ---
@@ -8,7 +8,7 @@ alwaysApply: false
 
 This rubric is the single source of truth for automated and human code review.
 The AI reviewer MUST evaluate every pull request against each section below and
-report findings using the output format in §8. Reviewers do not rewrite code;
+report findings using the output format in §9. Reviewers do not rewrite code;
 they report, cite, and recommend.
 
 Severity scale:
@@ -73,14 +73,23 @@ Apply `.cursor/rules/terraform-digitalocean.mdc` in full. In particular:
 - Stateful resources without `prevent_destroy`; databases without `private_network_uuid` → MAJOR.
 - `-auto-approve` for `prod` in a pipeline → BLOCKER.
 
-## 7. Tests & observability
+## 7. Next.js / dashboard specifics
+
+Apply `.cursor/rules/nextjs-dashboard.mdc` in full. In particular:
+
+- `pages/` router, `getServerSideProps`, or a parallel component kit beside shadcn/ui → MAJOR.
+- Client `fetch` / EventSource to FastAPI, or secrets in the browser bundle, before a Story wires the API → BLOCKER (mock-first violation) or MAJOR if the Story exists but the mock client was deleted without a replacement.
+- Deploy form without a local GitHub URL check, or a Terminal that dumps the full log in one tick instead of a paced stream → MINOR.
+- `"use client"` on `layout.tsx` only to hold form state → MINOR.
+
+## 8. Tests & observability
 
 - Behaviour changes ship with tests (new route → new test module; bug fix → regression test). Missing tests → MAJOR.
 - Tests assert behaviour, not implementation details; no network calls or real cloud resources in unit tests → MINOR.
 - New external calls or background jobs have structured log lines and error handling that preserves the stack (`raise ... from e`) → MINOR.
 - Swallowed exceptions (`except Exception: pass`) → MAJOR.
 
-## 8. Required reviewer output format
+## 9. Required reviewer output format
 
 The reviewer MUST respond in GitHub-flavoured Markdown using exactly this structure. Keep it concise; one bullet per finding; cite `path:line` from the diff.
 
@@ -100,7 +109,7 @@ The reviewer MUST respond in GitHub-flavoured Markdown using exactly this struct
 - ...
 
 ### Rules checked
-- [x] Scope & hygiene  - [x] SOLID  - [x] DRY  - [x] Security  - [x] FastAPI  - [x] Terraform  - [x] Tests
+- [x] Scope & hygiene  - [x] SOLID  - [x] DRY  - [x] Security  - [x] FastAPI  - [x] Next.js  - [x] Terraform  - [x] Tests
 ```
 
 Verdict mapping: any BLOCKER → `REQUEST_CHANGES`; only MAJOR → `REQUEST_CHANGES` unless justified in the PR body; only MINOR/NIT → `COMMENT`; nothing of note → `APPROVE`. If a section has no findings, write `- None`. Do not pad the review with praise or restate the diff.

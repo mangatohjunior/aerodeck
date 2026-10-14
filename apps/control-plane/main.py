@@ -1,8 +1,9 @@
 """AeroDeck Control Plane — ASGI entrypoint.
 
 This module only wires the application together (settings, lifespan, health
-endpoints, versioned API router). Business routes live under ``app/api/v1``
-per ``.cursor/rules/fastapi-architecture.mdc``.
+endpoints, versioned API router). Business routes — including the SSE
+deployment-log stub at ``GET /api/v1/deployments/{id}/logs`` — live under
+``app/api/v1`` per ``.cursor/rules/fastapi-architecture.mdc``.
 
 Run locally:
     uvicorn main:app --reload --port 8000

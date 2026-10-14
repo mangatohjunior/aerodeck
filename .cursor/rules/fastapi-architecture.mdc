@@ -1,5 +1,5 @@
 ---
-description: FastAPI service architecture for AeroDeck control-plane services. Enforces Pydantic V2 schemas, async DB dependency injection, and strict separation of routers, services, and repositories.
+description: FastAPI service architecture for AeroDeck control-plane services. Enforces Pydantic V2 schemas, async SQLAlchemy dependency injection, Celery/Redis task queuing, SSE deployment logs, and router → service → repository separation.
 globs: apps/**/*.py,apps/**/requirements*.txt,apps/**/pyproject.toml
 alwaysApply: false
 ---
@@ -44,7 +44,7 @@ apps/<service>/
 - Routers parse the request, call one service, and return a schema. They never import `models/` or `repositories/`, and they never contain business rules.
 - Services own business rules. They call repositories and return domain objects. They never build `JSONResponse`s or read `os.environ`.
 - Repositories are the only modules that query `models/`. Each method is `async def`, receives the injected session, and returns rows or domain objects to a service — never to a router.
-- `main.py` must not define endpoints other than `/healthz` and `/readyz`.
+- `main.py` must not define endpoints other than `/healthz` and `/readyz`. SSE streams and business routes live under `app/api/v1/routers/`.
 - No module-level side effects (DB connections, HTTP clients) outside of `lifespan`.
 
 ## 3. Pydantic V2 — strict schemas
@@ -99,3 +99,22 @@ async def get_session() -> AsyncIterator[AsyncSession]:
 - `pytest` + `pytest-asyncio` (`asyncio_mode = "auto"`) + `httpx.AsyncClient(transport=ASGITransport(app=app))`.
 - Override `get_session` and `get_settings` with `app.dependency_overrides` in fixtures; never monkeypatch module globals.
 - Each router module has a matching `tests/api/v1/test_<resource>.py`.
+
+## 8. Celery / Redis task queue
+
+- Long-running work (provision, reconcile, sandbox reap, certificate renew) is **never** awaited in an HTTP handler. Enqueue a Celery task and return `202` plus a job id.
+- Broker and result backend are Redis. The URL comes from `Settings` only (`AERODECK_REDIS_URL`). Do not construct Redis clients inline.
+- The API process does not run the worker. The orchestrator starts `celery -A app.worker worker` as a separate container from the same image.
+- Tasks live in `app/tasks/`. They call services (and, through them, repositories). They never import routers or build HTTP responses.
+- The worker reads the same `Settings` class. Task signatures take serialisable ids, not ORM objects or Pydantic models that embed secrets.
+- Without a broker URL, job routes return `503 queue_unavailable`. Do not silently run work in-process in production.
+
+## 9. Server-Sent Events for deployment logs
+
+- Live deployment / job logs use **SSE** (`text/event-stream`), not WebSockets, unless an ADR supersedes this.
+- Stream endpoints live under `/api/v1/` in a resource router. Never attach them to `main.py`.
+- Yield `data: <line>\n\n` from an `async` generator. Set `Cache-Control: no-cache` and `X-Accel-Buffering: no` so proxies do not buffer the stream.
+- Do not buffer the entire log in memory. Iterate the generator (Redis pub/sub, job event source, or a documented mock sequence).
+- Until the worker publishes real events, a stub MAY emit a fixed mock sequence (`Initializing Terraform...`, `Provisioning K3s...`, `Done`) with the same event shape the dashboard will consume.
+- Auth on the stream matches sibling job routes: an enrolled client token is required once the stub is replaced by real logs.
+- The Next.js dashboard stays mock-first (see `.cursor/rules/nextjs-dashboard.mdc`) and must not `fetch` this endpoint until a Story explicitly wires it.
