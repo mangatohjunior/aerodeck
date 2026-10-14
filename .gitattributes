@@ -1,0 +1,2 @@
+# Shell scripts run in GitHub Actions on Linux; keep LF even on Windows clones.
+*.sh text eol=lf

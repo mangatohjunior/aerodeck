@@ -1,0 +1,205 @@
+name: IaC plan and apply
+
+# Real terraform plan against Spaces state. Apply runs only on main, never on
+# a pull_request, and never from a laptop. Prod apply uses the stored plan
+# artefact and the GitHub "production" environment (required reviewers).
+#
+# Until DIGITALOCEAN_TOKEN, SPACES_ACCESS_KEY_ID, and SPACES_SECRET_ACCESS_KEY
+# are set, plan/apply jobs skip so pull requests stay green. Procedure:
+# docs/runbooks/iac-apply.md
+
+on:
+  pull_request:
+    paths:
+      - "packages/iac-engine/**"
+      - ".github/workflows/iac-plan-apply.yml"
+  push:
+    branches: [main]
+    paths:
+      - "packages/iac-engine/**"
+      - ".github/workflows/iac-plan-apply.yml"
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: Apply stored plans (main branch only). Prod still waits for the production environment approval.
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: iac-plan-apply-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  TF_IN_AUTOMATION: "true"
+  TF_INPUT: "0"
+
+jobs:
+  credentials:
+    name: credentials present
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      ready: ${{ steps.check.outputs.ready }}
+    steps:
+      - name: Check DigitalOcean and Spaces secrets
+        id: check
+        env:
+          DIGITALOCEAN_TOKEN: ${{ secrets.DIGITALOCEAN_TOKEN }}
+          SPACES_ACCESS_KEY_ID: ${{ secrets.SPACES_ACCESS_KEY_ID }}
+          SPACES_SECRET_ACCESS_KEY: ${{ secrets.SPACES_SECRET_ACCESS_KEY }}
+        run: |
+          set -euo pipefail
+          missing=0
+          [ -n "${DIGITALOCEAN_TOKEN}" ] || missing=$((missing + 1))
+          [ -n "${SPACES_ACCESS_KEY_ID}" ] || missing=$((missing + 1))
+          [ -n "${SPACES_SECRET_ACCESS_KEY}" ] || missing=$((missing + 1))
+          if [ "${missing}" -eq 3 ]; then
+            echo "ready=false" >> "${GITHUB_OUTPUT}"
+            echo "::notice::DigitalOcean/Spaces secrets are not set; skipping plan/apply. See docs/runbooks/iac-apply.md"
+            exit 0
+          fi
+          if [ "${missing}" -ne 0 ]; then
+            echo "::error::Partial IaC secrets. Set DIGITALOCEAN_TOKEN, SPACES_ACCESS_KEY_ID, and SPACES_SECRET_ACCESS_KEY together."
+            exit 1
+          fi
+          echo "ready=true" >> "${GITHUB_OUTPUT}"
+
+  plan:
+    name: plan (${{ matrix.environment }})
+    needs: credentials
+    if: needs.credentials.outputs.ready == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        environment: [dev, staging, prod]
+    defaults:
+      run:
+        working-directory: packages/iac-engine
+    env:
+      TF_VAR_do_token: ${{ secrets.DIGITALOCEAN_TOKEN }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.SPACES_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.SPACES_SECRET_ACCESS_KEY }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9.8"
+          terraform_wrapper: false
+
+      - name: Plan
+        run: bash scripts/ci.sh plan ${{ matrix.environment }}
+
+      - name: Plan summary
+        run: |
+          {
+            echo "## ${{ matrix.environment }} plan"
+            echo '```'
+            terraform show -no-color ${{ matrix.environment }}.tfplan
+            echo '```'
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Upload stored plan
+        uses: actions/upload-artifact@v4
+        with:
+          name: tfplan-${{ matrix.environment }}
+          path: packages/iac-engine/${{ matrix.environment }}.tfplan
+          if-no-files-found: error
+          retention-days: 14
+
+  apply-nonprod:
+    name: apply (${{ matrix.environment }})
+    needs: [credentials, plan]
+    if: >-
+      needs.credentials.outputs.ready == 'true'
+      && github.event_name != 'pull_request'
+      && github.ref == 'refs/heads/main'
+      && (github.event_name == 'push' || github.event.inputs.apply == 'true')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: ${{ matrix.environment }}
+    strategy:
+      fail-fast: false
+      matrix:
+        environment: [dev, staging]
+    concurrency:
+      group: iac-apply-${{ matrix.environment }}
+      cancel-in-progress: false
+    defaults:
+      run:
+        working-directory: packages/iac-engine
+    env:
+      TF_VAR_do_token: ${{ secrets.DIGITALOCEAN_TOKEN }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.SPACES_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.SPACES_SECRET_ACCESS_KEY }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9.8"
+          terraform_wrapper: false
+
+      - name: Download stored plan
+        uses: actions/download-artifact@v4
+        with:
+          name: tfplan-${{ matrix.environment }}
+          path: packages/iac-engine
+
+      - name: Apply stored plan
+        run: bash scripts/ci.sh apply ${{ matrix.environment }}
+
+  apply-prod:
+    name: apply (prod)
+    needs: [credentials, plan]
+    if: >-
+      needs.credentials.outputs.ready == 'true'
+      && github.event_name != 'pull_request'
+      && github.ref == 'refs/heads/main'
+      && (github.event_name == 'push' || github.event.inputs.apply == 'true')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: production
+    concurrency:
+      group: iac-apply-prod
+      cancel-in-progress: false
+    defaults:
+      run:
+        working-directory: packages/iac-engine
+    env:
+      TF_VAR_do_token: ${{ secrets.DIGITALOCEAN_TOKEN }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.SPACES_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.SPACES_SECRET_ACCESS_KEY }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9.8"
+          terraform_wrapper: false
+
+      - name: Download stored plan
+        uses: actions/download-artifact@v4
+        with:
+          name: tfplan-prod
+          path: packages/iac-engine
+
+      - name: Apply stored plan
+        run: bash scripts/ci.sh apply prod

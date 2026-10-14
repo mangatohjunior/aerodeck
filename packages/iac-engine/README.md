@@ -9,10 +9,14 @@ How to bootstrap the bucket, initialise a stack, and recover a lock:
 Project and private VPC per environment:
 **[docs/runbooks/platform-network.md](../../docs/runbooks/platform-network.md)**.
 
+Plan and apply (CI only; prod needs a stored plan and approval):
+**[docs/runbooks/iac-apply.md](../../docs/runbooks/iac-apply.md)**.
+
 ```bash
 terraform fmt -check
 terraform init -backend=false
 terraform validate   # needs TF_VAR_do_token set to any non-empty string
 ```
 
-Do not `terraform apply` from a laptop against shared state. That is #8.
+Do not `terraform apply` from a laptop against shared state.
+See [iac-apply.md](../../docs/runbooks/iac-apply.md).

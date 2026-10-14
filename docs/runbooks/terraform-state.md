@@ -4,8 +4,8 @@ Every environment's Terraform state lives in one Spaces bucket, one object per
 environment and stack. Plans are shared and locked. State files are never
 committed.
 
-Applies run in CI (#8). Do not `terraform apply` against this bucket from a
-laptop.
+Applies run in CI ([iac-apply.md](iac-apply.md)). Do not `terraform apply`
+against this bucket from a laptop.
 
 ## Layout
 
@@ -77,8 +77,8 @@ and is the wrong mode. Local state (`backend "local"`) is forbidden outside
 - `terraform init -backend=false`
 - `terraform validate` with a dummy `TF_VAR_do_token`
 
-It does **not** talk to Spaces or DigitalOcean. A real `plan` against the
-bucket lands with #8.
+It does **not** talk to Spaces or DigitalOcean. A real `plan` / `apply`
+against the bucket is [iac-apply.md](iac-apply.md).
 
 ## Lock stuck
 
@@ -113,4 +113,4 @@ Copy `backend.hcl`, keep the same bucket, change only the `key` at init.
 
 - #6 (this runbook) — state in Spaces.
 - #7 — project and private VPC per environment ([platform-network.md](platform-network.md)).
-- #8 — apply only from CI; prod requires a stored plan and a human approval.
+- #8 — apply only from CI ([iac-apply.md](iac-apply.md)).
