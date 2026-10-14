@@ -40,5 +40,6 @@ Follow the runbooks; do not invent a parallel procedure.
 ## Status
 
 Epics 1–2 are on `main` (applies skip until DigitalOcean secrets exist).
-Edge routing (#10–#12) and sandboxes (#14–#15) do not need a cloud account.
-Next: enroll hypervisor hosts (#16).
+Edge routing (#10–#12) and sandboxes (#14–#16) do not need a cloud account.
+Host enrollment is an API call; do not add Hetzner (or any other cloud) to
+`packages/iac-engine`.

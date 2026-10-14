@@ -13,6 +13,7 @@ platform_router = APIRouter(prefix="/sandboxes", tags=["sandboxes"])
 _NOT_FOUND = {status.HTTP_404_NOT_FOUND: {"model": ErrorResponse}}
 _UNAUTHENTICATED = {status.HTTP_401_UNAUTHORIZED: {"model": ErrorResponse}}
 _BAD_GATEWAY = {status.HTTP_502_BAD_GATEWAY: {"model": ErrorResponse}}
+_UNAVAILABLE = {status.HTTP_503_SERVICE_UNAVAILABLE: {"model": ErrorResponse}}
 
 
 @router.get(
@@ -39,7 +40,7 @@ async def list_sandboxes(
     response_model=SandboxRead,
     status_code=status.HTTP_201_CREATED,
     summary="Boot a Firecracker microVM from a declared image",
-    responses=_UNAUTHENTICATED | _NOT_FOUND | _BAD_GATEWAY,
+    responses=_UNAUTHENTICATED | _NOT_FOUND | _BAD_GATEWAY | _UNAVAILABLE,
 )
 async def create_sandbox(project_id: uuid.UUID, body: SandboxCreate, sandboxes: SandboxServiceDep) -> SandboxRead:
     return SandboxRead.model_validate(await sandboxes.create(project_id, body))

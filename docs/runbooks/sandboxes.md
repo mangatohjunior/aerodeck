@@ -5,9 +5,8 @@ change can be exercised in isolation. The default hypervisor is in-memory: no
 KVM, no bare-metal host, and no DigitalOcean account.
 
 When the sandbox TTL elapses, the control plane stops the microVM so capacity
-returns to the pool. Hosts are enrolled later (#16). Firecracker machines are
-**not** provisioned by Terraform — see
-[ADR 0001](../adr/0001-sandbox-runtime-outside-iac.md).
+returns to the pool. Bare-metal KVM hosts are enrolled here — never through
+Terraform. See [ADR 0001](../adr/0001-sandbox-runtime-outside-iac.md).
 
 ## Boot a sandbox
 
@@ -46,14 +45,33 @@ curl -s -X POST http://127.0.0.1:8000/api/v1/sandboxes/reap-expired \
 The hypervisor receives a stop (`SendCtrlAltDel` on Firecracker; in-memory
 pop). The row stays with `status: stopped`. Reaping again returns `[]`.
 
+## Enroll a hypervisor host
+
+Provision the KVM machine outside this repository. Then enroll it so
+untrusted microVMs land there instead of on the control-plane network:
+
+```bash
+curl -s -X POST http://127.0.0.1:8000/api/v1/sandbox-hosts \
+  -H "authorization: Bearer $TOKEN" \
+  -H 'content-type: application/json' \
+  -d '{"name":"kvm-1","api_url":"http://10.0.20.4:8080"}'
+```
+
+`api_url` must be `http` or `https`. New sandboxes land on the enrolled host
+with the fewest running VMs. `PATCH` `{"status":"disabled"}` to stop
+scheduling. `DELETE` is a conflict while any sandbox on that host is running.
+
+With `AERODECK_SANDBOX_HYPERVISOR=memory`, hosts are optional (laptop/CI).
+With `firecracker`, create returns `503 sandbox_unavailable` until a host is
+enrolled.
+
 ## What this does not do
 
-- Register Hetzner (or any) bare-metal hypervisor hosts (#16).
 - Add a second cloud provider to `packages/iac-engine`.
-- `terraform apply` a Firecracker host.
+- `terraform apply` a Firecracker or Hetzner host.
 
 ## Related
 
 - #14 — boot a microVM.
-- #15 — destroy on TTL (this section).
-- #16 — enroll sandbox hosts.
+- #15 — destroy on TTL.
+- #16 — enroll sandbox hosts (this section).

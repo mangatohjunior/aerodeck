@@ -39,6 +39,7 @@ async def test_create_sandbox_boots_a_running_microvm(
     assert body["ttl_seconds"] == 3600
     assert body["expires_at"]
     assert body["project_id"] == project["id"]
+    assert body["host_id"] is None
     assert "hypervisor_vm_id" not in body
     uuid.UUID(body["id"])
 

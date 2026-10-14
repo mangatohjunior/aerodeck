@@ -2,7 +2,7 @@
 
 - Status: Accepted
 - Date: 2026-10-14
-- Issue: #13, #14
+- Issue: #13, #14, #16
 
 ## Context
 
@@ -18,8 +18,8 @@ The sandbox hypervisor is a control-plane concern, not a Terraform stack:
 
 - Do not add a second cloud provider to `packages/iac-engine`.
 - Do not `terraform apply` Firecracker hosts from this repository.
-- Bare-metal KVM machines (the Hetzner pool in Epic 4) are enrolled later
-  through the control plane (#16), not through IaC.
+- Bare-metal KVM machines (the Hetzner pool in Epic 4) are enrolled through
+  the control plane (`POST /api/v1/sandbox-hosts`), not through IaC.
 - Until a host exists, the API uses an in-memory hypervisor so laptops and CI
   can boot a sandbox without KVM.
 
@@ -27,5 +27,5 @@ The sandbox hypervisor is a control-plane concern, not a Terraform stack:
 
 - Epic 2 (DigitalOcean project/VPC/Spaces) stays the only Terraform surface.
 - Starting a sandbox (#14) does not wait on cloud credentials.
-- Destroy-on-TTL (#15) and host registration (#16) extend this API; they still
-  must not introduce Hetzner (or any other cloud) into the IaC engine.
+- Destroy-on-TTL (#15) and host enrollment (#16) stay on this API; they must
+  not introduce Hetzner (or any other cloud) into the IaC engine.

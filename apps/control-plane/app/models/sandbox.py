@@ -34,5 +34,9 @@ class Sandbox(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         default=SandboxStatus.running,
     )
     hypervisor_vm_id: Mapped[str | None] = mapped_column(String(64))
+    host_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("sandbox_hosts.id", ondelete="SET NULL"), index=True
+    )
 
     project: Mapped[Project] = relationship(back_populates="sandboxes")
+    host: Mapped["SandboxHost | None"] = relationship(back_populates="sandboxes")
