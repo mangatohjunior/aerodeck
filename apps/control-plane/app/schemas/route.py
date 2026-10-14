@@ -4,6 +4,8 @@ from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from app.schemas.certificate import TraefikRouterTls, TraefikTls
+
 Hostname = Annotated[
     str,
     Field(
@@ -114,6 +116,7 @@ class TraefikRouter(BaseModel):
     rule: str
     service: str
     entryPoints: list[str]
+    tls: TraefikRouterTls | None = None
 
 
 class TraefikHttp(BaseModel):
@@ -129,3 +132,4 @@ class TraefikConfiguration(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     http: TraefikHttp
+    tls: TraefikTls | None = None

@@ -2,8 +2,9 @@ import uuid
 
 from fastapi import APIRouter, status
 
-from app.api.deps import PaginationDep, RouteServiceDep
+from app.api.deps import CertificateServiceDep, PaginationDep, RouteServiceDep
 from app.schemas.auth import ErrorResponse
+from app.schemas.certificate import CertificateRead
 from app.schemas.common import Page
 from app.schemas.route import RouteCreate, RouteRead, RouteUpdate
 
@@ -74,3 +75,42 @@ async def update_route(
 )
 async def delete_route(project_id: uuid.UUID, route_id: uuid.UUID, routes: RouteServiceDep) -> None:
     await routes.delete(project_id, route_id)
+
+
+@router.get(
+    "/{route_id}/certificate",
+    response_model=CertificateRead,
+    status_code=status.HTTP_200_OK,
+    summary="Get the TLS certificate for a route",
+    responses=_NOT_FOUND,
+)
+async def get_certificate(
+    project_id: uuid.UUID, route_id: uuid.UUID, certificates: CertificateServiceDep
+) -> CertificateRead:
+    return CertificateRead.model_validate(await certificates.get(project_id, route_id))
+
+
+@router.post(
+    "/{route_id}/certificate/issue",
+    response_model=CertificateRead,
+    status_code=status.HTTP_200_OK,
+    summary="Issue a certificate via DNS-01",
+    responses=_UNAUTHENTICATED | _NOT_FOUND | _CONFLICT,
+)
+async def issue_certificate(
+    project_id: uuid.UUID, route_id: uuid.UUID, certificates: CertificateServiceDep
+) -> CertificateRead:
+    return CertificateRead.model_validate(await certificates.issue(project_id, route_id))
+
+
+@router.post(
+    "/{route_id}/certificate/renew",
+    response_model=CertificateRead,
+    status_code=status.HTTP_200_OK,
+    summary="Renew a certificate via DNS-01",
+    responses=_UNAUTHENTICATED | _NOT_FOUND | _CONFLICT,
+)
+async def renew_certificate(
+    project_id: uuid.UUID, route_id: uuid.UUID, certificates: CertificateServiceDep
+) -> CertificateRead:
+    return CertificateRead.model_validate(await certificates.renew(project_id, route_id))

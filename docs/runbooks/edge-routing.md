@@ -1,8 +1,8 @@
 # Edge routing (Traefik)
 
 The control plane is the source of Traefik routes. Declare a hostname on a
-project; Traefik pulls the HTTP provider snapshot. TLS (#11) and DNS records
-(#12) are not in this runbook.
+project; Traefik pulls the HTTP provider snapshot. Certificates are issued
+through DNS-01 (this runbook). DNS *address* records are #12.
 
 No DigitalOcean account is required. Traefik can run against a laptop API.
 
@@ -43,6 +43,8 @@ Authenticate with either:
 entryPoints:
   web:
     address: ":80"
+  websecure:
+    address: ":443"
 
 providers:
   http:
@@ -55,15 +57,46 @@ providers:
 Point `backend_host` at a name or address Traefik can reach (Docker service
 name, private VPC IP). Until DigitalOcean exists, use a local process.
 
+## Certificates (DNS-01)
+
+Publishing a route creates a **pending** certificate. Issue it:
+
+```bash
+curl -s -X POST \
+  http://127.0.0.1:8000/api/v1/projects/<project-id>/routes/<route-id>/certificate/issue \
+  -H "authorization: Bearer $TOKEN"
+```
+
+The issuer presents a TXT record at `_acme-challenge.<hostname>` through the
+DNS-01 provider, then stores the cert. `GET` on that certificate never returns
+PEM or the private key. Traefik receives them only on `GET /api/v1/edge/traefik`.
+
+| `AERODECK_DNS01_PROVIDER` | What happens |
+| ------------------------- | ------------ |
+| `memory` (default) | In-process TXT store + fake ACME (self-signed, 90 days). Laptop/CI. |
+| `digitalocean` | TXT records via the DigitalOcean Domains API. Needs `AERODECK_DIGITALOCEAN_TOKEN`. |
+
+Renew one route: `POST .../certificate/renew`. Renew everything due in the
+next 30 days (`AERODECK_CERTIFICATE_RENEW_BEFORE_DAYS`):
+
+```bash
+curl -s -X POST http://127.0.0.1:8000/api/v1/edge/certificates/renew-due \
+  -H "authorization: Bearer $TOKEN"
+```
+
+After issue, the Traefik snapshot puts the router on `websecure` and includes
+`tls.certificates`. Let's Encrypt is not wired until an ACME account exists;
+the fake issuer still exercises the DNS-01 path.
+
 ## What this does not do
 
-- Issue certificates (#11).
-- Create DNS records (#12).
+- Create A/AAAA DNS records (#12).
+- Talk to Let's Encrypt until an account is configured.
 - `terraform apply` a Traefik Droplet. Applies stay in CI
   ([iac-apply.md](iac-apply.md)).
 
 ## Related
 
-- #10 — this runbook.
-- #11 — TLS from DNS.
+- #10 — route declarations.
+- #11 — TLS from DNS (this section).
 - #12 — DNS record lifecycle.
