@@ -25,6 +25,7 @@ def make_settings(database_url: str | None, **overrides: object) -> Settings:
         auth_signing_key=SIGNING_KEY,
         auth_token_ttl_seconds=300,
         auth_clients={CLIENT_ID: hash_client_secret(CLIENT_SECRET)},
+        traefik_provider_token="test-traefik-provider-token",
         **overrides,
     )
 
