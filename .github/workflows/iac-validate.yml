@@ -1,18 +1,20 @@
 name: IaC validate
 
 # Format and validate the Terraform root module without talking to Spaces or
-# DigitalOcean. A real plan against the remote state lands with #8.
+# DigitalOcean. A real plan against the remote state is iac-plan-apply.yml.
 
 on:
   pull_request:
     paths:
       - "packages/iac-engine/**"
       - ".github/workflows/iac-validate.yml"
+      - ".github/workflows/iac-plan-apply.yml"
   push:
     branches: [main]
     paths:
       - "packages/iac-engine/**"
       - ".github/workflows/iac-validate.yml"
+      - ".github/workflows/iac-plan-apply.yml"
 
 permissions:
   contents: read
@@ -58,3 +60,6 @@ jobs:
 
       - name: network module shape
         run: python tests/test_network.py
+
+      - name: CI plan/apply shape
+        run: python tests/test_ci_apply.py

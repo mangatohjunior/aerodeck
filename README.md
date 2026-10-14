@@ -22,8 +22,10 @@ Follow the runbooks; do not invent a parallel procedure.
 2. **Local API:** [docs/runbooks/control-plane.md](docs/runbooks/control-plane.md)
    (venv, `.env`, `alembic upgrade head`, uvicorn, Celery worker).
 3. **Network:** [docs/runbooks/platform-network.md](docs/runbooks/platform-network.md)
-   (project + private VPC per environment; apply waits for #8).
-4. **Board:** [docs/runbooks/issue-workflow.md](docs/runbooks/issue-workflow.md).
+   (project + private VPC per environment).
+4. **Apply:** [docs/runbooks/iac-apply.md](docs/runbooks/iac-apply.md)
+   (plan in Actions; apply only on main; prod needs approval).
+5. **Board:** [docs/runbooks/issue-workflow.md](docs/runbooks/issue-workflow.md).
 
 ## Guardrails
 
@@ -35,6 +37,6 @@ Follow the runbooks; do not invent a parallel procedure.
 
 ## Status
 
-Epic 1 (control plane) and #6 (Spaces state) are on `main`. #7 declares the
-project and private VPC per environment (code only; apply waits for a
-DigitalOcean account and #8). Next: CI-only applies (#8).
+Epic 1, #6 (Spaces state), and #7 (project + VPC) are on `main`. Applies run
+from GitHub Actions only ([iac-apply.md](docs/runbooks/iac-apply.md)); they
+stay skipped until DigitalOcean and Spaces secrets exist.

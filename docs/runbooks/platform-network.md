@@ -2,7 +2,8 @@
 
 Each environment gets its own DigitalOcean **Project** and a **private VPC**.
 Workloads never use the region's default VPC. Declared in
-`packages/iac-engine/modules/network`. Applied in CI (#8), not from a laptop.
+`packages/iac-engine/modules/network`. Applied in CI
+([iac-apply.md](iac-apply.md)), not from a laptop.
 
 ## What exists after apply
 
@@ -55,7 +56,8 @@ terraform plan -var-file=envs/${ENV}.tfvars -out=${ENV}.tfplan
 Expected creates: one project and one VPC. No Droplets, databases, clusters,
 or `digitalocean_project_resources` (a VPC cannot be assigned to a project).
 
-Do **not** `terraform apply` from a laptop. That is #8.
+Do **not** `terraform apply` from a laptop. Procedure:
+[iac-apply.md](iac-apply.md).
 
 ## After a future apply, verify
 
@@ -87,4 +89,4 @@ Never omit `vpc_uuid` on a Droplet, database cluster, or Kubernetes cluster.
 
 - #6 — state in Spaces.
 - #7 — this runbook.
-- #8 — apply only from CI; prod needs a stored plan and a human approval.
+- #8 — apply only from CI ([iac-apply.md](iac-apply.md)).
