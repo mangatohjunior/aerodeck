@@ -31,6 +31,8 @@ class BootedMachine:
 class Hypervisor(Protocol):
     def boot(self, sandbox_id: UUID, image: str, vcpu: int, memory_mib: int) -> BootedMachine: ...
 
+    def stop(self, vm_id: str) -> None: ...
+
 
 def image_paths(image: str, image_root: str) -> tuple[Path, Path]:
     """Resolve kernel and rootfs for a declared image. Rejects path traversal."""
@@ -54,6 +56,9 @@ class MemoryHypervisor:
         machine = BootedMachine(sandbox_id.hex, image, vcpu, memory_mib)
         self.booted[machine.vm_id] = machine
         return machine
+
+    def stop(self, vm_id: str) -> None:
+        self.booted.pop(vm_id, None)
 
 
 class FirecrackerHypervisor:
@@ -88,6 +93,13 @@ class FirecrackerHypervisor:
         )
         self._put("/actions", {"action_type": "InstanceStart"})
         return BootedMachine(sandbox_id.hex, image, vcpu, memory_mib)
+
+    def stop(self, vm_id: str) -> None:
+        if not vm_id:
+            return
+        response = self._client.put("/actions", json={"action_type": "SendCtrlAltDel"})
+        if response.status_code >= 400 and response.status_code != 404:
+            raise SandboxError(f"Firecracker refused to stop {vm_id}: HTTP {response.status_code}")
 
     def _put(self, path: str, body: dict[str, object]) -> None:
         response = self._client.put(path, json=body)

@@ -17,6 +17,7 @@ ImageName = Annotated[
 ]
 VcpuCount = Annotated[int, Field(ge=1, le=8)]
 MemoryMib = Annotated[int, Field(ge=32, le=4096)]
+TtlSeconds = Annotated[int, Field(ge=30, le=86_400)]
 
 
 class SandboxCreate(BaseModel):
@@ -25,6 +26,7 @@ class SandboxCreate(BaseModel):
     image: ImageName
     vcpu: VcpuCount = 1
     memory_mib: MemoryMib = 128
+    ttl_seconds: TtlSeconds = 3600
 
 
 class SandboxRead(BaseModel):
@@ -35,6 +37,8 @@ class SandboxRead(BaseModel):
     image: str
     vcpu: int
     memory_mib: int
+    ttl_seconds: int
+    expires_at: datetime
     status: SandboxStatus
     created_at: datetime
     updated_at: datetime

@@ -8,6 +8,7 @@ from app.schemas.common import Page
 from app.schemas.sandbox import SandboxCreate, SandboxRead
 
 router = APIRouter(prefix="/projects/{project_id}/sandboxes", tags=["sandboxes"])
+platform_router = APIRouter(prefix="/sandboxes", tags=["sandboxes"])
 
 _NOT_FOUND = {status.HTTP_404_NOT_FOUND: {"model": ErrorResponse}}
 _UNAUTHENTICATED = {status.HTTP_401_UNAUTHORIZED: {"model": ErrorResponse}}
@@ -53,3 +54,14 @@ async def create_sandbox(project_id: uuid.UUID, body: SandboxCreate, sandboxes: 
 )
 async def get_sandbox(project_id: uuid.UUID, sandbox_id: uuid.UUID, sandboxes: SandboxServiceDep) -> SandboxRead:
     return SandboxRead.model_validate(await sandboxes.get(project_id, sandbox_id))
+
+
+@platform_router.post(
+    "/reap-expired",
+    response_model=list[SandboxRead],
+    status_code=status.HTTP_200_OK,
+    summary="Destroy sandboxes whose TTL has elapsed",
+    responses=_UNAUTHENTICATED,
+)
+async def reap_expired_sandboxes(sandboxes: SandboxServiceDep) -> list[SandboxRead]:
+    return [SandboxRead.model_validate(item) for item in await sandboxes.reap_expired()]

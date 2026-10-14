@@ -24,12 +24,15 @@ def test_image_paths_rejects_traversal() -> None:
         image_paths("a\\b", "/var/lib/aerodeck/images")
 
 
-def test_memory_hypervisor_boots() -> None:
+def test_memory_hypervisor_boots_and_stops() -> None:
     hypervisor = MemoryHypervisor()
     sandbox_id = uuid4()
     machine = hypervisor.boot(sandbox_id, "alpine-3.20", 1, 128)
     assert machine.vm_id == sandbox_id.hex
     assert machine.vm_id in hypervisor.booted
+    hypervisor.stop(machine.vm_id)
+    assert machine.vm_id not in hypervisor.booted
+    hypervisor.stop(machine.vm_id)
 
 
 def test_firecracker_hypervisor_starts_the_instance() -> None:
@@ -74,3 +77,31 @@ def test_firecracker_hypervisor_maps_http_errors() -> None:
     )
     with pytest.raises(SandboxError):
         hypervisor.boot(uuid4(), "alpine-3.20", 1, 128)
+
+
+def test_firecracker_hypervisor_sends_ctrl_alt_del() -> None:
+    calls: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(request)
+        return httpx.Response(204)
+
+    client = httpx.Client(transport=httpx.MockTransport(handler), base_url="http://firecracker")
+    hypervisor = FirecrackerHypervisor(
+        api_url="http://firecracker", image_root="/var/lib/aerodeck/images", client=client
+    )
+    hypervisor.stop("abc123")
+    assert calls[0].method == "PUT"
+    assert calls[0].url.path == "/actions"
+    assert json.loads(calls[0].content) == {"action_type": "SendCtrlAltDel"}
+
+
+def test_firecracker_stop_treats_missing_instance_as_gone() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(404)
+
+    client = httpx.Client(transport=httpx.MockTransport(handler), base_url="http://firecracker")
+    hypervisor = FirecrackerHypervisor(
+        api_url="http://firecracker", image_root="/var/lib/aerodeck/images", client=client
+    )
+    hypervisor.stop("already-gone")

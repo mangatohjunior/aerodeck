@@ -7,7 +7,7 @@ chat history.
 | ------- | -------------- |
 | [Control plane](control-plane.md) | Run the API, worker, and tests locally; apply Alembic migrations. |
 | [Edge routing](edge-routing.md) | Declare hostnames; Traefik snapshot, DNS records, DNS-01 certs. |
-| [Sandboxes](sandboxes.md) | Boot a Firecracker microVM from a declared image. |
+| [Sandboxes](sandboxes.md) | Boot a Firecracker microVM; reap it when the TTL elapses. |
 | [Terraform remote state](terraform-state.md) | Bootstrap the Spaces bucket, initialise a stack, recover a locked state file. |
 | [Platform network](platform-network.md) | Project and private VPC per environment; how later stacks attach. |
 | [Apply from CI](iac-apply.md) | Plan in Actions; apply only on main; prod needs a stored plan and approval. |

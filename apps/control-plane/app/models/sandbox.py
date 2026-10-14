@@ -1,7 +1,9 @@
 import enum
 import uuid
 
-from sqlalchemy import Enum, ForeignKey, Integer, String
+from datetime import datetime
+
+from sqlalchemy import DateTime, Enum, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
@@ -10,6 +12,7 @@ from app.models.project import Project
 
 class SandboxStatus(enum.StrEnum):
     running = "running"
+    stopped = "stopped"
 
 
 class Sandbox(UUIDPrimaryKeyMixin, TimestampMixin, Base):
@@ -23,6 +26,8 @@ class Sandbox(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     image: Mapped[str] = mapped_column(String(64), nullable=False)
     vcpu: Mapped[int] = mapped_column(Integer, nullable=False)
     memory_mib: Mapped[int] = mapped_column(Integer, nullable=False)
+    ttl_seconds: Mapped[int] = mapped_column(Integer, nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
     status: Mapped[SandboxStatus] = mapped_column(
         Enum(SandboxStatus, name="sandbox_status", native_enum=False, length=16),
         nullable=False,
