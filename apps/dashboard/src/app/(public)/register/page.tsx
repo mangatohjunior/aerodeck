@@ -16,7 +16,7 @@ export default function RegisterPage() {
       <PageHeader
         eyebrow="Register"
         title="Create your account"
-        description="Email and password first. Google sign-in is a later story. The mock store forgets users when Next.js restarts."
+        description="Email and password, or Continue with Google. The mock store forgets users when Next.js restarts."
       />
       <Suspense fallback={<RegisterForm />}>
         <GuestOnly>

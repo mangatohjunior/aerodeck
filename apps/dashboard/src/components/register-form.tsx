@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 
+import { GoogleContinue } from "@/components/google-continue";
 import { PolicyNotice } from "@/components/policy-notice";
 import { Button } from "@/components/ui/button";
 import {
@@ -85,9 +86,10 @@ export function RegisterForm() {
       <CardHeader className="border-b">
         <CardTitle>Create an account</CardTitle>
         <CardDescription>
-          Email and password against the local mock at{" "}
-          <span className="font-mono">/api/mock/v1/auth/register</span>. A 201
-          sends you to Login. Sign-in sets the session cookie.
+          Email and password against{" "}
+          <span className="font-mono">/api/mock/v1/auth/register</span>, or
+          Continue with Google. A 201 still sends you to Login. Google signs you
+          in immediately.
         </CardDescription>
       </CardHeader>
       <form onSubmit={handleSubmit}>
@@ -138,6 +140,7 @@ export function RegisterForm() {
           ) : (
             <PolicyNotice />
           )}
+          <GoogleContinue disabled={submitting} />
         </CardContent>
         <CardFooter className="flex flex-col items-stretch gap-3 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-xs text-muted-foreground">

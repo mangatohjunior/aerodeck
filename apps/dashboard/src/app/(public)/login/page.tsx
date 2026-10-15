@@ -16,7 +16,7 @@ export default function LoginPage() {
       <PageHeader
         eyebrow="Login"
         title="Sign in"
-        description="Use the email and password from Register. Google sign-in is a later story."
+        description="Email and password, or Continue with Google. Mock Google does not call Google Cloud until GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET are set."
       />
       <Suspense fallback={<LoginForm />}>
         <GuestOnly>
