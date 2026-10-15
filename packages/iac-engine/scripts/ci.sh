@@ -1,17 +1,17 @@
 #!/usr/bin/env bash
-# Plan or apply one environment from GitHub Actions.
-# Applies are refused unless GITHUB_ACTIONS=true. Never pass -auto-approve;
-# applying a stored plan file is already non-interactive.
+# Plan, apply, or destroy one environment from GitHub Actions.
+# Apply and destroy are refused unless GITHUB_ACTIONS=true. Never pass
+# -auto-approve; applying a stored plan file is already non-interactive.
 set -euo pipefail
 
 usage() {
-  echo "usage: $0 plan|apply <dev|staging|prod>" >&2
+  echo "usage: $0 plan|apply|destroy-plan|destroy-apply <dev|staging|prod>" >&2
   exit 2
 }
 
 CMD="${1:-}"
 ENV_NAME="${2:-}"
-case "${CMD}" in plan|apply) ;; *) usage ;; esac
+case "${CMD}" in plan|apply|destroy-plan|destroy-apply) ;; *) usage ;; esac
 case "${ENV_NAME}" in dev|staging|prod) ;; *) usage ;; esac
 
 if [[ "${CMD}" == "apply" && "${GITHUB_ACTIONS:-}" != "true" ]]; then
@@ -19,15 +19,39 @@ if [[ "${CMD}" == "apply" && "${GITHUB_ACTIONS:-}" != "true" ]]; then
   exit 1
 fi
 
+if [[ "${CMD}" == destroy-plan || "${CMD}" == destroy-apply ]]; then
+  if [[ "${GITHUB_ACTIONS:-}" != "true" ]]; then
+    echo "Refusing terraform destroy outside GitHub Actions. See docs/runbooks/iac-destroy.md" >&2
+    exit 1
+  fi
+fi
+
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "${ROOT}"
 
 PLANFILE="${ENV_NAME}.tfplan"
+if [[ "${CMD}" == destroy-plan || "${CMD}" == destroy-apply ]]; then
+  PLANFILE="${ENV_NAME}.destroy.tfplan"
+fi
 TFVARS="envs/${ENV_NAME}.tfvars"
 STATE_KEY="${ENV_NAME}/platform/terraform.tfstate"
 
 export TF_IN_AUTOMATION=1
 export TF_INPUT=0
+
+# prevent_destroy cannot be a variable. Destroy CI lifts it in this runner
+# checkout only so smoke-test stacks can be torn down without a laptop destroy.
+lift_prevent_destroy_in_runner() {
+  echo "Destroy path: clearing prevent_destroy in the runner checkout (not committed)"
+  find "${ROOT}" -path '*/.terraform/*' -prune -o -name '*.tf' -print \
+    | while IFS= read -r f; do
+        sed -i 's/prevent_destroy = true/prevent_destroy = false/g' "${f}"
+      done
+}
+
+if [[ "${CMD}" == destroy-plan || "${CMD}" == destroy-apply ]]; then
+  lift_prevent_destroy_in_runner
+fi
 
 terraform init -input=false \
   -backend-config=backend.hcl \
@@ -39,10 +63,17 @@ if [[ "${CMD}" == "plan" ]]; then
   exit 0
 fi
 
+if [[ "${CMD}" == "destroy-plan" ]]; then
+  terraform plan -destroy -input=false -var-file="${TFVARS}" -out="${PLANFILE}"
+  terraform show -no-color "${PLANFILE}"
+  exit 0
+fi
+
 if [[ ! -f "${PLANFILE}" ]]; then
   echo "missing stored plan ${PLANFILE}; plan in CI and download the artefact first" >&2
   exit 1
 fi
 
-# Prod and non-prod both apply the stored plan. Do not add -auto-approve.
+# Prod and non-prod both apply the stored plan (create or destroy).
+# Do not add -auto-approve.
 terraform apply -input=false "${PLANFILE}"

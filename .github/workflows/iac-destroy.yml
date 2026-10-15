@@ -1,0 +1,181 @@
+name: IaC destroy
+
+# Tear down one environment's platform stack from a stored destroy plan.
+# Manual only. Never on pull_request. Never from a laptop.
+# Prod waits on the GitHub "production" environment.
+#
+# Does not delete Spaces bucket aerodeck-tfstate or the Container Registry;
+# those are not in this Terraform stack.
+#
+# Procedure: docs/runbooks/iac-destroy.md
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Environment whose platform stack to destroy (dev, staging, or prod)
+        type: choice
+        options: [dev, staging, prod]
+        required: true
+      confirm:
+        description: Type destroy-<environment> exactly (example destroy-dev)
+        type: string
+        required: true
+      apply_destroy:
+        description: Apply the stored destroy plan. Leave unchecked to plan only.
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: iac-destroy-${{ github.event.inputs.environment }}
+  cancel-in-progress: false
+
+env:
+  TF_IN_AUTOMATION: "true"
+  TF_INPUT: "0"
+
+jobs:
+  confirm:
+    name: confirm destroy intent
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require main, matching confirm string, and no pull_request
+        env:
+          CONFIRM: ${{ github.event.inputs.confirm }}
+          ENV_NAME: ${{ github.event.inputs.environment }}
+        run: |
+          set -euo pipefail
+          if [ "${GITHUB_EVENT_NAME}" = "pull_request" ]; then
+            echo "::error::Destroy must not run on pull_request"
+            exit 1
+          fi
+          if [ "${GITHUB_REF}" != "refs/heads/main" ]; then
+            echo "::error::Destroy runs only from main"
+            exit 1
+          fi
+          expected="destroy-${ENV_NAME}"
+          if [ "${CONFIRM}" != "${expected}" ]; then
+            echo "::error::confirm must be exactly ${expected}"
+            exit 1
+          fi
+
+  credentials:
+    name: credentials present
+    needs: confirm
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      ready: ${{ steps.check.outputs.ready }}
+    steps:
+      - name: Check DigitalOcean and Spaces secrets
+        id: check
+        env:
+          DIGITALOCEAN_TOKEN: ${{ secrets.DIGITALOCEAN_TOKEN }}
+          SPACES_ACCESS_KEY_ID: ${{ secrets.SPACES_ACCESS_KEY_ID }}
+          SPACES_SECRET_ACCESS_KEY: ${{ secrets.SPACES_SECRET_ACCESS_KEY }}
+        run: |
+          set -euo pipefail
+          missing=0
+          [ -n "${DIGITALOCEAN_TOKEN}" ] || missing=$((missing + 1))
+          [ -n "${SPACES_ACCESS_KEY_ID}" ] || missing=$((missing + 1))
+          [ -n "${SPACES_SECRET_ACCESS_KEY}" ] || missing=$((missing + 1))
+          if [ "${missing}" -eq 3 ]; then
+            echo "::error::DigitalOcean/Spaces secrets are not set. See docs/runbooks/iac-destroy.md"
+            exit 1
+          fi
+          if [ "${missing}" -ne 0 ]; then
+            echo "::error::Partial IaC secrets. Set DIGITALOCEAN_TOKEN, SPACES_ACCESS_KEY_ID, and SPACES_SECRET_ACCESS_KEY together."
+            exit 1
+          fi
+          echo "ready=true" >> "${GITHUB_OUTPUT}"
+
+  plan:
+    name: destroy plan (${{ github.event.inputs.environment }})
+    needs: [confirm, credentials]
+    if: needs.credentials.outputs.ready == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: packages/iac-engine
+    env:
+      TF_VAR_do_token: ${{ secrets.DIGITALOCEAN_TOKEN }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.SPACES_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.SPACES_SECRET_ACCESS_KEY }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9.8"
+          terraform_wrapper: false
+
+      - name: Destroy plan
+        run: bash scripts/ci.sh destroy-plan ${{ github.event.inputs.environment }}
+
+      - name: Plan summary
+        run: |
+          {
+            echo "## destroy plan ${{ github.event.inputs.environment }}"
+            echo '```'
+            terraform show -no-color ${{ github.event.inputs.environment }}.destroy.tfplan
+            echo '```'
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Upload stored destroy plan
+        uses: actions/upload-artifact@v4
+        with:
+          name: tfdestroy-${{ github.event.inputs.environment }}
+          path: packages/iac-engine/${{ github.event.inputs.environment }}.destroy.tfplan
+          if-no-files-found: error
+          retention-days: 7
+
+  apply:
+    name: destroy apply (${{ github.event.inputs.environment }})
+    needs: [confirm, credentials, plan]
+    if: >-
+      needs.credentials.outputs.ready == 'true'
+      && github.event_name == 'workflow_dispatch'
+      && github.ref == 'refs/heads/main'
+      && github.event.inputs.apply_destroy == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: ${{ github.event.inputs.environment == 'prod' && 'production' || github.event.inputs.environment }}
+    concurrency:
+      group: iac-apply-${{ github.event.inputs.environment }}
+      cancel-in-progress: false
+    defaults:
+      run:
+        working-directory: packages/iac-engine
+    env:
+      TF_VAR_do_token: ${{ secrets.DIGITALOCEAN_TOKEN }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.SPACES_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.SPACES_SECRET_ACCESS_KEY }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9.8"
+          terraform_wrapper: false
+
+      - name: Download stored destroy plan
+        uses: actions/download-artifact@v4
+        with:
+          name: tfdestroy-${{ github.event.inputs.environment }}
+          path: packages/iac-engine
+
+      - name: Apply stored destroy plan
+        run: bash scripts/ci.sh destroy-apply ${{ github.event.inputs.environment }}

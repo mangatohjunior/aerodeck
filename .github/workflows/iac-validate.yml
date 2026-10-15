@@ -10,6 +10,7 @@ on:
       - ".github/workflows/iac-validate.yml"
       - ".github/workflows/iac-plan-apply.yml"
       - ".github/workflows/control-plane-image.yml"
+      - ".github/workflows/iac-destroy.yml"
   push:
     branches: [main]
     paths:
@@ -17,6 +18,7 @@ on:
       - ".github/workflows/iac-validate.yml"
       - ".github/workflows/iac-plan-apply.yml"
       - ".github/workflows/control-plane-image.yml"
+      - ".github/workflows/iac-destroy.yml"
 
 permissions:
   contents: read
@@ -68,6 +70,9 @@ jobs:
 
       - name: CI plan/apply shape
         run: python tests/test_ci_apply.py
+
+      - name: CI destroy shape
+        run: python tests/test_ci_destroy.py
 
       - name: control-plane image publish shape
         run: python tests/test_image_publish.py

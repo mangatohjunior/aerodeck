@@ -18,6 +18,9 @@ Control-plane image (DigitalOcean Container Registry, git SHA + `main`):
 Plan and apply (CI only; prod needs a stored plan and approval):
 **[docs/runbooks/iac-apply.md](../../docs/runbooks/iac-apply.md)**.
 
+Tear down one environment after a smoke test (CI only):
+**[docs/runbooks/iac-destroy.md](../../docs/runbooks/iac-destroy.md)**.
+
 ```bash
 terraform fmt -check
 terraform init -backend=false

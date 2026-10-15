@@ -13,6 +13,7 @@ chat history.
 | [Terraform remote state](terraform-state.md) | Bootstrap the Spaces bucket, initialise a stack, recover a locked state file. |
 | [Platform network](platform-network.md) | Project and private VPC per environment; how later stacks attach. |
 | [Apply from CI](iac-apply.md) | Plan in Actions; apply only on main; prod needs a stored plan and approval. |
+| [Destroy from CI](iac-destroy.md) | Tear down one environment after a smoke-test apply. Manual, main only. |
 | [Issue workflow](issue-workflow.md) | How Epics and Stories move across the board. |
 | [Dashboard mock](dashboard-mock.md) | Run the Next.js console and curl `/api/mock/v1` without FastAPI. |
 
