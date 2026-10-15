@@ -1,10 +1,16 @@
 #cloud-config
-# Control-plane host. This module does not pull or start the API/worker image;
-# CI publishes that image in a later story. Docker is installed so an operator
-# (or that later workflow) can run the container inside the VPC.
+# Control-plane host. CI publishes the image to DigitalOcean Container Registry
+# (git SHA + floating main). This module writes that reference on disk; it does
+# not log in to the registry or start the container (no token on the host).
 package_update: true
 packages:
   - docker.io
   - ca-certificates
+write_files:
+  - path: /etc/aerodeck/control-plane-image
+    owner: root:root
+    permissions: "0644"
+    content: |
+      ${control_plane_image}
 runcmd:
   - [systemctl, enable, --now, docker]

@@ -90,4 +90,5 @@ module "runtime" {
   redis_node_count    = var.redis_node_count
   ssh_key_ids         = var.ssh_key_ids
   ssh_allow_cidrs     = var.ssh_allow_cidrs
+  control_plane_image = var.control_plane_image
 }

@@ -23,7 +23,8 @@ some of them are set, the workflow fails (misconfiguration).
 
 Full operator sequence (account → secrets → first apply of project, VPC,
 Droplet, Postgres, and Redis): [deploy.md](deploy.md). The control-plane
-image is still started by hand until #33.
+image is published to DigitalOcean Container Registry on `main`
+([control-plane-image.md](control-plane-image.md)) and still started by hand.
 
 ## Operator setup (once)
 

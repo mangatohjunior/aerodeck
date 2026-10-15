@@ -34,7 +34,12 @@ variable "droplet_size" {
 }
 
 variable "droplet_image" {
-  description = "Droplet image slug. Ubuntu LTS; the stack does not pull or start the control-plane image."
+  description = "Droplet image slug. Ubuntu LTS; the stack does not pull or start the control-plane container."
+  type        = string
+}
+
+variable "control_plane_image" {
+  description = "OCI image reference written to /etc/aerodeck/control-plane-image (DigitalOcean Container Registry, :main or :<git sha>)."
   type        = string
 }
 

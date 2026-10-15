@@ -12,6 +12,9 @@ Project and private VPC per environment:
 Droplet, managed PostgreSQL, and Redis in that VPC:
 **[docs/runbooks/platform-runtime.md](../../docs/runbooks/platform-runtime.md)**.
 
+Control-plane image (DigitalOcean Container Registry, git SHA + `main`):
+**[docs/runbooks/control-plane-image.md](../../docs/runbooks/control-plane-image.md)**.
+
 Plan and apply (CI only; prod needs a stored plan and approval):
 **[docs/runbooks/iac-apply.md](../../docs/runbooks/iac-apply.md)**.
 

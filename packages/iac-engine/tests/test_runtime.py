@@ -69,6 +69,8 @@ def main() -> None:
     _must(VARS, "droplet_size", "variables.tf")
     _must(VARS, "postgres_size", "variables.tf")
     _must(VARS, "redis_size", "variables.tf")
+    _must(VARS, "control_plane_image", "variables.tf")
+    _must(OUTPUTS, 'output "control_plane_image"', "outputs.tf")
 
     for env in ("dev", "staging", "prod"):
         tfvars = (ROOT / "envs" / f"{env}.tfvars").read_text(encoding="utf-8")

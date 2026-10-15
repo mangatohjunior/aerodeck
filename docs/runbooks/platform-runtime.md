@@ -4,14 +4,15 @@ Each environment VPC gets a control-plane **Droplet**, managed **PostgreSQL**,
 and managed **Redis**. Declared in `packages/iac-engine/modules/runtime`.
 Applied in CI ([iac-apply.md](iac-apply.md)), not from a laptop.
 
-This module creates the host and data stores. It does **not** pull or start
-the control-plane image ([#33](https://github.com/mangatohjunior/aerodeck/issues/33)).
+This module creates the host and data stores. It writes `control_plane_image`
+to `/etc/aerodeck/control-plane-image`. It does **not** log in to the registry
+or start the container ([control-plane-image.md](control-plane-image.md)).
 
 ## What exists after apply
 
 | Resource | Name | Notes |
 | -------- | ---- | ----- |
-| Droplet | `aerodeck-<env>-control` | Ubuntu in `aerodeck-<env>-vpc` (`vpc_uuid`). Docker is installed via cloud-init. |
+| Droplet | `aerodeck-<env>-control` | Ubuntu in `aerodeck-<env>-vpc` (`vpc_uuid`). Docker plus `/etc/aerodeck/control-plane-image`. |
 | Droplet firewall | `aerodeck-<env>-control-fw` | SSH from the VPC (or `ssh_allow_cidrs`). Port 8000 from the VPC only. |
 | PostgreSQL | `aerodeck-<env>-pg` | `engine = pg`, `private_network_uuid`. `prevent_destroy`. |
 | Redis | `aerodeck-<env>-redis` | `engine = redis`, `private_network_uuid`. `prevent_destroy`. |
@@ -32,7 +33,7 @@ Sizes (`envs/<env>.tfvars`):
 Outputs (`<env>/platform/terraform.tfstate`): `droplet_id`, `droplet_ipv4`,
 `droplet_private_ipv4`, `postgres_id`, `postgres_private_host`,
 `postgres_private_uri` (sensitive), `redis_id`, `redis_private_host`,
-`redis_private_uri` (sensitive). Network outputs from
+`redis_private_uri` (sensitive), `control_plane_image`. Network outputs from
 [platform-network.md](platform-network.md) are unchanged.
 
 ## Preconditions
@@ -82,12 +83,12 @@ In the DigitalOcean console:
    hostnames to put in `AERODECK_DATABASE_URL` / `AERODECK_REDIS_URL`.
    Rewrite the Postgres scheme to `postgresql+asyncpg`.
 
-The control-plane process is still started by hand (or by #33) on the Droplet.
-See [deploy.md](deploy.md) section 5.
+The control-plane process is still started by hand on the Droplet. See
+[deploy.md](deploy.md) section 5 and [control-plane-image.md](control-plane-image.md).
 
 ## Related
 
 - #32 — this runbook.
 - #7 — project + VPC ([platform-network.md](platform-network.md)).
 - #8 — apply only from CI ([iac-apply.md](iac-apply.md)).
-- #33 — publish and run the control-plane image.
+- #33 — publish the control-plane image ([control-plane-image.md](control-plane-image.md)).

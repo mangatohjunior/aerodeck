@@ -111,6 +111,9 @@ CI runs both legs plus `alembic upgrade / downgrade / upgrade` on PostgreSQL 16
 
 ## Docker
 
+Local image (no registry). CI publishes SHA and `main` tags to DigitalOcean
+Container Registry ([control-plane-image.md](control-plane-image.md)).
+
 ```bash
 docker build -t aerodeck/control-plane:dev apps/control-plane
 docker run --rm -p 8000:8000 \
