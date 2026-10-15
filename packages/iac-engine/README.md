@@ -9,6 +9,9 @@ How to bootstrap the bucket, initialise a stack, and recover a lock:
 Project and private VPC per environment:
 **[docs/runbooks/platform-network.md](../../docs/runbooks/platform-network.md)**.
 
+Droplet, managed PostgreSQL, and Redis in that VPC:
+**[docs/runbooks/platform-runtime.md](../../docs/runbooks/platform-runtime.md)**.
+
 Plan and apply (CI only; prod needs a stored plan and approval):
 **[docs/runbooks/iac-apply.md](../../docs/runbooks/iac-apply.md)**.
 

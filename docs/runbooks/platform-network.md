@@ -53,8 +53,10 @@ terraform init \
 terraform plan -var-file=envs/${ENV}.tfvars -out=${ENV}.tfplan
 ```
 
-Expected creates: one project and one VPC. No Droplets, databases, clusters,
-or `digitalocean_project_resources` (a VPC cannot be assigned to a project).
+The network module creates one project and one VPC. A VPC cannot be assigned
+to a project. Compute and databases are a separate module
+([platform-runtime.md](platform-runtime.md)) and attach with
+`digitalocean_project_resources`.
 
 Do **not** `terraform apply` from a laptop. Procedure:
 [iac-apply.md](iac-apply.md).

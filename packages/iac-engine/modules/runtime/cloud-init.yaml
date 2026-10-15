@@ -1,0 +1,10 @@
+#cloud-config
+# Control-plane host. This module does not pull or start the API/worker image;
+# CI publishes that image in a later story. Docker is installed so an operator
+# (or that later workflow) can run the container inside the VPC.
+package_update: true
+packages:
+  - docker.io
+  - ca-certificates
+runcmd:
+  - [systemctl, enable, --now, docker]

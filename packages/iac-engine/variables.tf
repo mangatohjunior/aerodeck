@@ -132,3 +132,112 @@ variable "extra_tags" {
     error_message = "Each tag may only contain letters, digits, '_', ':', '.', '-' and must be 1–255 characters."
   }
 }
+
+# --------------------------------------------------------------------------- #
+# Control-plane runtime (Droplet + managed Postgres + Redis)
+# --------------------------------------------------------------------------- #
+
+variable "droplet_size" {
+  description = "Droplet size slug for the control-plane host."
+  type        = string
+  default     = "s-1vcpu-2gb"
+
+  validation {
+    condition     = can(regex("^s-[0-9]+vcpu-[0-9]+gb$", var.droplet_size))
+    error_message = "droplet_size must be a DigitalOcean Droplet slug such as s-1vcpu-2gb."
+  }
+}
+
+variable "droplet_image" {
+  description = "Droplet image slug. Must be Ubuntu; this stack does not pull the control-plane container."
+  type        = string
+  default     = "ubuntu-24-04-x64"
+
+  validation {
+    condition     = startswith(var.droplet_image, "ubuntu-")
+    error_message = "droplet_image must be an Ubuntu slug (ubuntu-*)."
+  }
+}
+
+variable "postgres_size" {
+  description = "Managed PostgreSQL size slug."
+  type        = string
+  default     = "db-s-1vcpu-1gb"
+
+  validation {
+    condition     = can(regex("^db-s-[0-9]+vcpu-[0-9]+gb$", var.postgres_size))
+    error_message = "postgres_size must be a DigitalOcean database slug such as db-s-1vcpu-1gb."
+  }
+}
+
+variable "postgres_version" {
+  description = "Managed PostgreSQL major version."
+  type        = string
+  default     = "16"
+
+  validation {
+    condition     = contains(["14", "15", "16", "17"], var.postgres_version)
+    error_message = "postgres_version must be a supported DigitalOcean PostgreSQL major version (14–17)."
+  }
+}
+
+variable "postgres_node_count" {
+  description = "PostgreSQL node count. 1 is a single primary."
+  type        = number
+  default     = 1
+
+  validation {
+    condition     = var.postgres_node_count >= 1 && var.postgres_node_count <= 3
+    error_message = "postgres_node_count must be between 1 and 3."
+  }
+}
+
+variable "redis_size" {
+  description = "Managed Redis size slug."
+  type        = string
+  default     = "db-s-1vcpu-1gb"
+
+  validation {
+    condition     = can(regex("^db-s-[0-9]+vcpu-[0-9]+gb$", var.redis_size))
+    error_message = "redis_size must be a DigitalOcean database slug such as db-s-1vcpu-1gb."
+  }
+}
+
+variable "redis_version" {
+  description = "Managed Redis major version."
+  type        = string
+  default     = "7"
+
+  validation {
+    condition     = contains(["7"], var.redis_version)
+    error_message = "redis_version must be a supported DigitalOcean Redis major version."
+  }
+}
+
+variable "redis_node_count" {
+  description = "Redis node count. 1 is a single node."
+  type        = number
+  default     = 1
+
+  validation {
+    condition     = var.redis_node_count >= 1 && var.redis_node_count <= 3
+    error_message = "redis_node_count must be between 1 and 3."
+  }
+}
+
+variable "ssh_key_ids" {
+  description = "DigitalOcean SSH key IDs or fingerprints for the control-plane Droplet. Empty means console-only."
+  type        = list(string)
+  default     = []
+}
+
+variable "ssh_allow_cidrs" {
+  description = "CIDRs allowed to SSH to the control-plane Droplet. Empty means the environment VPC only."
+  type        = list(string)
+  default     = []
+
+  validation {
+    condition     = alltrue([for c in var.ssh_allow_cidrs : can(cidrnetmask(c))])
+    error_message = "Each ssh_allow_cidrs entry must be an IPv4 CIDR block."
+  }
+}
