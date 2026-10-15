@@ -30,6 +30,8 @@ Never write these into `.tf`, `.tfvars`, or `backend.hcl`.
 
 ## One-time: create the bucket
 
+Click-by-click with the rest of the account: [digitalocean-account.md](digitalocean-account.md).
+
 The platform stack **uses** the bucket; it does not create it (chicken and egg).
 Do this once in the DigitalOcean console or `doctl`, as an operator, not as
 part of the stack.

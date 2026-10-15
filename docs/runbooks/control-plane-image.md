@@ -29,6 +29,9 @@ the registry or start the container (no token on the host).
 
 ## Operator setup (once)
 
+Account, token, and registry click-by-click:
+[digitalocean-account.md](digitalocean-account.md).
+
 1. In DigitalOcean: **Container Registry** → create `aerodeck` (Starter is
    enough). One registry per account; it is not per environment.
 2. Repo secret `DIGITALOCEAN_TOKEN` already used by plan/apply. It must be
