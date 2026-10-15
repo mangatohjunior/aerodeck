@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { Suspense } from "react";
 
 import { LinkButton } from "@/components/link-button";
+import { LoginStatus } from "@/components/login-status";
 import { PageHeader } from "@/components/page-header";
 import {
   Card,
@@ -18,14 +20,7 @@ export const metadata: Metadata = {
   description: "Sign in to AeroDeck. Email and password POST lands in the next story.",
 };
 
-export default async function LoginPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ registered?: string | string[] }>;
-}) {
-  const params = await searchParams;
-  const registered = params.registered === "1";
-
+export default function LoginPage() {
   return (
     <div className="mx-auto w-full max-w-md px-4 py-10 md:px-8 md:py-16">
       <PageHeader
@@ -42,17 +37,17 @@ export default async function LoginPage({
             in localStorage. The Login story sets the session cookie.
           </CardDescription>
         </CardHeader>
-        <CardContent className="pt-4">
-          {registered ? (
-            <p className="text-sm text-primary" role="status">
-              Account created. Sign in with that email once Login is wired.
-            </p>
-          ) : (
-            <p className="text-sm text-muted-foreground">
-              Create an account first if you do not have one.
-            </p>
-          )}
-        </CardContent>
+        <Suspense
+          fallback={
+            <CardContent className="pt-4">
+              <p className="text-sm text-muted-foreground">
+                Create an account first if you do not have one.
+              </p>
+            </CardContent>
+          }
+        >
+          <LoginStatus />
+        </Suspense>
         <CardFooter className="flex flex-col items-stretch gap-3 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-xs text-muted-foreground">
             <Link href="/register" className="text-primary hover:underline">
