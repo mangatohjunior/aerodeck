@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 
+import { GuestOnly } from "@/components/guest-only";
 import { LoginForm } from "@/components/login-form";
 import { PageHeader } from "@/components/page-header";
 
@@ -16,7 +18,11 @@ export default function LoginPage() {
         title="Sign in"
         description="Use the email and password from Register. Google sign-in is a later story."
       />
-      <LoginForm />
+      <Suspense fallback={<LoginForm />}>
+        <GuestOnly>
+          <LoginForm />
+        </GuestOnly>
+      </Suspense>
     </div>
   );
 }
