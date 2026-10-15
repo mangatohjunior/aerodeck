@@ -33,6 +33,7 @@ def main() -> None:
     _must(MODULE, "vpc_uuid = var.vpc_id", "modules/runtime/main.tf")
     _must(MODULE, 'resource "digitalocean_database_cluster" "postgres"', "modules/runtime/main.tf")
     _must(MODULE, 'resource "digitalocean_database_cluster" "redis"', "modules/runtime/main.tf")
+    _must(MODULE, 'engine               = "valkey"', "modules/runtime/main.tf")
     _must(MODULE, "private_network_uuid = var.vpc_id", "modules/runtime/main.tf")
     _must(MODULE, 'resource "digitalocean_database_firewall" "postgres"', "modules/runtime/main.tf")
     _must(MODULE, 'resource "digitalocean_database_firewall" "redis"', "modules/runtime/main.tf")

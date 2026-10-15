@@ -15,7 +15,7 @@ or start the container ([control-plane-image.md](control-plane-image.md)).
 | Droplet | `aerodeck-<env>-control` | Ubuntu in `aerodeck-<env>-vpc` (`vpc_uuid`). Docker plus `/etc/aerodeck/control-plane-image`. |
 | Droplet firewall | `aerodeck-<env>-control-fw` | SSH from the VPC (or `ssh_allow_cidrs`). Port 8000 from the VPC only. |
 | PostgreSQL | `aerodeck-<env>-pg` | `engine = pg`, `private_network_uuid`. `prevent_destroy`. |
-| Redis | `aerodeck-<env>-redis` | `engine = redis`, `private_network_uuid`. `prevent_destroy`. |
+| Valkey (Redis-compatible) | `aerodeck-<env>-redis` | `engine = valkey` (DigitalOcean no longer creates new Redis clusters). `private_network_uuid`. `prevent_destroy`. |
 | Database firewalls | (attached to each cluster) | Trusted source is the control-plane Droplet only. |
 | Project members | Droplet + both clusters | `digitalocean_project_resources` on `aerodeck-<env>`. |
 
@@ -24,11 +24,11 @@ project; they still join the VPC with `vpc_uuid` / `private_network_uuid`.
 
 Sizes (`envs/<env>.tfvars`):
 
-| Environment | Droplet | Postgres | Redis |
-| ----------- | ------- | -------- | ----- |
-| dev | `s-1vcpu-2gb` | `db-s-1vcpu-1gb` | `db-s-1vcpu-1gb` |
-| staging | `s-1vcpu-2gb` | `db-s-1vcpu-1gb` | `db-s-1vcpu-1gb` |
-| prod | `s-2vcpu-4gb` | `db-s-1vcpu-2gb` | `db-s-1vcpu-1gb` |
+| Environment | Droplet | Postgres | Valkey |
+| ----------- | ------- | -------- | ------ |
+| dev | `s-1vcpu-2gb-amd` | `db-s-1vcpu-1gb` | `db-s-1vcpu-1gb` |
+| staging | `s-1vcpu-2gb-amd` | `db-s-1vcpu-1gb` | `db-s-1vcpu-1gb` |
+| prod | `s-2vcpu-4gb-amd` | `db-s-1vcpu-2gb` | `db-s-1vcpu-1gb` |
 
 Outputs (`<env>/platform/terraform.tfstate`): `droplet_id`, `droplet_ipv4`,
 `droplet_private_ipv4`, `postgres_id`, `postgres_private_host`,

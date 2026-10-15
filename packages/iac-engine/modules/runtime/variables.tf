@@ -29,7 +29,7 @@ variable "project_id" {
 }
 
 variable "droplet_size" {
-  description = "Droplet size slug for the control-plane host (e.g. s-1vcpu-2gb)."
+  description = "Droplet size slug for the control-plane host (e.g. s-1vcpu-2gb-amd)."
   type        = string
 }
 
@@ -69,7 +69,7 @@ variable "redis_size" {
 }
 
 variable "redis_version" {
-  description = "Managed Redis major version."
+  description = "Managed Valkey (Redis-compatible) major version."
   type        = string
 }
 

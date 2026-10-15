@@ -84,8 +84,10 @@ resource "digitalocean_database_cluster" "postgres" {
 }
 
 resource "digitalocean_database_cluster" "redis" {
+  # DigitalOcean no longer creates new Redis clusters. Valkey is Redis-protocol
+  # compatible (AERODECK_REDIS_URL still works).
   name                 = "${var.name_prefix}-redis"
-  engine               = "redis"
+  engine               = "valkey"
   version              = var.redis_version
   size                 = var.redis_size
   region               = var.region
