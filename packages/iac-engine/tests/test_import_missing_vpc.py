@@ -40,6 +40,39 @@ def main() -> None:
     if mod.attached_vpc_id(live) != "vpc-live":
         raise SystemExit("must recover UUID from postgres private_network_uuid")
 
+    droplet = {
+        "resources": [
+            {
+                "type": "digitalocean_droplet",
+                "name": "app",
+                "instances": [{"attributes": {"vpc_uuid": "vpc-from-droplet"}}],
+            }
+        ]
+    }
+    if mod.attached_vpc_id(droplet) != "vpc-from-droplet":
+        raise SystemExit("must recover UUID from droplet vpc_uuid")
+
+    mismatch = {
+        "resources": [
+            {
+                "type": "digitalocean_database_cluster",
+                "name": "postgres",
+                "instances": [{"attributes": {"private_network_uuid": "vpc-a"}}],
+            },
+            {
+                "type": "digitalocean_droplet",
+                "name": "app",
+                "instances": [{"attributes": {"vpc_uuid": "vpc-b"}}],
+            },
+        ]
+    }
+    try:
+        mod.attached_vpc_id(mismatch)
+    except SystemExit:
+        pass
+    else:
+        raise SystemExit("must fail when Droplet and Postgres VPC UUIDs disagree")
+
     with_vpc = {
         "resources": [
             {

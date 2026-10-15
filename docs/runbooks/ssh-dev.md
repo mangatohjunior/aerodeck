@@ -92,8 +92,8 @@ be started again after a replace.
 
 If a plan tries to **destroy** `digitalocean_database_cluster.postgres`
 because of `lifecycle.prevent_destroy`, the live VPC is missing from state.
-CI imports it before plan on push/apply. Do not lift `prevent_destroy` to
-force that apply.
+CI imports it before plan (including pull-request plans). Do not lift
+`prevent_destroy` to force that apply — that would delete the live cluster.
 
 ## 7. Log in
 

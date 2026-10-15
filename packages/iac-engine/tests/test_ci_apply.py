@@ -33,8 +33,11 @@ def main() -> None:
     _must(SCRIPT, "python3 scripts/import_missing_vpc.py", "scripts/ci.sh")
     _must(SCRIPT, 'CMD}" == destroy-plan || "${CMD}" == destroy-apply', "scripts/ci.sh")
     _must(SCRIPT, ".rehome-vpc-dropped", "scripts/ci.sh")
+    _must(SCRIPT, ".import-vpc-recovered", "scripts/ci.sh")
     if "python3 scripts/import_missing_vpc.py" not in SCRIPT.split("python3 scripts/rehome_default_vpc.py")[-1]:
         raise SystemExit("import_missing_vpc.py must run on the plan/apply path, not destroy")
+    if 'GITHUB_EVENT_NAME' in _code_lines(SCRIPT):
+        raise SystemExit("import_missing_vpc.py must run on pull_request plans")
     if "-auto-approve" in _code_lines(SCRIPT):
         raise SystemExit("scripts/ci.sh must not pass -auto-approve")
 

@@ -76,9 +76,11 @@ terraform init -input=false \
 
 # Only destroy may drop a region-default VPC from state. Running that on
 # plan/apply removed the live ams3 VPC and ForceNew-replaced Postgres.
+# Import on plan too (including pull_request) so prevent_destroy does not
+# fail the PR check while the live VPC is missing from state.
 if [[ "${CMD}" == destroy-plan || "${CMD}" == destroy-apply ]]; then
   python3 scripts/rehome_default_vpc.py
-elif [[ "${GITHUB_EVENT_NAME:-}" != "pull_request" ]]; then
+else
   python3 scripts/import_missing_vpc.py
 fi
 
@@ -94,13 +96,13 @@ if [[ "${CMD}" == "destroy-plan" ]]; then
   exit 0
 fi
 
-if [[ ! -f "${PLANFILE}" ]] && [[ ! -f .rehome-vpc-dropped ]]; then
+if [[ ! -f "${PLANFILE}" ]] && [[ ! -f .rehome-vpc-dropped ]] && [[ ! -f .import-vpc-recovered ]]; then
   echo "missing stored plan ${PLANFILE}; plan in CI and download the artefact first" >&2
   exit 1
 fi
 
-if [[ -f .rehome-vpc-dropped ]]; then
-  echo "Default VPC was dropped from state; re-planning so apply does not DELETE it"
+if [[ -f .rehome-vpc-dropped ]] || [[ -f .import-vpc-recovered ]]; then
+  echo "VPC state changed; re-planning so apply matches current state"
   if [[ "${CMD}" == "destroy-apply" ]]; then
     terraform plan -destroy -input=false -var-file="${TFVARS}" -out="${PLANFILE}"
   else
