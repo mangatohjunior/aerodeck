@@ -23,7 +23,7 @@ export function PublicShell({ children }: { children: React.ReactNode }) {
             <span className="text-sm font-semibold tracking-tight">AeroDeck</span>
           </Link>
 
-          <nav aria-label="Public" className="ml-6 hidden items-center gap-1 md:flex">
+          <nav aria-label="Public" className="ml-6 hidden items-center gap-4 md:flex">
             {PUBLIC_NAV.map((item) => (
               <PublicNavLink key={item.href} href={item.href} label={item.label} pathname={pathname} />
             ))}
@@ -84,9 +84,22 @@ export function PublicShell({ children }: { children: React.ReactNode }) {
       <main className="console-canvas flex-1">{children}</main>
 
       <footer className="border-t border-border">
-        <div className="flex w-full flex-col gap-1 px-4 py-6 text-xs text-muted-foreground md:px-8">
-          <p>AeroDeck · GitOps on DigitalOcean</p>
-          <p>Local mock UI. No FastAPI and no cloud apply from this page.</p>
+        <div className="flex w-full flex-col gap-3 px-4 py-6 text-xs text-muted-foreground md:flex-row md:items-end md:justify-between md:px-8">
+          <div className="flex flex-col gap-1">
+            <p>AeroDeck · GitOps on DigitalOcean</p>
+            <p>Local mock UI. No FastAPI and no cloud apply from this page.</p>
+          </div>
+          <nav aria-label="Legal" className="flex items-center gap-4">
+            {PUBLIC_NAV.map((item) => (
+              <PublicNavLink
+                key={`footer-${item.href}`}
+                href={item.href}
+                label={item.label}
+                pathname={pathname}
+                className="text-xs"
+              />
+            ))}
+          </nav>
         </div>
       </footer>
     </div>

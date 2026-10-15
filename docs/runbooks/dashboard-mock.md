@@ -23,6 +23,7 @@ Public marketing pages do **not** use the operator sidebar:
 | Path | What it is |
 | ---- | ---------- |
 | `/about` | Static About copy (GitOps, DigitalOcean, Firecracker). Header + footer only. |
+| `/policy` | Static Privacy and Acceptable use. Header + footer Policy links land here. |
 
 ## Mock contract
 
@@ -87,6 +88,7 @@ Invoke-RestMethod -Method Post -ContentType "application/json" `
 6. Deployments — the new row is listed. Refresh keeps it until the Next.js process restarts.
 7. Narrow viewport — hamburger opens the sidebar; a nav link closes it.
 8. About — open [http://localhost:3000/about](http://localhost:3000/about). There is no Overview / Deploy / Sandboxes sidebar. The header About link stays on `/about`. Narrow viewport: hamburger opens the public nav and About is in it.
+9. Policy — open [http://localhost:3000/policy](http://localhost:3000/policy). Privacy and Acceptable use sections are present. Header and footer Policy links land on `/policy`. No analytics pixels; no FastAPI.
 
 ## What this is not
 
