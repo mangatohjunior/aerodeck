@@ -30,6 +30,8 @@ def main() -> None:
     _must(SCRIPT, "terraform plan -destroy", "scripts/ci.sh")
     _must(SCRIPT, "lift_prevent_destroy_in_runner", "scripts/ci.sh")
     _must(SCRIPT, "python3 scripts/rehome_default_vpc.py", "scripts/ci.sh")
+    _must(SCRIPT, ".rehome-vpc-dropped", "scripts/ci.sh")
+    _must(SCRIPT, "pull_request", "scripts/ci.sh")
     rehome = (ROOT / "scripts" / "rehome_default_vpc.py").read_text(encoding="utf-8")
     _must(rehome, "/vpcs", "scripts/rehome_default_vpc.py")
     _must(rehome, '"default": True', "scripts/rehome_default_vpc.py")

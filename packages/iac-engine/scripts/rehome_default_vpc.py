@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
-"""Move the region default off a Terraform-managed VPC before destroy.
+"""Stop Terraform deleting a DigitalOcean region-default VPC.
 
-DigitalOcean returns 403 "Can not delete default VPCs". The default flag
-cannot be unset; another VPC in the same region must be set default=true.
-If this VPC is the only one, create a placeholder and make that the default.
-If DigitalOcean still refuses, drop the VPC from Terraform state and leave
-it in the account (VPCs are free).
+DELETE /v2/vpcs/:id returns 403 "Can not delete default VPCs". The default
+flag cannot be unset; another VPC in the same region must be set default=true.
+If that is refused (the first VPC in a region is often immutable), drop the
+VPC from Terraform state and leave it in the account. VPCs are free.
+
+Writes .rehome-vpc-dropped when state is changed so ci.sh can re-plan; a
+stored plan taken *before* the drop still contains the doomed DELETE.
 """
 
 from __future__ import annotations
@@ -16,8 +18,17 @@ import subprocess
 import sys
 import urllib.error
 import urllib.request
+from pathlib import Path
 
 API = "https://api.digitalocean.com/v2"
+MARKER = Path(".rehome-vpc-dropped")
+
+
+class ApiError(Exception):
+    def __init__(self, code: int, detail: str) -> None:
+        super().__init__(f"{code}: {detail}")
+        self.code = code
+        self.detail = detail
 
 
 def token() -> str:
@@ -47,7 +58,7 @@ def api(method: str, path: str, body: dict | None = None) -> dict:
             return json.loads(raw.decode()) if raw else {}
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode("utf-8", errors="replace")
-        raise SystemExit(f"rehome_default_vpc: {method} {path} -> {exc.code}: {detail}") from exc
+        raise ApiError(exc.code, detail) from exc
 
 
 def vpc_entries_from_state(state: dict) -> list[dict[str, str]]:
@@ -94,61 +105,84 @@ def unused_cidr(vpcs: list[dict], region: str) -> str:
     raise SystemExit("rehome_default_vpc: no free 10.x.0.0/20 for a placeholder VPC")
 
 
+def drop_from_state(address: str) -> None:
+    print(
+        f"rehome_default_vpc: leaving the DigitalOcean default VPC in place; "
+        f"removing {address} from Terraform state"
+    )
+    subprocess.check_call(["terraform", "state", "rm", address])
+    MARKER.write_text(address + "\n", encoding="utf-8")
+
+
 def ensure_not_default(entry: dict[str, str]) -> None:
     managed_id = entry["id"]
     region = entry["region"]
     address = entry["address"]
-    payload = api("GET", f"/vpcs/{managed_id}")
-    current = payload.get("vpc") or {}
+    try:
+        current = (api("GET", f"/vpcs/{managed_id}").get("vpc") or {})
+    except ApiError as exc:
+        if exc.code == 404:
+            drop_from_state(address)
+            return
+        raise SystemExit(f"rehome_default_vpc: GET /vpcs/{managed_id} -> {exc}") from exc
+
     if not current.get("default"):
         print(f"rehome_default_vpc: {managed_id} is not the region default")
         return
 
-    print(f"rehome_default_vpc: {managed_id} is the {region} default; moving default away")
-    listed = api("GET", "/vpcs").get("vpcs") or []
+    # Never let Terraform DELETE a VPC that is (or was) the region default.
+    # PUT default onto another VPC when we can; always drop ours from state.
+    print(f"rehome_default_vpc: {managed_id} is the {region} default; will not DELETE it")
+    try:
+        listed = api("GET", "/vpcs").get("vpcs") or []
+    except ApiError as exc:
+        raise SystemExit(f"rehome_default_vpc: GET /vpcs -> {exc}") from exc
+
     replacement = pick_replacement(managed_id, region, listed)
     if replacement is None:
         name = f"aerodeck-{region}-default-keep"
         cidr = unused_cidr(listed, region)
         print(f"rehome_default_vpc: creating placeholder {name} {cidr}")
-        created = api(
-            "POST",
-            "/vpcs",
-            {
-                "name": name,
-                "region": region,
-                "description": "Region default so Terraform can delete stack VPCs",
-                "ip_range": cidr,
-            },
-        )
+        try:
+            created = api(
+                "POST",
+                "/vpcs",
+                {
+                    "name": name,
+                    "region": region,
+                    "description": "Region default so Terraform can delete stack VPCs",
+                    "ip_range": cidr,
+                },
+            )
+        except ApiError as exc:
+            print(f"rehome_default_vpc: POST /vpcs failed ({exc}); dropping from state")
+            drop_from_state(address)
+            return
         replacement = created.get("vpc") or {}
-        listed.append(replacement)
 
     rid = replacement.get("id")
     rname = replacement.get("name")
-    if not rid or not rname:
-        raise SystemExit("rehome_default_vpc: replacement VPC has no id/name")
-    api(
-        "PUT",
-        f"/vpcs/{rid}",
-        {
-            "name": rname,
-            "description": replacement.get("description") or "",
-            "default": True,
-        },
-    )
-    print(f"rehome_default_vpc: set {rid} ({rname}) as {region} default")
+    if rid and rname:
+        try:
+            api(
+                "PUT",
+                f"/vpcs/{rid}",
+                {
+                    "name": rname,
+                    "description": replacement.get("description") or "",
+                    "default": True,
+                },
+            )
+            print(f"rehome_default_vpc: set {rid} ({rname}) as {region} default")
+        except ApiError as exc:
+            print(f"rehome_default_vpc: PUT default failed ({exc})")
 
-    again = (api("GET", f"/vpcs/{managed_id}").get("vpc") or {}).get("default")
-    if again:
-        print(
-            f"rehome_default_vpc: {managed_id} is still default; "
-            f"removing {address} from Terraform state so destroy can finish"
-        )
-        subprocess.check_call(["terraform", "state", "rm", address])
+    drop_from_state(address)
 
 
 def main() -> None:
+    if MARKER.exists():
+        MARKER.unlink()
     pulled = subprocess.check_output(["terraform", "state", "pull"], text=True)
     state = json.loads(pulled) if pulled.strip() else {}
     entries = vpc_entries_from_state(state)

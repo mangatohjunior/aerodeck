@@ -35,10 +35,10 @@ flag **only in the Actions runner checkout** so a smoke-test stack can go
 away without a laptop destroy. Merged code keeps `prevent_destroy = true`.
 
 DigitalOcean will not DELETE a VPC that is the region default
-(`Can not delete default VPCs`). Destroy CI moves the default onto another
-VPC in that region first (creating `aerodeck-<region>-default-keep` if the
-stack VPC is the only one). That placeholder is not in Terraform state and
-is not deleted.
+(`Can not delete default VPCs`). Plan/apply/destroy on `main` move the
+default onto another VPC when the API allows it, then **drop the stack VPC
+from Terraform state** so apply does not call DELETE. The leftover default
+VPC stays in the account (free) and is not in state.
 
 ## How to run it
 
