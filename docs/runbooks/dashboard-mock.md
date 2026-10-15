@@ -26,7 +26,7 @@ Public marketing pages do **not** use the operator sidebar:
 | `/about` | Static About copy (GitOps, DigitalOcean, Firecracker). Header + footer only. |
 | `/policy` | Static Privacy and Acceptable use. Header + footer Policy links land here. |
 | `/register` | Email/password form. Success → `/login?registered=1` (no session cookie). |
-| `/login` | Email/password form. Success sets `aerodeck_session` and opens Overview. |
+| `/login` | Email/password form, plus Continue with Google. Success sets `aerodeck_session` and opens Overview. |
 
 ## Mock contract
 
@@ -41,6 +41,8 @@ Public marketing pages do **not** use the operator sidebar:
 | POST | `/api/mock/v1/auth/login` | Body `{ "email", "password" }`. `200` `{ id, email, created_at }` plus httpOnly `aerodeck_session`. Wrong email/password → `401 invalid_credentials` (same message for both). |
 | POST | `/api/mock/v1/auth/logout` | Clears the session cookie. `204`. |
 | GET | `/api/mock/v1/auth/me` | Current user from the cookie, or `401 unauthenticated`. |
+| GET | `/api/mock/v1/auth/google/start` | Starts mock Google OIDC (or real Google when both env vars are set). Sets an httpOnly state cookie. `?error=1` simulates cancel. |
+| GET | `/api/mock/v1/auth/google/callback` | Finishes Google sign-in, sets `aerodeck_session`, redirects to Overview. Provider `error` → `/login?google=error` with no session. |
 | GET | `/api/mock/v1/deployments/{id}` | One deployment, or `404`. |
 | GET | `/api/mock/v1/deployments/{id}/logs` | `text/event-stream`. Lines include `Initializing Terraform...`, `Provisioning K3s...`, `Done`. |
 
@@ -151,6 +153,34 @@ $login.Content
 Invoke-RestMethod -Uri http://localhost:3000/api/mock/v1/auth/me -WebSession $mockAuth
 ```
 
+Mock Google (no Google Cloud project, no API key, no OAuth client). The button
+hits `GET /api/mock/v1/auth/google/start`, which sets an httpOnly state cookie
+and redirects to the mock callback. That callback creates or reuses
+`google.user@aerodeck.dev` and sets `aerodeck_session`.
+
+Linking rule: if an email/password user already exists with that same email,
+Google signs into **that** row and stores `google_subject` on it. A Google-only
+user has no password hash; email/password login then shows the generic invalid
+credentials message.
+
+Real Google is **skipped** unless both `GOOGLE_CLIENT_ID` and
+`GOOGLE_CLIENT_SECRET` are set in the dashboard process env. Those are an OAuth
+2.0 Web client ID and secret from Google Cloud Console — not a Google API key.
+Never commit the secret. When they are present, start uses PKCE against
+`accounts.google.com`.
+
+```bash
+# Mock Google → follow redirects, session cookie set, Overview
+curl -s -D - -o /dev/null -c /tmp/aerodeck-google -b /tmp/aerodeck-google -L \
+  http://localhost:3000/api/mock/v1/auth/google/start
+
+curl -s -b /tmp/aerodeck-google http://localhost:3000/api/mock/v1/auth/me
+
+# Simulated cancel → /login?google=error and no session
+curl -s -D - -o /dev/null -c /tmp/aerodeck-google-err -b /tmp/aerodeck-google-err -L \
+  "http://localhost:3000/api/mock/v1/auth/google/start?error=1"
+```
+
 ## Browser checks
 
 1. Overview — signed out, `/` and `/deploy` redirect to `/login`. After sign-in, three stat cards populate from GET projects / sandboxes / deployments. Signed-in `/login` and `/register` bounce back to Overview. `/about` still loads without a cookie.
@@ -165,6 +195,7 @@ Invoke-RestMethod -Uri http://localhost:3000/api/mock/v1/auth/me -WebSession $mo
 10. Policy — open [http://localhost:3000/policy](http://localhost:3000/policy). Privacy and Acceptable use sections are present. Header and footer Policy links land on `/policy`. No analytics pixels; no FastAPI.
 11. Register — open [http://localhost:3000/register](http://localhost:3000/register). Mismatched or short passwords stay on the form (no POST). A valid submit lands on `/login?registered=1`. Duplicate email shows `That email is already registered.` Login, About, and Policy links work. Password fields are `type=password`.
 12. Login — from `/login?registered=1`, sign in with that email. Overview loads and the header shows the email plus **Sign out**. A wrong password stays on `/login` with `Invalid email or password.` (same copy for an unknown email). Sign out returns to `/login`. Confirm DevTools Application has `aerodeck_session` as HttpOnly and that `localStorage` has no token.
+13. Google — `/login` and `/register` show **Continue with Google**. Click it (no Google account needed). Overview loads as `google.user@aerodeck.dev`. Sign out, then open `/api/mock/v1/auth/google/start?error=1` and land on `/login?google=error` unsigned. Register `google.user@aerodeck.dev` with a password, then Continue with Google: header email is that same address (linked account).
 
 ## What this is not
 

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Suspense, useState, type FormEvent } from "react";
 
+import { GoogleContinue } from "@/components/google-continue";
 import { LoginStatus } from "@/components/login-status";
 import { Button } from "@/components/ui/button";
 import {
@@ -79,9 +80,10 @@ export function LoginForm() {
       <CardHeader className="border-b">
         <CardTitle>Sign in</CardTitle>
         <CardDescription>
-          Email and password against the local mock at{" "}
-          <span className="font-mono">/api/mock/v1/auth/login</span>. A 200 sets
-          an httpOnly session cookie — nothing is stored in localStorage.
+          Email and password against{" "}
+          <span className="font-mono">/api/mock/v1/auth/login</span>, or Continue
+          with Google against the mock OIDC callback. Nothing is stored in
+          localStorage.
         </CardDescription>
       </CardHeader>
       <form onSubmit={handleSubmit}>
@@ -120,6 +122,7 @@ export function LoginForm() {
               {error}
             </p>
           ) : null}
+          <GoogleContinue disabled={submitting} />
         </CardContent>
         <CardFooter className="flex flex-col items-stretch gap-3 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-xs text-muted-foreground">

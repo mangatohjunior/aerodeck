@@ -13,7 +13,8 @@ import { hashPassword, verifyPassword } from "@/lib/password";
 import type { Deployment, Project, PublicUser, Sandbox } from "@/lib/types";
 
 type MockUser = PublicUser & {
-  password_hash: string;
+  password_hash: string | null;
+  google_subject: string | null;
 };
 
 type MockSession = {
@@ -56,6 +57,11 @@ export function getStore(): Store {
   }
   if (!Array.isArray(store.sessions)) {
     store.sessions = [];
+  }
+  for (const user of store.users) {
+    if (user.google_subject === undefined) {
+      user.google_subject = null;
+    }
   }
   return store;
 }
@@ -139,6 +145,7 @@ export function registerUser(email: string, password: string): PublicUser {
     email: normalized,
     created_at: new Date().toISOString(),
     password_hash: hashPassword(password),
+    google_subject: null,
   };
   getStore().users.push(user);
   return toPublicUser(user);
@@ -158,10 +165,41 @@ export function loginUser(
 
   const user = findUserByEmail(normalized);
   const hash = user?.password_hash ?? DUMMY_PASSWORD_HASH;
-  if (!user || !isValidEmail(normalized) || !verifyPassword(password, hash)) {
+  if (
+    !user ||
+    !user.password_hash ||
+    !isValidEmail(normalized) ||
+    !verifyPassword(password, hash)
+  ) {
     throw new MockAuthError("invalid_credentials", INVALID_CREDENTIALS_DETAIL);
   }
 
+  return { user: toPublicUser(user), token: createSession(user.id) };
+}
+
+export function loginGoogleUser(
+  email: string,
+  subject: string,
+): { user: PublicUser; token: string } {
+  const normalized = normalizeEmail(email);
+  if (!normalized || !isValidEmail(normalized) || !subject.trim()) {
+    throw new MockAuthError("invalid_email", "Google did not return a usable email.");
+  }
+
+  const existing = findUserByEmail(normalized);
+  if (existing) {
+    existing.google_subject = subject.trim();
+    return { user: toPublicUser(existing), token: createSession(existing.id) };
+  }
+
+  const user: MockUser = {
+    id: crypto.randomUUID(),
+    email: normalized,
+    created_at: new Date().toISOString(),
+    password_hash: null,
+    google_subject: subject.trim(),
+  };
+  getStore().users.push(user);
   return { user: toPublicUser(user), token: createSession(user.id) };
 }
 
