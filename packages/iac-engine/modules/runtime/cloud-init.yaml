@@ -14,3 +14,6 @@ write_files:
       ${control_plane_image}
 runcmd:
   - [systemctl, enable, --now, docker]
+%{ if !managed_cache_enabled ~}
+  - docker run -d --restart unless-stopped --name aerodeck-redis --publish 127.0.0.1:6379:6379 redis:7-alpine
+%{ endif ~}

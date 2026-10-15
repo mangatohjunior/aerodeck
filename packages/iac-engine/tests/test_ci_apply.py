@@ -34,7 +34,9 @@ def main() -> None:
 
     if "pull_request_target" in WORKFLOW:
         raise SystemExit("iac-plan-apply.yml must not use pull_request_target")
-    _must(WORKFLOW, "github.event_name != 'pull_request'", "iac-plan-apply.yml")
+    _must(WORKFLOW, "github.event_name == 'workflow_dispatch'", "iac-plan-apply.yml")
+    _must(WORKFLOW, "github.event.inputs.apply == 'true'", "iac-plan-apply.yml")
+    _must(WORKFLOW, "github.event.inputs.environment == 'prod'", "iac-plan-apply.yml")
     _must(WORKFLOW, "environment: production", "iac-plan-apply.yml")
     _must(WORKFLOW, "bash scripts/ci.sh plan", "iac-plan-apply.yml")
     _must(WORKFLOW, "bash scripts/ci.sh apply prod", "iac-plan-apply.yml")

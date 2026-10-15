@@ -45,22 +45,22 @@ output "postgres_private_uri" {
 }
 
 output "redis_id" {
-  description = "Managed Redis cluster ID."
-  value       = digitalocean_database_cluster.redis.id
+  description = "Managed Valkey cluster ID, or null when Redis runs in Docker on the Droplet."
+  value       = var.managed_cache_enabled ? digitalocean_database_cluster.redis[0].id : null
 }
 
 output "redis_urn" {
-  description = "Managed Redis cluster URN (project member)."
-  value       = digitalocean_database_cluster.redis.urn
+  description = "Managed Valkey cluster URN, or empty when Redis runs in Docker on the Droplet."
+  value       = var.managed_cache_enabled ? digitalocean_database_cluster.redis[0].urn : ""
 }
 
 output "redis_private_host" {
-  description = "Private hostname for Redis. Use this, not the public host."
-  value       = digitalocean_database_cluster.redis.private_host
+  description = "Private hostname for Redis, or 127.0.0.1 when it runs in Docker on the Droplet."
+  value       = var.managed_cache_enabled ? digitalocean_database_cluster.redis[0].private_host : "127.0.0.1"
 }
 
 output "redis_private_uri" {
-  description = "Private Redis URI (password included). Map to AERODECK_REDIS_URL."
-  value       = digitalocean_database_cluster.redis.private_uri
+  description = "Redis URI for AERODECK_REDIS_URL. Local Docker when managed_cache_enabled is false."
+  value       = var.managed_cache_enabled ? digitalocean_database_cluster.redis[0].private_uri : "redis://127.0.0.1:6379/0"
   sensitive   = true
 }

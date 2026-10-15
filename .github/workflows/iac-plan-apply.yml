@@ -1,8 +1,9 @@
 name: IaC plan and apply
 
-# Real terraform plan against Spaces state. Apply runs only on main, never on
-# a pull_request, and never from a laptop. Prod apply uses the stored plan
-# artefact and the GitHub "production" environment (required reviewers).
+# Real terraform plan against Spaces state. Apply runs only from
+# workflow_dispatch on main, one environment at a time (default dev). Never on
+# a pull_request, never from a laptop, never automatically on push. Prod apply
+# uses the stored plan artefact and the GitHub "production" environment.
 #
 # Until DIGITALOCEAN_TOKEN, SPACES_ACCESS_KEY_ID, and SPACES_SECRET_ACCESS_KEY
 # are set, plan/apply jobs skip so pull requests stay green. Procedure:
@@ -21,9 +22,14 @@ on:
   workflow_dispatch:
     inputs:
       apply:
-        description: Apply stored plans (main branch only). Prod still waits for the production environment approval.
+        description: Apply the stored plan for the selected environment (main only). Prod still waits for production approval.
         type: boolean
         default: false
+      environment:
+        description: Environment to apply. New DigitalOcean teams should apply only dev. Never apply all three at once on a Tier 1 account.
+        type: choice
+        options: [dev, staging, prod]
+        default: dev
 
 permissions:
   contents: read
@@ -117,22 +123,19 @@ jobs:
           retention-days: 14
 
   apply-nonprod:
-    name: apply (${{ matrix.environment }})
+    name: apply (${{ github.event.inputs.environment }})
     needs: [credentials, plan]
     if: >-
       needs.credentials.outputs.ready == 'true'
-      && github.event_name != 'pull_request'
+      && github.event_name == 'workflow_dispatch'
       && github.ref == 'refs/heads/main'
-      && (github.event_name == 'push' || github.event.inputs.apply == 'true')
+      && github.event.inputs.apply == 'true'
+      && contains(fromJSON('["dev","staging"]'), github.event.inputs.environment)
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    environment: ${{ matrix.environment }}
-    strategy:
-      fail-fast: false
-      matrix:
-        environment: [dev, staging]
+    environment: ${{ github.event.inputs.environment }}
     concurrency:
-      group: iac-apply-${{ matrix.environment }}
+      group: iac-apply-${{ github.event.inputs.environment }}
       cancel-in-progress: false
     defaults:
       run:
@@ -156,20 +159,21 @@ jobs:
       - name: Download stored plan
         uses: actions/download-artifact@v4
         with:
-          name: tfplan-${{ matrix.environment }}
+          name: tfplan-${{ github.event.inputs.environment }}
           path: packages/iac-engine
 
       - name: Apply stored plan
-        run: bash scripts/ci.sh apply ${{ matrix.environment }}
+        run: bash scripts/ci.sh apply ${{ github.event.inputs.environment }}
 
   apply-prod:
     name: apply (prod)
     needs: [credentials, plan]
     if: >-
       needs.credentials.outputs.ready == 'true'
-      && github.event_name != 'pull_request'
+      && github.event_name == 'workflow_dispatch'
       && github.ref == 'refs/heads/main'
-      && (github.event_name == 'push' || github.event.inputs.apply == 'true')
+      && github.event.inputs.apply == 'true'
+      && github.event.inputs.environment == 'prod'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment: production

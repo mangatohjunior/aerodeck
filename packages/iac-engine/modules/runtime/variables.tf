@@ -43,6 +43,11 @@ variable "control_plane_image" {
   type        = string
 }
 
+variable "managed_cache_enabled" {
+  description = "When true, create managed Valkey. When false, cloud-init runs Redis in Docker on the Droplet (one DBaaS cluster = Postgres only)."
+  type        = bool
+}
+
 variable "postgres_size" {
   description = "Managed PostgreSQL size slug (e.g. db-s-1vcpu-1gb)."
   type        = string

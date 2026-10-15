@@ -40,7 +40,8 @@ def main() -> None:
     _must(MODULE, 'resource "digitalocean_project_resources" "runtime"', "modules/runtime/main.tf")
     _must(MODULE, "digitalocean_droplet.control.urn", "modules/runtime/main.tf")
     _must(MODULE, "digitalocean_database_cluster.postgres.urn", "modules/runtime/main.tf")
-    _must(MODULE, "digitalocean_database_cluster.redis.urn", "modules/runtime/main.tf")
+    _must(MODULE, "digitalocean_database_cluster.redis[0].urn", "modules/runtime/main.tf")
+    _must(MODULE, "managed_cache_enabled", "modules/runtime/main.tf")
 
     if MODULE.count("prevent_destroy = true") < 2:
         raise SystemExit("postgres and redis clusters must set lifecycle prevent_destroy")
@@ -71,6 +72,7 @@ def main() -> None:
     _must(VARS, "postgres_size", "variables.tf")
     _must(VARS, "redis_size", "variables.tf")
     _must(VARS, "control_plane_image", "variables.tf")
+    _must(VARS, "managed_cache_enabled", "variables.tf")
     _must(OUTPUTS, 'output "control_plane_image"', "outputs.tf")
 
     for env in ("dev", "staging", "prod"):
@@ -78,6 +80,8 @@ def main() -> None:
         for key in ("droplet_size", "postgres_size", "redis_size"):
             if not re.search(rf'{key}\s*=\s*"', tfvars):
                 raise SystemExit(f"envs/{env}.tfvars must set {key}")
+        if "managed_cache_enabled" not in tfvars:
+            raise SystemExit(f"envs/{env}.tfvars must set managed_cache_enabled")
 
     print("runtime module, VPC attachment, and env sizes look right")
 

@@ -138,13 +138,13 @@ variable "extra_tags" {
 # --------------------------------------------------------------------------- #
 
 variable "droplet_size" {
-  description = "Droplet size slug for the control-plane host. nyc3 needs a current Basic slug (Premium AMD: s-1vcpu-2gb-amd)."
+  description = "Droplet size slug. New teams are Tier 1: Basic Shared CPU only (no Premium -amd/-intel) up to $48. Use s-1vcpu-1gb until the account tier is raised."
   type        = string
-  default     = "s-1vcpu-2gb-amd"
+  default     = "s-1vcpu-1gb"
 
   validation {
     condition     = can(regex("^s-[0-9]+vcpu-[0-9]+gb(-amd|-intel)?$", var.droplet_size))
-    error_message = "droplet_size must be a DigitalOcean Droplet slug such as s-1vcpu-2gb-amd."
+    error_message = "droplet_size must be a DigitalOcean Droplet slug such as s-1vcpu-1gb."
   }
 }
 
@@ -234,6 +234,12 @@ variable "redis_node_count" {
     condition     = var.redis_node_count >= 1 && var.redis_node_count <= 3
     error_message = "redis_node_count must be between 1 and 3."
   }
+}
+
+variable "managed_cache_enabled" {
+  description = "When true, create a managed Valkey cluster. New DigitalOcean teams are often capped at one database cluster (Postgres already uses that slot); leave false so Redis runs in Docker on the Droplet."
+  type        = bool
+  default     = false
 }
 
 variable "ssh_key_ids" {
