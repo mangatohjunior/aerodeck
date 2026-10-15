@@ -28,6 +28,12 @@ resource "digitalocean_droplet" "control" {
     control_plane_image   = var.control_plane_image
     managed_cache_enabled = var.managed_cache_enabled
   })
+
+  # ssh_keys is ForceNew. Do not rebuild a live Droplet to inject keys;
+  # paste the pubkey via Droplet Console into authorized_keys instead.
+  lifecycle {
+    ignore_changes = [ssh_keys]
+  }
 }
 
 resource "digitalocean_firewall" "control" {

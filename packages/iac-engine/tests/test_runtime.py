@@ -45,8 +45,11 @@ def main() -> None:
 
     if MODULE.count("prevent_destroy = true") < 2:
         raise SystemExit("postgres and redis clusters must set lifecycle prevent_destroy")
-    if "prevent_destroy" in MODULE.split('resource "digitalocean_droplet"')[1].split("resource ")[0]:
+    droplet_block = MODULE.split('resource "digitalocean_droplet"')[1].split("resource ")[0]
+    if "prevent_destroy" in droplet_block:
         raise SystemExit("the Droplet is not a stateful store; do not prevent_destroy it")
+    if "ignore_changes = [ssh_keys]" not in droplet_block:
+        raise SystemExit("Droplet must ignore_changes ssh_keys so a live box is not replaced")
 
     if "hashicorp/aws" in CHILD or re.search(r'\baws_', CHILD):
         raise SystemExit("runtime module must not use AWS resources")

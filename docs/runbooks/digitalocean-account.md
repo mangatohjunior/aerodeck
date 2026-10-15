@@ -187,9 +187,9 @@ stack: [iac-destroy.md](iac-destroy.md).
 
 ## Optional later (not required to finish this runbook)
 
-- **SSH key**: [ssh-dev.md](ssh-dev.md). Add the key in DigitalOcean, set
-  GitHub variables `SSH_KEY_IDS` and `SSH_ALLOW_CIDRS`, then apply **dev**.
-  Empty means console-only access.
+- **SSH key**: [ssh-dev.md](ssh-dev.md). Paste the pubkey via Droplet
+  Console into `authorized_keys`. Set GitHub `SSH_ALLOW_CIDRS` only, then
+  apply **dev**. Leave `SSH_KEY_IDS` empty so the live Droplet is not replaced.
 - **Domain**: add a domain in DigitalOcean when you do real DNS/TLS
   ([edge-routing.md](edge-routing.md)). Skip until story #35.
 
