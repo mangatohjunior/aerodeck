@@ -163,10 +163,12 @@ managed databases are the expensive part).
 | Apply from **Actions → IaC plan and apply** with Apply checked, on `main` | Hand-create `aerodeck-*` resources in the console |
 | Approve **production** in the Actions UI when that job waits | Put tokens in git, `.env` committed, or `backend.hcl` |
 | Use `scripts/ci.sh` only inside GitHub Actions | `terraform apply -auto-approve` |
+| Tear down a smoke test with **IaC destroy** | `terraform destroy` from a laptop |
 
 When you are ready to create the resources: [iac-apply.md](iac-apply.md)
 **First apply**, then [deploy.md](deploy.md) section 4–5. After apply you
-still start the control-plane container by hand.
+still start the control-plane container by hand. To delete a smoke-test
+stack: [iac-destroy.md](iac-destroy.md).
 
 ## Optional later (not required to finish this runbook)
 
@@ -191,4 +193,5 @@ still start the control-plane container by hand.
 - Operator checklist: [deploy.md](deploy.md)
 - State bucket details: [terraform-state.md](terraform-state.md)
 - Plan/apply: [iac-apply.md](iac-apply.md)
+- Destroy: [iac-destroy.md](iac-destroy.md)
 - Image push: [control-plane-image.md](control-plane-image.md)

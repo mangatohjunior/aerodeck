@@ -79,8 +79,12 @@ Local `terraform plan` against Spaces is allowed for debugging. Local
 `terraform apply` is not; `scripts/ci.sh apply` exits unless it is running
 inside GitHub Actions.
 
+To tear down a smoke-test apply: [iac-destroy.md](iac-destroy.md). Do not
+`terraform destroy` from a laptop.
+
 ## Related
 
 - #6 — state in Spaces ([terraform-state.md](terraform-state.md)).
 - #7 — project and VPC ([platform-network.md](platform-network.md)).
 - #8 — this runbook.
+- #68 — destroy from CI ([iac-destroy.md](iac-destroy.md)).
