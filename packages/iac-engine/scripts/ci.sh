@@ -33,7 +33,7 @@ PLANFILE="${ENV_NAME}.tfplan"
 if [[ "${CMD}" == destroy-plan || "${CMD}" == destroy-apply ]]; then
   PLANFILE="${ENV_NAME}.destroy.tfplan"
 fi
-TFVARS="envs/${ENV_NAME}.tfvars"
+export TFVARS="envs/${ENV_NAME}.tfvars"
 STATE_KEY="${ENV_NAME}/platform/terraform.tfstate"
 
 export TF_IN_AUTOMATION=1
@@ -74,11 +74,12 @@ terraform init -input=false \
   -backend-config=backend.hcl \
   -backend-config="key=${STATE_KEY}"
 
-# DigitalOcean 403s DELETE on a region-default VPC. Do not mutate state from
-# a pull_request plan. Apply and destroy on main may drop the VPC from state
-# and must re-plan if they do; a stored plan still contains the doomed DELETE.
-if [[ "${GITHUB_EVENT_NAME:-}" != "pull_request" ]]; then
+# Only destroy may drop a region-default VPC from state. Running that on
+# plan/apply removed the live ams3 VPC and ForceNew-replaced Postgres.
+if [[ "${CMD}" == destroy-plan || "${CMD}" == destroy-apply ]]; then
   python3 scripts/rehome_default_vpc.py
+elif [[ "${GITHUB_EVENT_NAME:-}" != "pull_request" ]]; then
+  python3 scripts/import_missing_vpc.py
 fi
 
 if [[ "${CMD}" == "plan" ]]; then

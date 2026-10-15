@@ -8,6 +8,10 @@ VPC from Terraform state and leave it in the account. VPCs are free.
 
 Writes .rehome-vpc-dropped when state is changed so ci.sh can re-plan; a
 stored plan taken *before* the drop still contains the doomed DELETE.
+
+ci.sh must call this only on destroy-plan/destroy-apply. On plan/apply a
+region-default live VPC would be dropped from state and ForceNew-replace
+Postgres.
 """
 
 from __future__ import annotations

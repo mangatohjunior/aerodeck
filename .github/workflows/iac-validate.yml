@@ -77,5 +77,8 @@ jobs:
       - name: rehome default VPC helpers
         run: python tests/test_rehome_default_vpc.py
 
+      - name: import missing VPC helpers
+        run: python tests/test_import_missing_vpc.py
+
       - name: control-plane image publish shape
         run: python tests/test_image_publish.py
