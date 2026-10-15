@@ -138,13 +138,13 @@ variable "extra_tags" {
 # --------------------------------------------------------------------------- #
 
 variable "droplet_size" {
-  description = "Droplet size slug. New teams are Tier 1: Basic Shared CPU only (no Premium -amd/-intel) up to $48. Use s-1vcpu-1gb until the account tier is raised."
+  description = "Droplet size slug. New teams are Tier 1: Basic Shared CPU Regular only (no Premium -amd/-intel) up to $48. nyc3 no longer has Regular 1GB/2GB; use s-2vcpu-4gb until the account tier is raised."
   type        = string
-  default     = "s-1vcpu-1gb"
+  default     = "s-2vcpu-4gb"
 
   validation {
     condition     = can(regex("^s-[0-9]+vcpu-[0-9]+gb(-amd|-intel)?$", var.droplet_size))
-    error_message = "droplet_size must be a DigitalOcean Droplet slug such as s-1vcpu-1gb."
+    error_message = "droplet_size must be a DigitalOcean Droplet slug such as s-2vcpu-4gb."
   }
 }
 

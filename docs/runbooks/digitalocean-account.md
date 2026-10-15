@@ -154,8 +154,10 @@ If it errors on **partial** secrets, add the missing one.
 ## 8. Stop and read this before apply
 
 New teams are [Tier 1](https://docs.digitalocean.com/platform/resource-limits/):
-up to **3 Basic shared-CPU Droplets** (no Premium AMD/Intel sizes) and often
-**one** managed database cluster. First apply must be **dev only**. Redis
+up to **3 Basic shared-CPU Droplets** (Regular only; Premium AMD/Intel
+sizes return “restricted”) and often **one** managed database cluster.
+Regular 1 vCPU plans (`s-1vcpu-1gb`, `s-1vcpu-2gb`) are not available in
+nyc3. First apply must be **dev only** with Regular `s-2vcpu-4gb`. Redis
 runs in Docker on that Droplet so Postgres can use the cluster slot.
 
 If you already created Postgres in staging/prod from an earlier failed apply,

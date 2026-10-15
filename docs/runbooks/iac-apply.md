@@ -61,7 +61,9 @@ After secrets and the bucket exist, run **IaC plan and apply** on `main`:
 environment **`dev`**, Apply **checked**. New DigitalOcean teams are
 [Tier 1](https://docs.digitalocean.com/platform/resource-limits/): Basic
 shared-CPU Droplets only (no Premium `-amd` / `-intel`), and often **one**
-managed database cluster. This stack uses `s-1vcpu-1gb` and runs Redis in
+managed database cluster. Regular `s-1vcpu-1gb` / `s-1vcpu-2gb` are not
+offered in nyc3; Premium `-amd` / `-intel` are restricted on Tier 1. This
+stack uses Regular `s-2vcpu-4gb` ($24, under the $48 cap) and runs Redis in
 Docker on the Droplet so Postgres can use that single cluster slot.
 
 Do **not** apply staging or prod until
