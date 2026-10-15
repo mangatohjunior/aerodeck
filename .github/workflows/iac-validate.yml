@@ -9,12 +9,14 @@ on:
       - "packages/iac-engine/**"
       - ".github/workflows/iac-validate.yml"
       - ".github/workflows/iac-plan-apply.yml"
+      - ".github/workflows/control-plane-image.yml"
   push:
     branches: [main]
     paths:
       - "packages/iac-engine/**"
       - ".github/workflows/iac-validate.yml"
       - ".github/workflows/iac-plan-apply.yml"
+      - ".github/workflows/control-plane-image.yml"
 
 permissions:
   contents: read
@@ -66,3 +68,6 @@ jobs:
 
       - name: CI plan/apply shape
         run: python tests/test_ci_apply.py
+
+      - name: control-plane image publish shape
+        run: python tests/test_image_publish.py

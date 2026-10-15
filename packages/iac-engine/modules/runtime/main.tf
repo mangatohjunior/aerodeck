@@ -5,8 +5,9 @@
 # denied except via digitalocean_database_firewall, which trusts only this
 # Droplet. Stateful clusters have prevent_destroy.
 #
-# This module does not start the control-plane process. It creates the host
-# and data stores; image publish is a later story.
+# This module does not start the control-plane process. It writes
+# var.control_plane_image to /etc/aerodeck/control-plane-image so an operator
+# (or a later workflow) can pull the SHA-tagged image from DOCR.
 
 locals {
   ssh_sources = length(var.ssh_allow_cidrs) > 0 ? var.ssh_allow_cidrs : [var.vpc_ip_range]
@@ -23,7 +24,9 @@ resource "digitalocean_droplet" "control" {
 
   ipv6       = false
   monitoring = true
-  user_data  = file("${path.module}/cloud-init.yaml")
+  user_data = templatefile("${path.module}/cloud-init.yaml", {
+    control_plane_image = var.control_plane_image
+  })
 }
 
 resource "digitalocean_firewall" "control" {

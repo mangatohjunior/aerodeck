@@ -86,3 +86,8 @@ output "redis_private_uri" {
   value       = module.runtime.redis_private_uri
   sensitive   = true
 }
+
+output "control_plane_image" {
+  description = "OCI image reference written to the Droplet (/etc/aerodeck/control-plane-image). Pin a SHA tag in tfvars to freeze a build."
+  value       = var.control_plane_image
+}

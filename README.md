@@ -25,7 +25,8 @@ deployed until an operator finishes
 1. **Deploy (operator):** [docs/runbooks/deploy.md](docs/runbooks/deploy.md)
    — DigitalOcean account, Spaces bucket, GitHub secrets, first apply
    (project, VPC, Droplet, Postgres, Redis). The control-plane image is
-   not published or started yet.
+   published to DigitalOcean Container Registry on `main`; start it on the
+   Droplet yourself.
 2. **Local API:** [docs/runbooks/control-plane.md](docs/runbooks/control-plane.md)
    (venv, `.env`, `alembic upgrade head`, uvicorn, Celery worker).
    Traefik routes: [docs/runbooks/edge-routing.md](docs/runbooks/edge-routing.md).
@@ -33,8 +34,9 @@ deployed until an operator finishes
 3. **Dashboard (local mock):** [dashboard-mock.md](docs/runbooks/dashboard-mock.md)
    — `cd apps/dashboard && npm install && npm run dev`, then curl
    `/api/mock/v1`. Does not need FastAPI.
-4. **Network / runtime / apply:** [platform-network.md](docs/runbooks/platform-network.md),
+4. **Network / runtime / image / apply:** [platform-network.md](docs/runbooks/platform-network.md),
    [platform-runtime.md](docs/runbooks/platform-runtime.md),
+   [control-plane-image.md](docs/runbooks/control-plane-image.md),
    [iac-apply.md](docs/runbooks/iac-apply.md).
 5. **Board:** [docs/runbooks/issue-workflow.md](docs/runbooks/issue-workflow.md).
 

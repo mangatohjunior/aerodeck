@@ -159,6 +159,17 @@ variable "droplet_image" {
   }
 }
 
+variable "control_plane_image" {
+  description = "Control-plane OCI image (DigitalOcean Container Registry). CI publishes :<git sha> and a floating :main tag."
+  type        = string
+  default     = "registry.digitalocean.com/aerodeck/control-plane:main"
+
+  validation {
+    condition     = can(regex("^registry\\.digitalocean\\.com/[a-z0-9-]+/control-plane:[A-Za-z0-9._-]+$", var.control_plane_image))
+    error_message = "control_plane_image must be registry.digitalocean.com/<registry>/control-plane:<tag> (no GHCR)."
+  }
+}
+
 variable "postgres_size" {
   description = "Managed PostgreSQL size slug."
   type        = string
