@@ -13,6 +13,7 @@ chat history.
 | [Platform network](platform-network.md) | Project and private VPC per environment; how later stacks attach. |
 | [Apply from CI](iac-apply.md) | Plan in Actions; apply only on main; prod needs a stored plan and approval. |
 | [Issue workflow](issue-workflow.md) | How Epics and Stories move across the board. |
+| [Dashboard mock](dashboard-mock.md) | Run the Next.js console and curl `/api/mock/v1` without FastAPI. |
 
 Do not `terraform apply` against shared state from a laptop. Procedure:
 [iac-apply.md](iac-apply.md).

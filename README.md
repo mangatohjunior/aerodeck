@@ -30,8 +30,9 @@ deployed until an operator finishes
    (venv, `.env`, `alembic upgrade head`, uvicorn, Celery worker).
    Traefik routes: [docs/runbooks/edge-routing.md](docs/runbooks/edge-routing.md).
    Sandboxes: [docs/runbooks/sandboxes.md](docs/runbooks/sandboxes.md).
-3. **Dashboard (local):** `cd apps/dashboard && npm install && npm run dev`
-   — Next.js on http://localhost:3000. Not wired to the control plane yet.
+3. **Dashboard (local mock):** [dashboard-mock.md](docs/runbooks/dashboard-mock.md)
+   — `cd apps/dashboard && npm install && npm run dev`, then curl
+   `/api/mock/v1`. Does not need FastAPI.
 4. **Network / apply detail:** [platform-network.md](docs/runbooks/platform-network.md),
    [iac-apply.md](docs/runbooks/iac-apply.md).
 5. **Board:** [docs/runbooks/issue-workflow.md](docs/runbooks/issue-workflow.md).

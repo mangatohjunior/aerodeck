@@ -1,6 +1,8 @@
 "use client";
 
 import { CheckCircle2, Loader2, Rocket } from "lucide-react";
+import Link from "next/link";
+import { useState } from "react";
 
 import { Terminal } from "@/components/terminal";
 import { Badge } from "@/components/ui/badge";
@@ -12,21 +14,15 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import type { Deployment, DeploymentStatus } from "@/lib/mock-deploy";
+import { deploymentLogsUrl } from "@/lib/api";
+import type { Deployment, DeploymentStatus } from "@/lib/types";
 
 type DeploymentStatusViewProps = {
   deployment: Deployment;
-  status: DeploymentStatus;
-  onStreamComplete: () => void;
-  onNewDeployment: () => void;
 };
 
-export function DeploymentStatusView({
-  deployment,
-  status,
-  onStreamComplete,
-  onNewDeployment,
-}: DeploymentStatusViewProps) {
+export function DeploymentStatusView({ deployment }: DeploymentStatusViewProps) {
+  const [status, setStatus] = useState<DeploymentStatus>(deployment.status);
   const running = status === "running" || status === "queued";
 
   return (
@@ -40,13 +36,13 @@ export function DeploymentStatusView({
             Deployment Status
           </h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            Mock SSE stream for{" "}
+            Mock SSE for{" "}
             <span className="font-mono text-foreground">
               {deployment.owner}/{deployment.repo}
             </span>
           </p>
         </div>
-        <Button variant="outline" onClick={onNewDeployment}>
+        <Button variant="outline" render={<Link href="/deploy" />}>
           <Rocket data-icon="inline-start" />
           New deployment
         </Button>
@@ -56,19 +52,13 @@ export function DeploymentStatusView({
         <CardHeader className="border-b">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <CardTitle className="font-mono text-sm">
-                {deployment.id}
-              </CardTitle>
+              <CardTitle className="font-mono text-sm">{deployment.id}</CardTitle>
               <CardDescription className="mt-1 break-all">
-                {deployment.repoUrl}
+                {deployment.repo_url}
               </CardDescription>
             </div>
             <Badge variant={running ? "secondary" : "default"}>
-              {running ? (
-                <Loader2 className="animate-spin" />
-              ) : (
-                <CheckCircle2 />
-              )}
+              {running ? <Loader2 className="animate-spin" /> : <CheckCircle2 />}
               {running ? "Running" : "Succeeded"}
             </Badge>
           </div>
@@ -77,7 +67,7 @@ export function DeploymentStatusView({
           <div>
             <p className="text-xs text-muted-foreground">Started</p>
             <p className="mt-0.5 font-mono text-xs">
-              {new Date(deployment.startedAt).toLocaleString()}
+              {new Date(deployment.started_at).toLocaleString()}
             </p>
           </div>
           <div>
@@ -87,7 +77,10 @@ export function DeploymentStatusView({
         </CardContent>
       </Card>
 
-      <Terminal active onComplete={onStreamComplete} />
+      <Terminal
+        streamUrl={deploymentLogsUrl(deployment.id)}
+        onComplete={() => setStatus("succeeded")}
+      />
     </div>
   );
 }

@@ -4,43 +4,34 @@ import {
   Activity,
   Box,
   FolderGit2,
+  LayoutDashboard,
   Rocket,
-  Settings,
   X,
 } from "lucide-react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 
+import { BrandMark } from "@/components/brand-mark";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 
-export type ConsoleView = "new" | "status";
-
 const NAV = [
-  { id: "new" as const, label: "New Deployment", icon: Rocket },
-  { id: "status" as const, label: "Deployment Status", icon: Activity },
-] as const;
-
-const PLACEHOLDER = [
-  { label: "Projects", icon: FolderGit2 },
-  { label: "Sandboxes", icon: Box },
-  { label: "Settings", icon: Settings },
+  { href: "/", label: "Overview", icon: LayoutDashboard },
+  { href: "/deploy", label: "New Deployment", icon: Rocket },
+  { href: "/deployments", label: "Deployments", icon: Activity },
+  { href: "/projects", label: "Projects", icon: FolderGit2 },
+  { href: "/sandboxes", label: "Sandboxes", icon: Box },
 ] as const;
 
 type AppSidebarProps = {
-  view: ConsoleView;
-  hasDeployment: boolean;
   mobileOpen: boolean;
-  onNavigate: (view: ConsoleView) => void;
   onCloseMobile: () => void;
 };
 
-export function AppSidebar({
-  view,
-  hasDeployment,
-  mobileOpen,
-  onNavigate,
-  onCloseMobile,
-}: AppSidebarProps) {
+export function AppSidebar({ mobileOpen, onCloseMobile }: AppSidebarProps) {
+  const pathname = usePathname();
+
   return (
     <>
       {mobileOpen ? (
@@ -59,15 +50,13 @@ export function AppSidebar({
         )}
       >
         <div className="flex items-center justify-between px-4 py-4">
-          <div className="flex items-center gap-2.5">
-            <span className="flex size-8 items-center justify-center rounded-lg bg-primary text-sm font-semibold text-primary-foreground">
-              A
-            </span>
+          <Link href="/" className="flex items-center gap-2.5" onClick={onCloseMobile}>
+            <BrandMark className="size-8 text-primary" />
             <div>
               <p className="text-sm font-semibold tracking-tight">AeroDeck</p>
-              <p className="text-[11px] text-muted-foreground">GitOps console</p>
+              <p className="text-[11px] text-muted-foreground">Flight-deck console</p>
             </div>
-          </div>
+          </Link>
           <Button
             variant="ghost"
             size="icon-sm"
@@ -82,56 +71,37 @@ export function AppSidebar({
         <Separator />
 
         <nav className="flex flex-1 flex-col gap-1 p-3">
+          <p className="mb-1 px-2.5 text-[11px] font-medium tracking-wider text-muted-foreground uppercase">
+            Operate
+          </p>
           {NAV.map((item) => {
             const Icon = item.icon;
-            const disabled = item.id === "status" && !hasDeployment;
-            const active = view === item.id;
+            const active =
+              item.href === "/"
+                ? pathname === "/"
+                : pathname === item.href || pathname.startsWith(`${item.href}/`);
             return (
-              <button
-                key={item.id}
-                type="button"
-                disabled={disabled}
-                onClick={() => {
-                  onNavigate(item.id);
-                  onCloseMobile();
-                }}
+              <Link
+                key={item.href}
+                href={item.href}
+                onClick={onCloseMobile}
                 className={cn(
-                  "flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm transition-colors",
+                  "flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm transition-colors",
                   active
                     ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                    : "text-sidebar-foreground/80 hover:bg-sidebar-accent/70 hover:text-sidebar-accent-foreground",
-                  disabled && "cursor-not-allowed opacity-40 hover:bg-transparent",
+                    : "text-sidebar-foreground/75 hover:bg-sidebar-accent/70 hover:text-sidebar-accent-foreground",
                 )}
               >
                 <Icon className="size-4 shrink-0" />
                 {item.label}
-              </button>
-            );
-          })}
-
-          <p className="mt-4 mb-1 px-2.5 text-[11px] font-medium tracking-wider text-muted-foreground uppercase">
-            Platform
-          </p>
-          {PLACEHOLDER.map((item) => {
-            const Icon = item.icon;
-            return (
-              <span
-                key={item.label}
-                className="flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm text-sidebar-foreground/45"
-              >
-                <Icon className="size-4 shrink-0" />
-                {item.label}
-                <span className="ml-auto text-[10px] tracking-wide uppercase">
-                  soon
-                </span>
-              </span>
+              </Link>
             );
           })}
         </nav>
 
         <div className="border-t border-sidebar-border p-4">
           <p className="text-[11px] text-muted-foreground">
-            Mock mode · no control-plane API
+            Mock API · <span className="font-mono text-primary/80">/api/mock/v1</span>
           </p>
         </div>
       </aside>

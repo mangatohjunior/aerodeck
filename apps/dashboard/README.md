@@ -1,8 +1,9 @@
 # AeroDeck dashboard
 
-Next.js App Router operator UI (TypeScript, Tailwind, shadcn/ui). The
-New Deployment flow mocks a create-deployment POST and streams fake
-provisioner logs. It is not wired to the FastAPI control plane yet.
+Next.js App Router operator console. Talks to a same-origin mock control
+plane at `/api/mock/v1`. It does not call FastAPI.
+
+Procedure: [docs/runbooks/dashboard-mock.md](../../docs/runbooks/dashboard-mock.md).
 
 ## Local
 
@@ -12,5 +13,4 @@ npm install
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000). Enter a GitHub URL
-and click **Deploy** to watch the mock SSE terminal.
+Open [http://localhost:3000](http://localhost:3000).

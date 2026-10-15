@@ -317,6 +317,37 @@ EOF
 
 link_epic "${EPIC6}" "${EPIC6_BODY}" "${S6_1}" "${S6_2}" "${S6_3}"
 
+# --------------------------------------------------------------------------- #
+# Epic 7 — Operator console polish & local mock API
+# --------------------------------------------------------------------------- #
+
+EPIC7_BODY="$(cat <<'EOF'
+Give operators a professional AeroDeck console (flight-deck navy, ion cyan, runway amber) and same-origin mock HTTP endpoints so the dashboard can be exercised locally without FastAPI or DigitalOcean.
+
+In scope: multi-route console, /api/mock/v1 contract, fetch/EventSource client, dashboard-mock runbook.
+Out of scope: calling localhost:8000, embedding tokens in the browser, real Terraform applies.
+EOF
+)"
+
+EPIC7="$(ensure_issue "[EPIC] Operator console polish and local mock API" "type: epic" "${EPIC7_BODY}")"
+
+S7_1="$(ensure_issue "[STORY] Apply AeroDeck brand colors and a multi-route console" "type: story" "$(cat <<'EOF'
+As an application developer, I want a professional AeroDeck console with flight-deck navy, ion cyan, and runway amber so that Overview, Deploy, Projects, and Sandboxes look like one product instead of a single form.
+EOF
+)")"
+
+S7_2="$(ensure_issue "[STORY] Serve local mock control-plane endpoints from Next.js" "type: story" "$(cat <<'EOF'
+As a platform engineer, I want same-origin mock HTTP endpoints for projects, sandboxes, deployments, and SSE logs so that I can test the dashboard locally with fetch and EventSource without running FastAPI.
+EOF
+)")"
+
+S7_3="$(ensure_issue "[STORY] Document the dashboard mock-test runbook" "type: story" "$(cat <<'EOF'
+As an SRE, I want a runbook that lists every mock endpoint and the curl/browser steps so that I can verify the console locally without inventing a procedure.
+EOF
+)")"
+
+link_epic "${EPIC7}" "${EPIC7_BODY}" "${S7_1}" "${S7_2}" "${S7_3}"
+
 echo
 echo "Backlog ready in ${REPO}:"
 echo "  Epic #${EPIC1}  stories #${S1_1} #${S1_2} #${S1_3}"
@@ -325,3 +356,4 @@ echo "  Epic #${EPIC3}  stories #${S3_1} #${S3_2} #${S3_3}"
 echo "  Epic #${EPIC4}  stories #${S4_1} #${S4_2} #${S4_3}"
 echo "  Epic #${EPIC5}  stories #${S5_1} #${S5_2} #${S5_3} #${S5_4} #${S5_5} #${S5_6} #${S5_7} #${S5_8} #${S5_9}"
 echo "  Epic #${EPIC6}  stories #${S6_1} #${S6_2} #${S6_3}"
+echo "  Epic #${EPIC7}  stories #${S7_1} #${S7_2} #${S7_3}"

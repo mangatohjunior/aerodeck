@@ -34,11 +34,11 @@ apps/dashboard/src/
 
 The dashboard **simulates** control-plane behaviour until a Story says to wire FastAPI.
 
-- **Forbidden until that Story ships:** `fetch` / `axios` / `ky` to the FastAPI origin, EventSource against `/api/v1`, embedding `AERODECK_*` API URLs in client bundles, or copying JWT handling into the browser.
-- **Required instead:** a typed mock in `src/lib/` (e.g. `mockCreateDeployment`) that `await`s a `setTimeout` and returns a `Deployment`. Treat this as the contract the real client will later honour.
-- Clicking **Deploy** must transition local React state from the New Deployment form to the Deployment Status view. Do not navigate away with a full page load for that transition.
-- The **Terminal** component simulates an SSE stream with `useEffect` + `setTimeout` (or an async generator). Same event shape as the control-plane stub: lines such as `Initializing Terraform...`, `Provisioning K3s...`, `Done`.
-- When the real SSE endpoint is wired, replace only the mock client. The Terminal still renders `data:` lines; it does not grow FastAPI-specific parsing.
+- **Forbidden until that Story ships:** `fetch` / `axios` / `ky` to the FastAPI origin, EventSource against control-plane `/api/v1`, embedding `AERODECK_*` API URLs or JWTs in the browser.
+- **Allowed mock HTTP:** same-origin `fetch` / `EventSource` to `/api/mock/v1/*` (Next.js route handlers). That prefix is the stand-in control plane. A later Story changes only the client base URL.
+- Clicking **Deploy** POSTs `/api/mock/v1/deployments` and navigates to `/deployments/{id}`.
+- The **Terminal** consumes `text/event-stream` from `/api/mock/v1/deployments/{id}/logs`. Same `data:` lines as the FastAPI stub (`Initializing Terraform...`, `Provisioning K3s...`, `Done`).
+- When FastAPI is wired, replace only `src/lib/api.ts`. The Terminal still renders `data:` lines.
 
 ## 4. UI conventions
 
