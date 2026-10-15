@@ -36,8 +36,11 @@ this runbook.
 3. **Settings → Billing**: add a payment method. Droplets, managed databases,
    Spaces, and Container Registry all require billing. A free account cannot
    finish this runbook.
-4. Stay in region **nyc3** for everything below. That is what
-   `packages/iac-engine/envs/*.tfvars` and `backend.hcl` assume.
+4. Create **Spaces** and the **registry** in **NYC** (this repo’s
+   `backend.hcl` uses `nyc3.digitaloceanspaces.com`). Compute (VPC,
+   Droplet, Postgres) is **ams3** in `envs/*.tfvars` because Regular
+   Basic is not sold in NYC. The bucket does not have to match the
+   Droplet region.
 
 ## 2. API token
 
@@ -156,9 +159,11 @@ If it errors on **partial** secrets, add the missing one.
 New teams are [Tier 1](https://docs.digitalocean.com/platform/resource-limits/):
 up to **3 Basic shared-CPU Droplets** (Regular only; Premium AMD/Intel
 sizes return “restricted”) and often **one** managed database cluster.
-Regular 1 vCPU plans (`s-1vcpu-1gb`, `s-1vcpu-2gb`) are not available in
-nyc3. First apply must be **dev only** with Regular `s-2vcpu-4gb`. Redis
-runs in Docker on that Droplet so Postgres can use the cluster slot.
+NYC does not sell Regular Basic Droplets. First apply must be **dev
+only** in **ams3** with Regular `s-1vcpu-1gb`. Resize later in the same
+region (`s-1vcpu-2gb`, `s-2vcpu-2gb`, `s-2vcpu-4gb`, then Intel after a
+tier increase). Redis runs in Docker on that Droplet so Postgres can use
+the cluster slot.
 
 If you already created Postgres in staging/prod from an earlier failed apply,
 destroy those environments first ([iac-destroy.md](iac-destroy.md)).

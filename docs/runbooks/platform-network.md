@@ -66,7 +66,7 @@ Do **not** `terraform apply` from a laptop. Procedure:
 In the DigitalOcean console:
 
 1. Project `aerodeck-<env>` exists and is not the account default.
-2. VPC `aerodeck-<env>-vpc` exists in `nyc3` with the CIDR above.
+2. VPC `aerodeck-<env>-vpc` exists in `ams3` with the CIDR above.
 3. The VPC is listed under Networking → VPC, not as a project member. That is
    expected.
 4. `terraform output vpc_id` is a UUID later stacks pass as `vpc_uuid`.
