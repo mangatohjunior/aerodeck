@@ -1,7 +1,7 @@
 environment            = "staging"
 do_project_environment = "Staging"
 region                 = "ams3"
-vpc_ip_range           = "10.20.0.0/16"
+vpc_ip_range           = "10.50.0.0/16"
 droplet_size           = "s-1vcpu-1gb"
 control_plane_image    = "registry.digitalocean.com/aerodeck/control-plane:main"
 postgres_size          = "db-s-1vcpu-1gb"

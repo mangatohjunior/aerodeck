@@ -60,6 +60,10 @@ def main() -> None:
         cidrs[env] = match.group(1)
         if not cidrs[env].startswith("10."):
             raise SystemExit(f"envs/{env}.tfvars vpc_ip_range must be RFC1918 10.x")
+        if cidrs[env] in ("10.10.0.0/16", "10.20.0.0/16", "10.30.0.0/16"):
+            raise SystemExit(
+                f"envs/{env}.tfvars {cidrs[env]} overlaps leftover nyc3 VPCs; use 10.40+/16"
+            )
         if 'region                 = "ams3"' not in tfvars:
             raise SystemExit(f"envs/{env}.tfvars must set region to ams3")
     if len(set(cidrs.values())) != 3:

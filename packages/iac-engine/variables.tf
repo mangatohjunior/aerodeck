@@ -83,11 +83,11 @@ variable "region" {
 variable "vpc_ip_range" {
   description = "CIDR block for the environment VPC. Must be RFC1918, /16–/24, unique per environment, and must not overlap other VPCs in the same DigitalOcean region."
   type        = string
-  default     = "10.10.0.0/16"
+  default     = "10.40.0.0/16"
 
   validation {
     condition     = can(cidrnetmask(var.vpc_ip_range))
-    error_message = "vpc_ip_range must be a valid IPv4 CIDR block (e.g. 10.10.0.0/16)."
+    error_message = "vpc_ip_range must be a valid IPv4 CIDR block (e.g. 10.40.0.0/16)."
   }
 
   validation {

@@ -1,7 +1,7 @@
 environment            = "prod"
 do_project_environment = "Production"
 region                 = "ams3"
-vpc_ip_range           = "10.30.0.0/16"
+vpc_ip_range           = "10.60.0.0/16"
 droplet_size           = "s-1vcpu-1gb"
 control_plane_image    = "registry.digitalocean.com/aerodeck/control-plane:main"
 postgres_size          = "db-s-1vcpu-1gb"
