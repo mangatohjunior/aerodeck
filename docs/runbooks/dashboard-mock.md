@@ -18,6 +18,12 @@ npm run dev
 Open [http://localhost:3000](http://localhost:3000). You should see the
 Overview cards (2 projects, 1 running sandbox, 0 deployments).
 
+Public marketing pages do **not** use the operator sidebar:
+
+| Path | What it is |
+| ---- | ---------- |
+| `/about` | Static About copy (GitOps, DigitalOcean, Firecracker). Header + footer only. |
+
 ## Mock contract
 
 | Method | Path | What it does |
@@ -80,6 +86,7 @@ Invoke-RestMethod -Method Post -ContentType "application/json" `
 5. Status — the terminal prints SSE lines, then the badge becomes Succeeded.
 6. Deployments — the new row is listed. Refresh keeps it until the Next.js process restarts.
 7. Narrow viewport — hamburger opens the sidebar; a nav link closes it.
+8. About — open [http://localhost:3000/about](http://localhost:3000/about). There is no Overview / Deploy / Sandboxes sidebar. The header About link stays on `/about`. Narrow viewport: hamburger opens the public nav and About is in it.
 
 ## What this is not
 

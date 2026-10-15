@@ -26,9 +26,10 @@ apps/dashboard/src/
 └── lib/                    # utils, mock clients, typed domain objects
 ```
 
-- Shell (sidebar + main) wraps the operator console. Navigation is explicit: New Deployment, Deployment Status, later Projects / Sandboxes.
+- Operator routes live under `app/(console)`. Shell (sidebar + main) wraps only that group. Navigation is explicit: Overview, Deploy, Deployments, Projects, Sandboxes.
+- Public routes live under `app/(public)` (`/about`, later Policy / Register / Login). They use a header + footer shell — never the operator sidebar.
 - Interactive deploy state lives in Client Components. Do not mark the root layout `"use client"` just to hold form state.
-- Responsive: sidebar is a fixed column on `md+`; hamburger + overlay on smaller viewports.
+- Responsive: console sidebar is a fixed column on `md+`; hamburger + overlay on smaller viewports. Public nav uses the same split (inline links on `md+`, hamburger on smaller viewports).
 
 ## 3. Mock-first development (hard constraint)
 

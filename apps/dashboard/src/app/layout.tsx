@@ -1,8 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 
-import { AppShell } from "@/components/app-shell";
-
 import "./globals.css";
 
 const geistSans = Geist({
@@ -28,7 +26,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       suppressHydrationWarning
     >
       <body className="min-h-full" suppressHydrationWarning>
-        <AppShell>{children}</AppShell>
+        {children}
       </body>
     </html>
   );
