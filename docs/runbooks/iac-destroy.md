@@ -34,6 +34,12 @@ Postgres and Redis have `prevent_destroy` in git. The destroy jobs lift that
 flag **only in the Actions runner checkout** so a smoke-test stack can go
 away without a laptop destroy. Merged code keeps `prevent_destroy = true`.
 
+DigitalOcean will not DELETE a VPC that is the region default
+(`Can not delete default VPCs`). Destroy CI moves the default onto another
+VPC in that region first (creating `aerodeck-<region>-default-keep` if the
+stack VPC is the only one). That placeholder is not in Terraform state and
+is not deleted.
+
 ## How to run it
 
 1. Wait until the **IaC plan and apply** run for that environment has
