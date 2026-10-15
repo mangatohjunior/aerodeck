@@ -5,7 +5,8 @@ import { useState } from "react";
 
 import { AppSidebar } from "@/components/app-sidebar";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -19,15 +20,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex items-center gap-3 border-b border-border px-4 py-3 md:px-8">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="md:hidden"
+          <button
+            type="button"
+            className={cn(buttonVariants({ variant: "ghost", size: "icon" }), "md:hidden")}
             onClick={() => setMobileOpen(true)}
             aria-label="Open navigation"
           >
             <Menu />
-          </Button>
+          </button>
           <p className="text-sm text-muted-foreground">
             GitOps operator console
           </p>

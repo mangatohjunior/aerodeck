@@ -5,8 +5,8 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { PageHeader } from "@/components/page-header";
+import { LinkButton } from "@/components/link-button";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -44,10 +44,10 @@ export default function OverviewPage() {
         title="AeroDeck console"
         description="Local mock control plane. Cards and tables are served from /api/mock/v1 — FastAPI is not required."
         actions={
-          <Button render={<Link href="/deploy" />}>
+          <LinkButton href="/deploy">
             <Rocket data-icon="inline-start" />
             New deployment
-          </Button>
+          </LinkButton>
         }
       />
 

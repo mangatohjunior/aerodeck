@@ -4,10 +4,11 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { PageHeader } from "@/components/page-header";
+import { LinkButton } from "@/components/link-button";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { fetchDeployments } from "@/lib/api";
+import { formatInstant } from "@/lib/format";
 import type { Deployment } from "@/lib/types";
 
 export default function DeploymentsPage() {
@@ -29,7 +30,7 @@ export default function DeploymentsPage() {
         title="Deployments"
         description="In-memory mock list. Restarting next dev clears it."
         actions={
-          <Button render={<Link href="/deploy" />}>New deployment</Button>
+          <LinkButton href="/deploy">New deployment</LinkButton>
         }
       />
 
@@ -58,7 +59,7 @@ export default function DeploymentsPage() {
                       <p className="font-mono text-xs text-muted-foreground">{row.id}</p>
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      {new Date(row.started_at).toLocaleString()}
+                      {formatInstant(row.started_at)}
                     </p>
                     <Badge variant="secondary">{row.status}</Badge>
                   </li>

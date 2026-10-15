@@ -1,12 +1,12 @@
 "use client";
 
 import { CheckCircle2, Loader2, Rocket } from "lucide-react";
-import Link from "next/link";
 import { useState } from "react";
 
+import { LinkButton } from "@/components/link-button";
 import { Terminal } from "@/components/terminal";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { formatInstant } from "@/lib/format";
 import {
   Card,
   CardContent,
@@ -42,10 +42,10 @@ export function DeploymentStatusView({ deployment }: DeploymentStatusViewProps) 
             </span>
           </p>
         </div>
-        <Button variant="outline" render={<Link href="/deploy" />}>
+        <LinkButton href="/deploy" variant="outline">
           <Rocket data-icon="inline-start" />
           New deployment
-        </Button>
+        </LinkButton>
       </div>
 
       <Card>
@@ -67,7 +67,7 @@ export function DeploymentStatusView({ deployment }: DeploymentStatusViewProps) 
           <div>
             <p className="text-xs text-muted-foreground">Started</p>
             <p className="mt-0.5 font-mono text-xs">
-              {new Date(deployment.started_at).toLocaleString()}
+              {formatInstant(deployment.started_at)}
             </p>
           </div>
           <div>
