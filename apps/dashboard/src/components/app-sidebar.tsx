@@ -12,7 +12,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 import { BrandMark } from "@/components/brand-mark";
-import { Button } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 
@@ -57,15 +57,17 @@ export function AppSidebar({ mobileOpen, onCloseMobile }: AppSidebarProps) {
               <p className="text-[11px] text-muted-foreground">Flight-deck console</p>
             </div>
           </Link>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            className="md:hidden"
+          <button
+            type="button"
+            className={cn(
+              buttonVariants({ variant: "ghost", size: "icon-sm" }),
+              "md:hidden",
+            )}
             onClick={onCloseMobile}
             aria-label="Close sidebar"
           >
             <X />
-          </Button>
+          </button>
         </div>
 
         <Separator />
