@@ -39,6 +39,23 @@ STATE_KEY="${ENV_NAME}/platform/terraform.tfstate"
 export TF_IN_AUTOMATION=1
 export TF_INPUT=0
 
+# Optional operator SSH from GitHub variables (comma-separated, not committed).
+# SSH_KEY_IDS=fingerprint-or-id  SSH_ALLOW_CIDRS=203.0.113.10/32
+export_operator_ssh() {
+  json_string_list() {
+    python3 -c 'import json,sys; print(json.dumps([p.strip() for p in sys.argv[1].split(",") if p.strip()]))' "$1"
+  }
+  if [[ -n "${SSH_KEY_IDS:-}" ]]; then
+    TF_VAR_ssh_key_ids="$(json_string_list "${SSH_KEY_IDS}")"
+    export TF_VAR_ssh_key_ids
+  fi
+  if [[ -n "${SSH_ALLOW_CIDRS:-}" ]]; then
+    TF_VAR_ssh_allow_cidrs="$(json_string_list "${SSH_ALLOW_CIDRS}")"
+    export TF_VAR_ssh_allow_cidrs
+  fi
+}
+export_operator_ssh
+
 # prevent_destroy cannot be a variable. Destroy CI lifts it in this runner
 # checkout only so smoke-test stacks can be torn down without a laptop destroy.
 lift_prevent_destroy_in_runner() {

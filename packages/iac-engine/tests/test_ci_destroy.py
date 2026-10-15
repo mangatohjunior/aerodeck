@@ -55,6 +55,8 @@ def main() -> None:
     _must(WORKFLOW, "name: tfdestroy-${{ github.event.inputs.environment }}", "iac-destroy.yml")
     _must(WORKFLOW, "terraform_wrapper: false", "iac-destroy.yml")
     _must(WORKFLOW, "secrets.DIGITALOCEAN_TOKEN", "iac-destroy.yml")
+    _must(WORKFLOW, "vars.SSH_KEY_IDS", "iac-destroy.yml")
+    _must(WORKFLOW, "vars.SSH_ALLOW_CIDRS", "iac-destroy.yml")
     if "aerodeck-tfstate" in _code_lines(WORKFLOW) and "terraform destroy" in _code_lines(WORKFLOW):
         raise SystemExit("destroy workflow must not target the Spaces bucket")
     if "-auto-approve" in _code_lines(WORKFLOW):

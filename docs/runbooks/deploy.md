@@ -66,6 +66,16 @@ Expected creates per environment: one project, one VPC, one Droplet, two
 managed databases, firewalls, and project members. This **bills** for the
 Droplet and both databases. No container is started.
 
+### 4b. SSH to the dev Droplet
+
+Procedure: [ssh-dev.md](ssh-dev.md). Until then, use the DigitalOcean
+**Droplet Console**.
+
+- [ ] SSH public key added in DigitalOcean (**Settings → Security**).
+- [ ] GitHub variables `SSH_KEY_IDS` and `SSH_ALLOW_CIDRS` (your `/32`).
+- [ ] **IaC plan and apply** on `main`, environment **dev**, Apply checked.
+- [ ] `ssh root@<droplet-ipv4>` succeeds.
+
 ### 5. Control-plane process (image published, not started)
 
 CI builds `apps/control-plane` on pull requests and, on `main`, pushes

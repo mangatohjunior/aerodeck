@@ -36,6 +36,8 @@ concurrency:
 env:
   TF_IN_AUTOMATION: "true"
   TF_INPUT: "0"
+  SSH_KEY_IDS: ${{ vars.SSH_KEY_IDS }}
+  SSH_ALLOW_CIDRS: ${{ vars.SSH_ALLOW_CIDRS }}
 
 jobs:
   confirm:
