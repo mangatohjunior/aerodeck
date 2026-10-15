@@ -20,8 +20,10 @@ resource "digitalocean_project" "platform" {
 }
 
 resource "digitalocean_vpc" "platform" {
-  name        = "${var.name_prefix}-vpc"
+  # Region is in the name: VPC names are unique per account, not per region.
+  # A leftover nyc3 default named aerodeck-dev-vpc would 422 a new ams3 VPC.
+  name        = "${var.name_prefix}-${var.region}-vpc"
   region      = var.region
   ip_range    = var.vpc_ip_range
-  description = "${var.name_prefix} private network. Workloads must use this VPC, never the default."
+  description = "${var.name_prefix} private network in ${var.region}. Workloads must use this VPC, never the default."
 }

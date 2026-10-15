@@ -57,7 +57,7 @@ Saving secrets does not create Droplets.
 
 - [ ] Merge to `main` (or run **IaC plan and apply** with Apply checked).
 - [ ] Confirm each environment created `aerodeck-<env>`,
-      `aerodeck-<env>-vpc`, `aerodeck-<env>-control`, `aerodeck-<env>-pg`,
+      `aerodeck-<env>-ams3-vpc`, `aerodeck-<env>-control`, `aerodeck-<env>-pg`,
       and `aerodeck-<env>-redis` ([platform-network.md](platform-network.md),
       [platform-runtime.md](platform-runtime.md)).
 - [ ] Approve the `production` apply in the Actions UI.
