@@ -29,6 +29,8 @@ def main() -> None:
     _must(SCRIPT, "Refusing terraform apply outside GitHub Actions", "scripts/ci.sh")
     _must(SCRIPT, 'terraform plan -input=false -var-file="${TFVARS}" -out="${PLANFILE}"', "scripts/ci.sh")
     _must(SCRIPT, 'terraform apply -input=false "${PLANFILE}"', "scripts/ci.sh")
+    _must(SCRIPT, "python3 scripts/rehome_default_vpc.py", "scripts/ci.sh")
+    _must(SCRIPT, ".rehome-vpc-dropped", "scripts/ci.sh")
     if "-auto-approve" in _code_lines(SCRIPT):
         raise SystemExit("scripts/ci.sh must not pass -auto-approve")
 

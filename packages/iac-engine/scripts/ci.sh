@@ -57,8 +57,10 @@ terraform init -input=false \
   -backend-config=backend.hcl \
   -backend-config="key=${STATE_KEY}"
 
-# DigitalOcean 403s DELETE on a region-default VPC. Move default away first.
-if [[ "${CMD}" == destroy-plan || "${CMD}" == destroy-apply ]]; then
+# DigitalOcean 403s DELETE on a region-default VPC. Do not mutate state from
+# a pull_request plan. Apply and destroy on main may drop the VPC from state
+# and must re-plan if they do; a stored plan still contains the doomed DELETE.
+if [[ "${GITHUB_EVENT_NAME:-}" != "pull_request" ]]; then
   python3 scripts/rehome_default_vpc.py
 fi
 
@@ -72,6 +74,20 @@ if [[ "${CMD}" == "destroy-plan" ]]; then
   terraform plan -destroy -input=false -var-file="${TFVARS}" -out="${PLANFILE}"
   terraform show -no-color "${PLANFILE}"
   exit 0
+fi
+
+if [[ ! -f "${PLANFILE}" ]] && [[ ! -f .rehome-vpc-dropped ]]; then
+  echo "missing stored plan ${PLANFILE}; plan in CI and download the artefact first" >&2
+  exit 1
+fi
+
+if [[ -f .rehome-vpc-dropped ]]; then
+  echo "Default VPC was dropped from state; re-planning so apply does not DELETE it"
+  if [[ "${CMD}" == "destroy-apply" ]]; then
+    terraform plan -destroy -input=false -var-file="${TFVARS}" -out="${PLANFILE}"
+  else
+    terraform plan -input=false -var-file="${TFVARS}" -out="${PLANFILE}"
+  fi
 fi
 
 if [[ ! -f "${PLANFILE}" ]]; then

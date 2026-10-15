@@ -75,6 +75,10 @@ If a previous apply already created Postgres clusters, destroy extras first
 ([iac-destroy.md](iac-destroy.md)) or the next Valkey/Postgres create will
 return `maximum clusters reached`.
 
+If apply fails with `Can not delete default VPCs`, the leftover VPC is the
+region default. CI drops it from state and creates a new VPC in `ams3`; it
+does not DELETE the old default.
+
 Expected creates for **dev**: one project, one VPC, one Droplet, one
 Postgres cluster, firewalls. Redis listens on `127.0.0.1:6379` unless
 `managed_cache_enabled = true`.
