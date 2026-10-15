@@ -11,29 +11,40 @@ import { fetchMe, logoutAccount } from "@/lib/api";
 import type { PublicUser } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
-export function AppShell({ children }: { children: React.ReactNode }) {
+export function AppShell({
+  children,
+  user,
+}: {
+  children: React.ReactNode;
+  user: PublicUser;
+}) {
   const router = useRouter();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [user, setUser] = useState<PublicUser | null>(null);
+  const [currentUser, setCurrentUser] = useState(user);
   const [signingOut, setSigningOut] = useState(false);
 
   useEffect(() => {
+    setCurrentUser(user);
+  }, [user]);
+
+  useEffect(() => {
     let cancelled = false;
-    fetchMe()
-      .then((next) => {
-        if (!cancelled) {
-          setUser(next);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setUser(null);
-        }
-      });
+    fetchMe().catch(async () => {
+      if (cancelled) {
+        return;
+      }
+      try {
+        await logoutAccount();
+      } catch {
+        // Treat a 401 as signed out even if logout cannot run.
+      }
+      router.replace("/login");
+      router.refresh();
+    });
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [router]);
 
   async function handleSignOut() {
     setSigningOut(true);
@@ -42,7 +53,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     } catch {
       // Cookie clear still happens on 204; treat any failure as signed out.
     }
-    setUser(null);
     router.push("/login");
     router.refresh();
   }
@@ -68,23 +78,19 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             GitOps operator console
           </p>
           <div className="ml-auto flex min-w-0 items-center gap-2">
-            {user ? (
-              <>
-                <p className="max-w-[10rem] truncate text-xs text-muted-foreground">
-                  {user.email}
-                </p>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleSignOut}
-                  disabled={signingOut}
-                >
-                  <LogOut data-icon="inline-start" />
-                  Sign out
-                </Button>
-              </>
-            ) : null}
+            <p className="max-w-[10rem] truncate text-xs text-muted-foreground">
+              {currentUser.email}
+            </p>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={handleSignOut}
+              disabled={signingOut}
+            >
+              <LogOut data-icon="inline-start" />
+              Sign out
+            </Button>
             <Badge variant="outline" className="border-runway/40 text-runway">
               local · mock
             </Badge>

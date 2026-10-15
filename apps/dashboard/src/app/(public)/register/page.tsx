@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 
+import { GuestOnly } from "@/components/guest-only";
 import { PageHeader } from "@/components/page-header";
 import { RegisterForm } from "@/components/register-form";
 
@@ -16,7 +18,11 @@ export default function RegisterPage() {
         title="Create your account"
         description="Email and password first. Google sign-in is a later story. The mock store forgets users when Next.js restarts."
       />
-      <RegisterForm />
+      <Suspense fallback={<RegisterForm />}>
+        <GuestOnly>
+          <RegisterForm />
+        </GuestOnly>
+      </Suspense>
     </div>
   );
 }

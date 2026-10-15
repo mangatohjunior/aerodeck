@@ -15,8 +15,9 @@ npm install
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000). You should see the
-Overview cards (2 projects, 1 running sandbox, 0 deployments).
+Open [http://localhost:3000](http://localhost:3000) while signed out — you
+should land on `/login`. After sign-in, Overview cards populate (2 projects,
+1 running sandbox, 0 deployments). `/about` and `/policy` stay public.
 
 Public marketing pages do **not** use the operator sidebar:
 
@@ -115,7 +116,8 @@ Invoke-RestMethod -Method Post -ContentType "application/json" `
 Decision: a 201 does **not** sign the browser in. The UI redirects to
 `/login?registered=1`. Login POSTs `/api/mock/v1/auth/login` and sets the
 httpOnly `aerodeck_session` cookie. No `localStorage` token. No JWT in the
-query string. Console pages stay reachable without a cookie until story #53.
+query string. Console routes redirect to `/login` without that cookie.
+Signed-in visits to `/login` or `/register` redirect to Overview.
 
 Login (cookie jar required so `/me` sees the session):
 
@@ -151,17 +153,18 @@ Invoke-RestMethod -Uri http://localhost:3000/api/mock/v1/auth/me -WebSession $mo
 
 ## Browser checks
 
-1. Overview — three stat cards populate from GET projects / sandboxes / deployments.
-2. Projects / Sandboxes — seeded rows render.
-3. Deploy — submit `https://example.com/x` and stay on the form with a validation error.
-4. Deploy — submit `https://github.com/mangatohjunior/aerodeck`. The UI navigates to `/deployments/{id}`.
-5. Status — the terminal prints SSE lines, then the badge becomes Succeeded.
-6. Deployments — the new row is listed. Refresh keeps it until the Next.js process restarts.
-7. Narrow viewport — hamburger opens the sidebar; a nav link closes it.
-8. About — open [http://localhost:3000/about](http://localhost:3000/about). There is no Overview / Deploy / Sandboxes sidebar. The header About link stays on `/about`. Narrow viewport: hamburger opens the public nav and About is in it.
-9. Policy — open [http://localhost:3000/policy](http://localhost:3000/policy). Privacy and Acceptable use sections are present. Header and footer Policy links land on `/policy`. No analytics pixels; no FastAPI.
-10. Register — open [http://localhost:3000/register](http://localhost:3000/register). Mismatched or short passwords stay on the form (no POST). A valid submit lands on `/login?registered=1`. Duplicate email shows `That email is already registered.` Login, About, and Policy links work. Password fields are `type=password`.
-11. Login — from `/login?registered=1`, sign in with that email. Overview loads and the header shows the email plus **Sign out**. A wrong password stays on `/login` with `Invalid email or password.` (same copy for an unknown email). Sign out returns to `/login`. Confirm DevTools Application has `aerodeck_session` as HttpOnly and that `localStorage` has no token.
+1. Overview — signed out, `/` and `/deploy` redirect to `/login`. After sign-in, three stat cards populate from GET projects / sandboxes / deployments. Signed-in `/login` and `/register` bounce back to Overview. `/about` still loads without a cookie.
+2. Header — signed-in Overview shows the account email and **Sign out**. A 401 from `/api/mock/v1/auth/me` returns to `/login` instead of crashing.
+3. Projects / Sandboxes — seeded rows render.
+4. Deploy — submit `https://example.com/x` and stay on the form with a validation error.
+5. Deploy — submit `https://github.com/mangatohjunior/aerodeck`. The UI navigates to `/deployments/{id}`.
+6. Status — the terminal prints SSE lines, then the badge becomes Succeeded.
+7. Deployments — the new row is listed. Refresh keeps it until the Next.js process restarts.
+8. Narrow viewport — hamburger opens the sidebar; a nav link closes it.
+9. About — open [http://localhost:3000/about](http://localhost:3000/about). There is no Overview / Deploy / Sandboxes sidebar. The header About link stays on `/about`. Narrow viewport: hamburger opens the public nav and About is in it.
+10. Policy — open [http://localhost:3000/policy](http://localhost:3000/policy). Privacy and Acceptable use sections are present. Header and footer Policy links land on `/policy`. No analytics pixels; no FastAPI.
+11. Register — open [http://localhost:3000/register](http://localhost:3000/register). Mismatched or short passwords stay on the form (no POST). A valid submit lands on `/login?registered=1`. Duplicate email shows `That email is already registered.` Login, About, and Policy links work. Password fields are `type=password`.
+12. Login — from `/login?registered=1`, sign in with that email. Overview loads and the header shows the email plus **Sign out**. A wrong password stays on `/login` with `Invalid email or password.` (same copy for an unknown email). Sign out returns to `/login`. Confirm DevTools Application has `aerodeck_session` as HttpOnly and that `localStorage` has no token.
 
 ## What this is not
 

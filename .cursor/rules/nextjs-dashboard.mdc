@@ -29,7 +29,8 @@ apps/dashboard/src/
 - Operator routes live under `app/(console)`. Shell (sidebar + main) wraps only that group. Navigation is explicit: Overview, Deploy, Deployments, Projects, Sandboxes.
 - Public routes live under `app/(public)` (`/about`, `/policy`, `/register`, `/login`). They use a header + footer shell — never the operator sidebar. Register and Login legal copy must link to `/policy`.
 - Register POSTs `/api/mock/v1/auth/register` then redirects to `/login?registered=1`. No token in `localStorage`.
-- Login POSTs `/api/mock/v1/auth/login` and receives an httpOnly `aerodeck_session` cookie. Logout POSTs `/api/mock/v1/auth/logout`. `GET /api/mock/v1/auth/me` returns the current user or 401. Do not put JWTs in query strings or `localStorage`. Console route guards are the next story.
+- Login POSTs `/api/mock/v1/auth/login` and receives an httpOnly `aerodeck_session` cookie. Logout POSTs `/api/mock/v1/auth/logout`. `GET /api/mock/v1/auth/me` returns the current user or 401. Do not put JWTs in query strings or `localStorage`.
+- Console routes (`/`, `/deploy`, `/deployments`, `/projects`, `/sandboxes`) require a valid session. Signed-out visits redirect to `/login`. Signed-in visits to `/login` or `/register` redirect to Overview. Public `/about` and `/policy` stay open. A 401 from `/auth/me` is signed out, not a crash. Do not `await connection()` in the public layout.
 - Interactive deploy state lives in Client Components. Do not mark the root layout `"use client"` just to hold form state.
 - Responsive: console sidebar is a fixed column on `md+`; hamburger + overlay on smaller viewports. Public nav uses the same split (inline links on `md+`, hamburger on smaller viewports).
 
