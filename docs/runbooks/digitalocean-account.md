@@ -153,9 +153,17 @@ If it errors on **partial** secrets, add the missing one.
 
 ## 8. Stop and read this before apply
 
-First apply creates **three** environments. Each one is a Droplet plus two
-managed databases. That is real spend (DigitalOcean bills by the hour, but
-managed databases are the expensive part).
+New teams are [Tier 1](https://docs.digitalocean.com/platform/resource-limits/):
+up to **3 Basic shared-CPU Droplets** (no Premium AMD/Intel sizes) and often
+**one** managed database cluster. First apply must be **dev only**. Redis
+runs in Docker on that Droplet so Postgres can use the cluster slot.
+
+If you already created Postgres in staging/prod from an earlier failed apply,
+destroy those environments first ([iac-destroy.md](iac-destroy.md)).
+
+To raise limits later: DigitalOcean **Settings → Resource Limits → Request
+an increase** (or a prepayment). Then you can use Premium Droplet slugs and
+set `managed_cache_enabled = true`.
 
 | Do | Do not |
 | -- | ------ |

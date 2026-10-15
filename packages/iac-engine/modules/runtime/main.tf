@@ -25,7 +25,8 @@ resource "digitalocean_droplet" "control" {
   ipv6       = false
   monitoring = true
   user_data = templatefile("${path.module}/cloud-init.yaml", {
-    control_plane_image = var.control_plane_image
+    control_plane_image   = var.control_plane_image
+    managed_cache_enabled = var.managed_cache_enabled
   })
 }
 
@@ -84,6 +85,9 @@ resource "digitalocean_database_cluster" "postgres" {
 }
 
 resource "digitalocean_database_cluster" "redis" {
+  # Off by default: new teams often cannot create a second DBaaS cluster.
+  count = var.managed_cache_enabled ? 1 : 0
+
   # DigitalOcean no longer creates new Redis clusters. Valkey is Redis-protocol
   # compatible (AERODECK_REDIS_URL still works).
   name                 = "${var.name_prefix}-redis"
@@ -112,7 +116,8 @@ resource "digitalocean_database_firewall" "postgres" {
 }
 
 resource "digitalocean_database_firewall" "redis" {
-  cluster_id = digitalocean_database_cluster.redis.id
+  count      = var.managed_cache_enabled ? 1 : 0
+  cluster_id = digitalocean_database_cluster.redis[0].id
 
   rule {
     type  = "droplet"
@@ -122,9 +127,9 @@ resource "digitalocean_database_firewall" "redis" {
 
 resource "digitalocean_project_resources" "runtime" {
   project = var.project_id
-  resources = [
+  resources = compact([
     digitalocean_droplet.control.urn,
     digitalocean_database_cluster.postgres.urn,
-    digitalocean_database_cluster.redis.urn,
-  ]
+    var.managed_cache_enabled ? digitalocean_database_cluster.redis[0].urn : "",
+  ])
 }

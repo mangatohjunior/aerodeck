@@ -13,8 +13,8 @@ Helper: `packages/iac-engine/scripts/ci.sh` (refuses `apply` unless
 | Event | Plan | Apply |
 | ----- | ---- | ----- |
 | Pull request touching `packages/iac-engine/**` | All three environments, if secrets are set | Never |
-| Push to `main` touching that tree | All three environments | `dev` and `staging` immediately; `prod` after `production` approval |
-| `workflow_dispatch` on `main` with Apply checked | All three | Same as a main push |
+| Push to `main` touching that tree | All three environments | Never (avoids burning a new team's one database-cluster quota on three stacks) |
+| `workflow_dispatch` on `main` with Apply checked | All three | **One** environment (`dev` by default). `prod` still waits on `production` |
 | Laptop | `terraform plan` only, against a throwaway clone | Refused |
 
 If `DIGITALOCEAN_TOKEN`, `SPACES_ACCESS_KEY_ID`, and `SPACES_SECRET_ACCESS_KEY`
@@ -57,12 +57,24 @@ that exact file; they do not re-plan.
 
 ## First apply
 
-After secrets and the bucket exist, merge to `main` (or run **IaC plan and
-apply** with Apply checked). Expected first creates per environment: one
-project, one VPC, one Droplet, Postgres, Redis, and firewalls
-([platform-network.md](platform-network.md),
-[platform-runtime.md](platform-runtime.md)). That **bills**. Plan first with
-Apply unchecked ([digitalocean-account.md](digitalocean-account.md) step 7–8).
+After secrets and the bucket exist, run **IaC plan and apply** on `main`:
+environment **`dev`**, Apply **checked**. New DigitalOcean teams are
+[Tier 1](https://docs.digitalocean.com/platform/resource-limits/): Basic
+shared-CPU Droplets only (no Premium `-amd` / `-intel`), and often **one**
+managed database cluster. This stack uses `s-1vcpu-1gb` and runs Redis in
+Docker on the Droplet so Postgres can use that single cluster slot.
+
+Do **not** apply staging or prod until
+**Settings → Resource Limits** shows room for another Droplet and another
+database cluster.
+
+If a previous apply already created Postgres clusters, destroy extras first
+([iac-destroy.md](iac-destroy.md)) or the next Valkey/Postgres create will
+return `maximum clusters reached`.
+
+Expected creates for **dev**: one project, one VPC, one Droplet, one
+Postgres cluster, firewalls. Redis listens on `127.0.0.1:6379` unless
+`managed_cache_enabled = true`.
 
 Prod stays queued on the `production` environment until a reviewer approves
 in the Actions UI.

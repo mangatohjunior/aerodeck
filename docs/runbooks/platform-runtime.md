@@ -24,11 +24,16 @@ project; they still join the VPC with `vpc_uuid` / `private_network_uuid`.
 
 Sizes (`envs/<env>.tfvars`):
 
-| Environment | Droplet | Postgres | Valkey |
-| ----------- | ------- | -------- | ------ |
-| dev | `s-1vcpu-2gb-amd` | `db-s-1vcpu-1gb` | `db-s-1vcpu-1gb` |
-| staging | `s-1vcpu-2gb-amd` | `db-s-1vcpu-1gb` | `db-s-1vcpu-1gb` |
-| prod | `s-2vcpu-4gb-amd` | `db-s-1vcpu-2gb` | `db-s-1vcpu-1gb` |
+| Environment | Droplet | Postgres | Cache |
+| ----------- | ------- | -------- | ----- |
+| dev | `s-1vcpu-1gb` | `db-s-1vcpu-1gb` | Docker Redis on the Droplet (`managed_cache_enabled = false`) |
+| staging | `s-1vcpu-1gb` | `db-s-1vcpu-1gb` | same |
+| prod | `s-1vcpu-1gb` | `db-s-1vcpu-1gb` | same |
+
+New DigitalOcean teams cannot create Premium (`-amd` / `-intel`) Droplets
+until the account tier is raised. They also cannot create a second managed
+database cluster; leave `managed_cache_enabled = false` until
+**Resource Limits** allows it.
 
 Outputs (`<env>/platform/terraform.tfstate`): `droplet_id`, `droplet_ipv4`,
 `droplet_private_ipv4`, `postgres_id`, `postgres_private_host`,
