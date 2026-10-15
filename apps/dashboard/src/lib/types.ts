@@ -47,6 +47,8 @@ export type AuthErrorCode =
   | "invalid_email"
   | "weak_password"
   | "email_taken"
+  | "invalid_credentials"
+  | "unauthenticated"
   | "invalid_json";
 
 export type DeployLogEvent = {

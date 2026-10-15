@@ -1,4 +1,7 @@
+import { randomBytes } from "node:crypto";
+
 import {
+  INVALID_CREDENTIALS_DETAIL,
   isStrongPassword,
   isValidEmail,
   MockAuthError,
@@ -6,11 +9,17 @@ import {
 } from "@/lib/auth";
 import { DEPLOY_LOG_EVENTS, SEED_PROJECTS, SEED_SANDBOXES } from "@/lib/catalog";
 import { parseGithubRepo } from "@/lib/github";
-import { hashPassword } from "@/lib/password";
+import { hashPassword, verifyPassword } from "@/lib/password";
 import type { Deployment, Project, PublicUser, Sandbox } from "@/lib/types";
 
 type MockUser = PublicUser & {
   password_hash: string;
+};
+
+type MockSession = {
+  token: string;
+  user_id: string;
+  created_at: string;
 };
 
 type Store = {
@@ -18,7 +27,10 @@ type Store = {
   sandboxes: Sandbox[];
   deployments: Deployment[];
   users: MockUser[];
+  sessions: MockSession[];
 };
+
+const DUMMY_PASSWORD_HASH = hashPassword("not-a-real-user");
 
 const globalStore = globalThis as typeof globalThis & {
   __aerodeckMockStore?: Store;
@@ -30,6 +42,7 @@ function seed(): Store {
     sandboxes: SEED_SANDBOXES.map((row) => ({ ...row })),
     deployments: [],
     users: [],
+    sessions: [],
   };
 }
 
@@ -40,6 +53,9 @@ export function getStore(): Store {
   const store = globalStore.__aerodeckMockStore;
   if (!Array.isArray(store.users)) {
     store.users = [];
+  }
+  if (!Array.isArray(store.sessions)) {
+    store.sessions = [];
   }
   return store;
 }
@@ -126,4 +142,52 @@ export function registerUser(email: string, password: string): PublicUser {
   };
   getStore().users.push(user);
   return toPublicUser(user);
+}
+
+export function loginUser(
+  email: string,
+  password: string,
+): { user: PublicUser; token: string } {
+  const normalized = normalizeEmail(email);
+  if (!normalized) {
+    throw new MockAuthError("missing_email", "email is required.");
+  }
+  if (password.length === 0) {
+    throw new MockAuthError("missing_password", "password is required.");
+  }
+
+  const user = findUserByEmail(normalized);
+  const hash = user?.password_hash ?? DUMMY_PASSWORD_HASH;
+  if (!user || !isValidEmail(normalized) || !verifyPassword(password, hash)) {
+    throw new MockAuthError("invalid_credentials", INVALID_CREDENTIALS_DETAIL);
+  }
+
+  return { user: toPublicUser(user), token: createSession(user.id) };
+}
+
+export function createSession(userId: string): string {
+  const token = randomBytes(32).toString("hex");
+  getStore().sessions.push({
+    token,
+    user_id: userId,
+    created_at: new Date().toISOString(),
+  });
+  return token;
+}
+
+export function destroySession(token: string): void {
+  const store = getStore();
+  store.sessions = store.sessions.filter((row) => row.token !== token);
+}
+
+export function getUserBySessionToken(token: string | undefined): PublicUser | undefined {
+  if (!token) {
+    return undefined;
+  }
+  const session = getStore().sessions.find((row) => row.token === token);
+  if (!session) {
+    return undefined;
+  }
+  const user = getStore().users.find((row) => row.id === session.user_id);
+  return user ? toPublicUser(user) : undefined;
 }

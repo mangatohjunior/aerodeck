@@ -59,3 +59,34 @@ export async function registerAccount(
   });
   return readJson(response);
 }
+
+export async function loginAccount(
+  email: string,
+  password: string,
+): Promise<PublicUser> {
+  const response = await fetch(`${MOCK_API_PREFIX}/auth/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "same-origin",
+    body: JSON.stringify({ email, password }),
+  });
+  return readJson(response);
+}
+
+export async function fetchMe(): Promise<PublicUser> {
+  const response = await fetch(`${MOCK_API_PREFIX}/auth/me`, {
+    credentials: "same-origin",
+    cache: "no-store",
+  });
+  return readJson(response);
+}
+
+export async function logoutAccount(): Promise<void> {
+  const response = await fetch(`${MOCK_API_PREFIX}/auth/logout`, {
+    method: "POST",
+    credentials: "same-origin",
+  });
+  if (!response.ok) {
+    await readJson(response);
+  }
+}
