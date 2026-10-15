@@ -13,5 +13,6 @@ npm install
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) for the operator console, or
-[http://localhost:3000/about](http://localhost:3000/about) for the public About page.
+Open [http://localhost:3000](http://localhost:3000) for the operator console,
+[http://localhost:3000/about](http://localhost:3000/about) for About, or
+[http://localhost:3000/policy](http://localhost:3000/policy) for Policy.
