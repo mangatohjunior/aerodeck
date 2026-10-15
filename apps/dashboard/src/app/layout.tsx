@@ -25,6 +25,10 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       className={`dark ${geistSans.variable} ${geistMono.variable} h-full antialiased`}
       suppressHydrationWarning
     >
+      <head>
+        {/* Blocking: Cursor injects data-cursor-ref before React hydrates. */}
+        <script src="/strip-cursor-ref.js" />
+      </head>
       <body className="min-h-full" suppressHydrationWarning>
         {children}
       </body>
