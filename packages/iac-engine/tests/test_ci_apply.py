@@ -48,6 +48,11 @@ def main() -> None:
     _must(WORKFLOW, "secrets.DIGITALOCEAN_TOKEN", "iac-plan-apply.yml")
     _must(WORKFLOW, "secrets.SPACES_ACCESS_KEY_ID", "iac-plan-apply.yml")
     _must(WORKFLOW, "secrets.SPACES_SECRET_ACCESS_KEY", "iac-plan-apply.yml")
+    _must(WORKFLOW, "vars.SSH_KEY_IDS", "iac-plan-apply.yml")
+    _must(WORKFLOW, "vars.SSH_ALLOW_CIDRS", "iac-plan-apply.yml")
+    _must(SCRIPT, "SSH_KEY_IDS", "scripts/ci.sh")
+    _must(SCRIPT, "TF_VAR_ssh_key_ids", "scripts/ci.sh")
+    _must(SCRIPT, "TF_VAR_ssh_allow_cidrs", "scripts/ci.sh")
     if "-auto-approve" in _code_lines(WORKFLOW):
         raise SystemExit("iac-plan-apply.yml must not pass -auto-approve")
     # Apply jobs must not run on pull requests; the apply job names are unique.
