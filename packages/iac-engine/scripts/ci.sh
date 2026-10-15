@@ -57,6 +57,11 @@ terraform init -input=false \
   -backend-config=backend.hcl \
   -backend-config="key=${STATE_KEY}"
 
+# DigitalOcean 403s DELETE on a region-default VPC. Move default away first.
+if [[ "${CMD}" == destroy-plan || "${CMD}" == destroy-apply ]]; then
+  python3 scripts/rehome_default_vpc.py
+fi
+
 if [[ "${CMD}" == "plan" ]]; then
   terraform plan -input=false -var-file="${TFVARS}" -out="${PLANFILE}"
   terraform show -no-color "${PLANFILE}"

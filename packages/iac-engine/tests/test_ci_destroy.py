@@ -29,6 +29,13 @@ def main() -> None:
     _must(SCRIPT, "Refusing terraform destroy outside GitHub Actions", "scripts/ci.sh")
     _must(SCRIPT, "terraform plan -destroy", "scripts/ci.sh")
     _must(SCRIPT, "lift_prevent_destroy_in_runner", "scripts/ci.sh")
+    _must(SCRIPT, "python3 scripts/rehome_default_vpc.py", "scripts/ci.sh")
+    rehome = (ROOT / "scripts" / "rehome_default_vpc.py").read_text(encoding="utf-8")
+    _must(rehome, "/vpcs", "scripts/rehome_default_vpc.py")
+    _must(rehome, '"default": True', "scripts/rehome_default_vpc.py")
+    _must(rehome, "terraform", "scripts/rehome_default_vpc.py")
+    if "hashicorp/aws" in rehome:
+        raise SystemExit("rehome_default_vpc.py must not use AWS")
     if "-auto-approve" in _code_lines(SCRIPT):
         raise SystemExit("scripts/ci.sh must not pass -auto-approve")
 
