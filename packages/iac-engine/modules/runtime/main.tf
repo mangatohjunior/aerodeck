@@ -1,0 +1,125 @@
+# Control-plane Droplet + managed Postgres + managed Redis in the environment
+# VPC. Child modules must not declare provider or backend blocks.
+#
+# Databases use private_network_uuid (never the default VPC). Public access is
+# denied except via digitalocean_database_firewall, which trusts only this
+# Droplet. Stateful clusters have prevent_destroy.
+#
+# This module does not start the control-plane process. It creates the host
+# and data stores; image publish is a later story.
+
+locals {
+  ssh_sources = length(var.ssh_allow_cidrs) > 0 ? var.ssh_allow_cidrs : [var.vpc_ip_range]
+}
+
+resource "digitalocean_droplet" "control" {
+  name     = "${var.name_prefix}-control"
+  region   = var.region
+  size     = var.droplet_size
+  image    = var.droplet_image
+  vpc_uuid = var.vpc_id
+  ssh_keys = var.ssh_key_ids
+  tags     = var.tags
+
+  ipv6       = false
+  monitoring = true
+  user_data  = file("${path.module}/cloud-init.yaml")
+}
+
+resource "digitalocean_firewall" "control" {
+  name        = "${var.name_prefix}-control-fw"
+  droplet_ids = [digitalocean_droplet.control.id]
+
+  inbound_rule {
+    protocol         = "tcp"
+    port_range       = "22"
+    source_addresses = local.ssh_sources
+  }
+
+  inbound_rule {
+    protocol         = "tcp"
+    port_range       = "8000"
+    source_addresses = [var.vpc_ip_range]
+  }
+
+  inbound_rule {
+    protocol         = "icmp"
+    source_addresses = [var.vpc_ip_range]
+  }
+
+  outbound_rule {
+    protocol              = "tcp"
+    port_range            = "1-65535"
+    destination_addresses = ["0.0.0.0/0", "::/0"]
+  }
+
+  outbound_rule {
+    protocol              = "udp"
+    port_range            = "1-65535"
+    destination_addresses = ["0.0.0.0/0", "::/0"]
+  }
+
+  outbound_rule {
+    protocol              = "icmp"
+    destination_addresses = ["0.0.0.0/0", "::/0"]
+  }
+}
+
+resource "digitalocean_database_cluster" "postgres" {
+  name                 = "${var.name_prefix}-pg"
+  engine               = "pg"
+  version              = var.postgres_version
+  size                 = var.postgres_size
+  region               = var.region
+  node_count           = var.postgres_node_count
+  private_network_uuid = var.vpc_id
+  tags                 = var.tags
+
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+
+resource "digitalocean_database_cluster" "redis" {
+  name                 = "${var.name_prefix}-redis"
+  engine               = "redis"
+  version              = var.redis_version
+  size                 = var.redis_size
+  region               = var.region
+  node_count           = var.redis_node_count
+  private_network_uuid = var.vpc_id
+  eviction_policy      = "allkeys_lru"
+  tags                 = var.tags
+
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+
+# Trusted sources only. Without these rules the public hostname is reachable.
+resource "digitalocean_database_firewall" "postgres" {
+  cluster_id = digitalocean_database_cluster.postgres.id
+
+  rule {
+    type  = "droplet"
+    value = digitalocean_droplet.control.id
+  }
+}
+
+resource "digitalocean_database_firewall" "redis" {
+  cluster_id = digitalocean_database_cluster.redis.id
+
+  rule {
+    type  = "droplet"
+    value = digitalocean_droplet.control.id
+  }
+}
+
+resource "digitalocean_project_resources" "runtime" {
+  project = var.project_id
+  resources = [
+    digitalocean_droplet.control.urn,
+    digitalocean_database_cluster.postgres.urn,
+    digitalocean_database_cluster.redis.urn,
+  ]
+}

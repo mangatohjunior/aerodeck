@@ -3,10 +3,10 @@
 What exists on `main` vs what an operator must still do before anything
 runs in DigitalOcean. Follow this instead of improvising from chat.
 
-Stories #1–#16 are merged. The platform is **code-complete for the backlog**
-and **not yet deployed**. The first Terraform apply creates a DigitalOcean
-project and a private VPC per environment. It does **not** create a Droplet,
-database, Redis, load balancer, Traefik, or the control-plane container.
+Stories #1–#16 are merged. The platform is **not yet deployed**. The first
+Terraform apply creates a DigitalOcean project, a private VPC, a control-plane
+Droplet, managed PostgreSQL, and Redis per environment. It does **not**
+publish or start the control-plane container, load balancer, or Traefik.
 
 Do not `terraform apply` from a laptop. Applies stay in CI
 ([iac-apply.md](iac-apply.md)).
@@ -18,7 +18,8 @@ Do not `terraform apply` from a laptop. Applies stay in CI
 | Git + CI | Tests, IaC validate, plan/apply workflow | GitHub secrets and a `production` reviewer |
 | Remote state | `backend.hcl` + runbook | Spaces bucket `aerodeck-tfstate` with versioning |
 | Network | Project + VPC module | First CI apply after secrets exist |
-| Control plane | FastAPI image, Alembic `0007`, Celery worker | Postgres, Redis, a host to run the image, env vars |
+| Runtime | Droplet + Postgres + Redis in the VPC | Same CI apply; bills for compute and databases |
+| Control plane | FastAPI image, Alembic `0007`, Celery worker | Publish the image (#33), env vars, start the container |
 | Jobs | Queue + `NoopProvisioner` | A provisioner that actually runs Terraform |
 | Edge | Traefik HTTP snapshot, memory DNS, fake ACME | Traefik process, DigitalOcean domain + token, Let's Encrypt account |
 | Sandboxes | Boot / TTL reap / host enroll APIs | KVM hosts with Firecracker; enroll them via the API |
@@ -33,7 +34,7 @@ Do these once. Tick them in this file or on the board as you go.
 ### 1. DigitalOcean account
 
 - [ ] Account exists; billing is enabled.
-- [ ] API token with write on projects, VPCs, Spaces, and (later) Droplets and Domains.
+- [ ] API token with write on projects, VPCs, Spaces, Droplets, and databases.
 - [ ] Optional: a Domain in DigitalOcean for public hostnames (`example.com`).
 
 Without the account, plan/apply jobs skip and stay green. That is expected.
@@ -61,24 +62,29 @@ Procedure: [iac-apply.md](iac-apply.md).
 
 All three secrets must be set together. Partial secrets fail the workflow.
 
-### 4. First apply (project + VPC only)
+### 4. First apply (project + VPC + runtime)
 
 - [ ] Merge to `main` (or run **IaC plan and apply** with Apply checked).
-- [ ] Confirm each environment created `aerodeck-<env>` and
-      `aerodeck-<env>-vpc` ([platform-network.md](platform-network.md)).
+- [ ] Confirm each environment created `aerodeck-<env>`,
+      `aerodeck-<env>-vpc`, `aerodeck-<env>-control`, `aerodeck-<env>-pg`,
+      and `aerodeck-<env>-redis` ([platform-network.md](platform-network.md),
+      [platform-runtime.md](platform-runtime.md)).
 - [ ] Approve the `production` apply in the Actions UI.
 
-Expected creates: one project and one VPC per environment. No compute.
+Expected creates per environment: one project, one VPC, one Droplet, two
+managed databases, firewalls, and project members. This **bills** for the
+Droplet and both databases. No container is started.
 
-### 5. Control-plane runtime (not in Terraform yet)
+### 5. Control-plane process (image not published yet)
 
-The image builds locally. Nothing in this repo publishes it or runs it on
-DigitalOcean. Until a compute stack exists, run it yourself on a Droplet (or
-equivalent) **inside the environment VPC**:
+Terraform created the Droplet, Postgres, and Redis. The image still builds
+locally; nothing in this repo publishes it or starts it on the Droplet
+([#33](https://github.com/mangatohjunior/aerodeck/issues/33)). Until then,
+run the container yourself **on `aerodeck-<env>-control`**:
 
-- [ ] Managed PostgreSQL (or a Droplet) with `AERODECK_DATABASE_URL`
-      (`postgresql+asyncpg://…`).
-- [ ] Redis with `AERODECK_REDIS_URL`.
+- [ ] `AERODECK_DATABASE_URL` from `terraform output postgres_private_uri`
+      (`postgresql+asyncpg://…` on the private host).
+- [ ] `AERODECK_REDIS_URL` from `terraform output redis_private_uri`.
 - [ ] `alembic upgrade head` (expect `0007`).
 - [ ] `AERODECK_AUTH_SIGNING_KEY` (≥ 32 random characters, unique per env).
 - [ ] `AERODECK_AUTH_CLIENTS` with SHA-256 digests of client secrets — never
@@ -88,11 +94,6 @@ equivalent) **inside the environment VPC**:
       ([control-plane.md](control-plane.md) Docker section).
 - [ ] `GET /healthz` is 200; `GET /readyz` shows `database: ok` and
       `queue: ok`.
-
-Suggested later (not in this repo today): a `packages/iac-engine` compute
-module that creates the Droplet/App Platform service, managed Postgres, and
-Redis, attaches them with `vpc_uuid` + `digitalocean_project_resources`, and
-a workflow that builds `apps/control-plane` to a registry on `main`.
 
 ### 6. Edge (Traefik + real DNS + real TLS)
 
@@ -139,7 +140,6 @@ above as if an operator can finish them without new code.
 
 | Story | Outcome |
 | ----- | ------- |
-| #32 | Compute, Postgres, and Redis in the environment VPC |
 | #33 | Publish the control-plane image from CI |
 | #34 | Run environment provision jobs through the IaC engine |
 | #35 | Traefik in the VPC with real DNS and Let's Encrypt |
@@ -158,5 +158,6 @@ hosts stay API-enrolled ([ADR 0001](../adr/0001-sandbox-runtime-outside-iac.md))
 - State: [terraform-state.md](terraform-state.md)
 - Apply: [iac-apply.md](iac-apply.md)
 - Network: [platform-network.md](platform-network.md)
+- Runtime: [platform-runtime.md](platform-runtime.md)
 - Edge: [edge-routing.md](edge-routing.md)
 - Sandboxes: [sandboxes.md](sandboxes.md)

@@ -66,3 +66,28 @@ module "network" {
   region                 = var.region
   vpc_ip_range           = var.vpc_ip_range
 }
+
+# --------------------------------------------------------------------------- #
+# Control-plane runtime — Droplet, Postgres, Redis in the environment VPC
+# --------------------------------------------------------------------------- #
+
+module "runtime" {
+  source = "./modules/runtime"
+
+  name_prefix         = local.name_prefix
+  region              = var.region
+  tags                = local.common_tags
+  vpc_id              = module.network.vpc_id
+  vpc_ip_range        = module.network.vpc_ip_range
+  project_id          = module.network.project_id
+  droplet_size        = var.droplet_size
+  droplet_image       = var.droplet_image
+  postgres_size       = var.postgres_size
+  postgres_version    = var.postgres_version
+  postgres_node_count = var.postgres_node_count
+  redis_size          = var.redis_size
+  redis_version       = var.redis_version
+  redis_node_count    = var.redis_node_count
+  ssh_key_ids         = var.ssh_key_ids
+  ssh_allow_cidrs     = var.ssh_allow_cidrs
+}

@@ -21,8 +21,9 @@ If `DIGITALOCEAN_TOKEN`, `SPACES_ACCESS_KEY_ID`, and `SPACES_SECRET_ACCESS_KEY`
 are all unset, plan and apply **skip** so pull requests stay green. If only
 some of them are set, the workflow fails (misconfiguration).
 
-Full operator sequence (account → secrets → first apply → runtime that is
-not in Terraform yet): [deploy.md](deploy.md).
+Full operator sequence (account → secrets → first apply of project, VPC,
+Droplet, Postgres, and Redis): [deploy.md](deploy.md). The control-plane
+image is still started by hand until #33.
 
 ## Operator setup (once)
 

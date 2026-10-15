@@ -61,5 +61,8 @@ jobs:
       - name: network module shape
         run: python tests/test_network.py
 
+      - name: runtime module shape
+        run: python tests/test_runtime.py
+
       - name: CI plan/apply shape
         run: python tests/test_ci_apply.py
