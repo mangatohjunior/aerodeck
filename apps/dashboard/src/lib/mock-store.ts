@@ -1,11 +1,23 @@
+import {
+  isStrongPassword,
+  isValidEmail,
+  MockAuthError,
+  normalizeEmail,
+} from "@/lib/auth";
 import { DEPLOY_LOG_EVENTS, SEED_PROJECTS, SEED_SANDBOXES } from "@/lib/catalog";
 import { parseGithubRepo } from "@/lib/github";
-import type { Deployment, Project, Sandbox } from "@/lib/types";
+import { hashPassword } from "@/lib/password";
+import type { Deployment, Project, PublicUser, Sandbox } from "@/lib/types";
+
+type MockUser = PublicUser & {
+  password_hash: string;
+};
 
 type Store = {
   projects: Project[];
   sandboxes: Sandbox[];
   deployments: Deployment[];
+  users: MockUser[];
 };
 
 const globalStore = globalThis as typeof globalThis & {
@@ -17,6 +29,7 @@ function seed(): Store {
     projects: SEED_PROJECTS.map((row) => ({ ...row })),
     sandboxes: SEED_SANDBOXES.map((row) => ({ ...row })),
     deployments: [],
+    users: [],
   };
 }
 
@@ -24,7 +37,11 @@ export function getStore(): Store {
   if (!globalStore.__aerodeckMockStore) {
     globalStore.__aerodeckMockStore = seed();
   }
-  return globalStore.__aerodeckMockStore;
+  const store = globalStore.__aerodeckMockStore;
+  if (!Array.isArray(store.users)) {
+    store.users = [];
+  }
+  return store;
 }
 
 export function listProjects(): Project[] {
@@ -72,4 +89,41 @@ export function markDeploymentSucceeded(id: string): void {
 
 export function logEvents() {
   return DEPLOY_LOG_EVENTS;
+}
+
+function toPublicUser(user: MockUser): PublicUser {
+  return { id: user.id, email: user.email, created_at: user.created_at };
+}
+
+export function findUserByEmail(email: string): MockUser | undefined {
+  const normalized = normalizeEmail(email);
+  return getStore().users.find((row) => row.email === normalized);
+}
+
+export function registerUser(email: string, password: string): PublicUser {
+  const normalized = normalizeEmail(email);
+  if (!normalized) {
+    throw new MockAuthError("missing_email", "email is required.");
+  }
+  if (!isValidEmail(normalized)) {
+    throw new MockAuthError("invalid_email", "Enter a valid email address.");
+  }
+  if (password.length === 0) {
+    throw new MockAuthError("missing_password", "password is required.");
+  }
+  if (!isStrongPassword(password)) {
+    throw new MockAuthError("weak_password", "Use at least 8 characters.");
+  }
+  if (findUserByEmail(normalized)) {
+    throw new MockAuthError("email_taken", "That email is already registered.");
+  }
+
+  const user: MockUser = {
+    id: crypto.randomUUID(),
+    email: normalized,
+    created_at: new Date().toISOString(),
+    password_hash: hashPassword(password),
+  };
+  getStore().users.push(user);
+  return toPublicUser(user);
 }

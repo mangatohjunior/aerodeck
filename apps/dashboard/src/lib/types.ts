@@ -35,6 +35,20 @@ export type ApiError = {
   code: string;
 };
 
+export type PublicUser = {
+  id: string;
+  email: string;
+  created_at: string;
+};
+
+export type AuthErrorCode =
+  | "missing_email"
+  | "missing_password"
+  | "invalid_email"
+  | "weak_password"
+  | "email_taken"
+  | "invalid_json";
+
 export type DeployLogEvent = {
   delayMs: number;
   text: string;

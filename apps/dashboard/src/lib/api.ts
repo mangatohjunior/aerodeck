@@ -1,5 +1,5 @@
 import { MOCK_API_PREFIX } from "@/lib/catalog";
-import type { ApiError, Deployment, Project, Sandbox } from "@/lib/types";
+import type { ApiError, Deployment, Project, PublicUser, Sandbox } from "@/lib/types";
 
 async function readJson<T>(response: Response): Promise<T> {
   const body = (await response.json()) as T | ApiError;
@@ -46,4 +46,16 @@ export async function createDeployment(repoUrl: string): Promise<Deployment> {
 
 export function deploymentLogsUrl(id: string): string {
   return `${MOCK_API_PREFIX}/deployments/${id}/logs`;
+}
+
+export async function registerAccount(
+  email: string,
+  password: string,
+): Promise<PublicUser> {
+  const response = await fetch(`${MOCK_API_PREFIX}/auth/register`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, password }),
+  });
+  return readJson(response);
 }

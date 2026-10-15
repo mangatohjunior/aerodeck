@@ -7,7 +7,7 @@ import { useState } from "react";
 
 import { BrandMark } from "@/components/brand-mark";
 import { buttonVariants } from "@/components/ui/button";
-import { PUBLIC_NAV } from "@/lib/public-nav";
+import { PUBLIC_AUTH_NAV, PUBLIC_NAV } from "@/lib/public-nav";
 import { cn } from "@/lib/utils";
 
 export function PublicShell({ children }: { children: React.ReactNode }) {
@@ -25,6 +25,12 @@ export function PublicShell({ children }: { children: React.ReactNode }) {
 
           <nav aria-label="Public" className="ml-6 hidden items-center gap-4 md:flex">
             {PUBLIC_NAV.map((item) => (
+              <PublicNavLink key={item.href} href={item.href} label={item.label} pathname={pathname} />
+            ))}
+          </nav>
+
+          <nav aria-label="Account" className="ml-auto hidden items-center gap-4 md:flex">
+            {PUBLIC_AUTH_NAV.map((item) => (
               <PublicNavLink key={item.href} href={item.href} label={item.label} pathname={pathname} />
             ))}
           </nav>
@@ -67,6 +73,18 @@ export function PublicShell({ children }: { children: React.ReactNode }) {
             </div>
             <nav aria-label="Public" className="flex flex-col gap-1 p-3">
               {PUBLIC_NAV.map((item) => (
+                <PublicNavLink
+                  key={item.href}
+                  href={item.href}
+                  label={item.label}
+                  pathname={pathname}
+                  className="rounded-lg px-2.5 py-2"
+                  onClick={() => setMobileOpen(false)}
+                />
+              ))}
+            </nav>
+            <nav aria-label="Account" className="flex flex-col gap-1 p-3">
+              {PUBLIC_AUTH_NAV.map((item) => (
                 <PublicNavLink
                   key={item.href}
                   href={item.href}

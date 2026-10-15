@@ -27,7 +27,8 @@ apps/dashboard/src/
 ```
 
 - Operator routes live under `app/(console)`. Shell (sidebar + main) wraps only that group. Navigation is explicit: Overview, Deploy, Deployments, Projects, Sandboxes.
-- Public routes live under `app/(public)` (`/about`, `/policy`, later Register / Login). They use a header + footer shell — never the operator sidebar. Register and Login legal copy must link to `/policy`.
+- Public routes live under `app/(public)` (`/about`, `/policy`, `/register`, `/login`). They use a header + footer shell — never the operator sidebar. Register and Login legal copy must link to `/policy`.
+- Register POSTs `/api/mock/v1/auth/register` then redirects to `/login?registered=1`. No token in `localStorage`. Session cookies are the Login story.
 - Interactive deploy state lives in Client Components. Do not mark the root layout `"use client"` just to hold form state.
 - Responsive: console sidebar is a fixed column on `md+`; hamburger + overlay on smaller viewports. Public nav uses the same split (inline links on `md+`, hamburger on smaller viewports).
 
@@ -38,6 +39,7 @@ The dashboard **simulates** control-plane behaviour until a Story says to wire F
 - **Forbidden until that Story ships:** `fetch` / `axios` / `ky` to the FastAPI origin, EventSource against control-plane `/api/v1`, embedding `AERODECK_*` API URLs or JWTs in the browser.
 - **Allowed mock HTTP:** same-origin `fetch` / `EventSource` to `/api/mock/v1/*` (Next.js route handlers). That prefix is the stand-in control plane. A later Story changes only the client base URL.
 - Clicking **Deploy** POSTs `/api/mock/v1/deployments` and navigates to `/deployments/{id}`.
+- Register POSTs `{ email, password }` to `/api/mock/v1/auth/register`. Passwords are hashed in the mock store and never returned.
 - The **Terminal** consumes `text/event-stream` from `/api/mock/v1/deployments/{id}/logs`. Same `data:` lines as the FastAPI stub (`Initializing Terraform...`, `Provisioning K3s...`, `Done`).
 - When FastAPI is wired, replace only `src/lib/api.ts`. The Terminal still renders `data:` lines.
 
