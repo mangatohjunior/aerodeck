@@ -26,14 +26,15 @@ Sizes (`envs/<env>.tfvars`):
 
 | Environment | Droplet | Postgres | Cache |
 | ----------- | ------- | -------- | ----- |
-| dev | `s-1vcpu-1gb` | `db-s-1vcpu-1gb` | Docker Redis on the Droplet (`managed_cache_enabled = false`) |
-| staging | `s-1vcpu-1gb` | `db-s-1vcpu-1gb` | same |
-| prod | `s-1vcpu-1gb` | `db-s-1vcpu-1gb` | same |
+| dev | `s-2vcpu-4gb` | `db-s-1vcpu-1gb` | Docker Redis on the Droplet (`managed_cache_enabled = false`) |
+| staging | `s-2vcpu-4gb` | `db-s-1vcpu-1gb` | same |
+| prod | `s-2vcpu-4gb` | `db-s-1vcpu-1gb` | same |
 
 New DigitalOcean teams cannot create Premium (`-amd` / `-intel`) Droplets
-until the account tier is raised. They also cannot create a second managed
-database cluster; leave `managed_cache_enabled = false` until
-**Resource Limits** allows it.
+until the account tier is raised. Regular `s-1vcpu-1gb` and `s-1vcpu-2gb`
+are not available in nyc3, so the stack uses Regular `s-2vcpu-4gb`. They
+also cannot create a second managed database cluster; leave
+`managed_cache_enabled = false` until **Resource Limits** allows it.
 
 Outputs (`<env>/platform/terraform.tfstate`): `droplet_id`, `droplet_ipv4`,
 `droplet_private_ipv4`, `postgres_id`, `postgres_private_host`,

@@ -29,7 +29,7 @@ variable "project_id" {
 }
 
 variable "droplet_size" {
-  description = "Droplet size slug for the control-plane host (e.g. s-1vcpu-2gb-amd)."
+  description = "Droplet size slug for the control-plane host (e.g. s-2vcpu-4gb Regular; Premium -amd/-intel needs a higher account tier)."
   type        = string
 }
 
