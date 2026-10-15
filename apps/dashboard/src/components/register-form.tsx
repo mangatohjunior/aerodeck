@@ -87,7 +87,7 @@ export function RegisterForm() {
         <CardDescription>
           Email and password against the local mock at{" "}
           <span className="font-mono">/api/mock/v1/auth/register</span>. A 201
-          sends you to Login with a success message — no session cookie yet.
+          sends you to Login. Sign-in sets the session cookie.
         </CardDescription>
       </CardHeader>
       <form onSubmit={handleSubmit}>

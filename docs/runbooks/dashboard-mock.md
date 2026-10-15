@@ -25,7 +25,7 @@ Public marketing pages do **not** use the operator sidebar:
 | `/about` | Static About copy (GitOps, DigitalOcean, Firecracker). Header + footer only. |
 | `/policy` | Static Privacy and Acceptable use. Header + footer Policy links land here. |
 | `/register` | Email/password form. Success → `/login?registered=1` (no session cookie). |
-| `/login` | Landing for that redirect. Sign-in POST is story #52. |
+| `/login` | Email/password form. Success sets `aerodeck_session` and opens Overview. |
 
 ## Mock contract
 
@@ -37,6 +37,9 @@ Public marketing pages do **not** use the operator sidebar:
 | GET | `/api/mock/v1/deployments` | Deployments created this process. |
 | POST | `/api/mock/v1/deployments` | Body `{ "repo_url": "https://github.com/org/repo" }`. `201` + deployment. |
 | POST | `/api/mock/v1/auth/register` | Body `{ "email", "password" }`. `201` `{ id, email, created_at }`. Duplicate → `409 email_taken`. Weak password → `400 weak_password`. |
+| POST | `/api/mock/v1/auth/login` | Body `{ "email", "password" }`. `200` `{ id, email, created_at }` plus httpOnly `aerodeck_session`. Wrong email/password → `401 invalid_credentials` (same message for both). |
+| POST | `/api/mock/v1/auth/logout` | Clears the session cookie. `204`. |
+| GET | `/api/mock/v1/auth/me` | Current user from the cookie, or `401 unauthenticated`. |
 | GET | `/api/mock/v1/deployments/{id}` | One deployment, or `404`. |
 | GET | `/api/mock/v1/deployments/{id}/logs` | `text/event-stream`. Lines include `Initializing Terraform...`, `Provisioning K3s...`, `Done`. |
 
@@ -110,7 +113,41 @@ Invoke-RestMethod -Method Post -ContentType "application/json" `
 ```
 
 Decision: a 201 does **not** sign the browser in. The UI redirects to
-`/login?registered=1`. No `localStorage` token. Session cookies are story #52.
+`/login?registered=1`. Login POSTs `/api/mock/v1/auth/login` and sets the
+httpOnly `aerodeck_session` cookie. No `localStorage` token. No JWT in the
+query string. Console pages stay reachable without a cookie until story #53.
+
+Login (cookie jar required so `/me` sees the session):
+
+```bash
+# After register, correct password → 200 + Set-Cookie
+curl -s -c /tmp/aerodeck-cookies -X POST \
+  -H "content-type: application/json" \
+  -d "{\"email\":\"dev@example.com\",\"password\":\"long-enough\"}" \
+  http://localhost:3000/api/mock/v1/auth/login
+
+# Current user → 200
+curl -s -b /tmp/aerodeck-cookies http://localhost:3000/api/mock/v1/auth/me
+
+# Wrong password → 401 invalid_credentials
+curl -s -o /tmp/mock-login-bad.json -w "%{http_code}" \
+  -H "content-type: application/json" \
+  -d "{\"email\":\"dev@example.com\",\"password\":\"wrong-password\"}" \
+  http://localhost:3000/api/mock/v1/auth/login
+
+# Sign out → 204
+curl -s -o /tmp/mock-logout.txt -w "%{http_code}" -c /tmp/aerodeck-cookies \
+  -b /tmp/aerodeck-cookies -X POST \
+  http://localhost:3000/api/mock/v1/auth/logout
+```
+
+```powershell
+$login = Invoke-WebRequest -Method Post -ContentType "application/json" `
+  -Body '{"email":"dev@example.com","password":"long-enough"}' `
+  -Uri http://localhost:3000/api/mock/v1/auth/login -SessionVariable mockAuth
+$login.Content
+Invoke-RestMethod -Uri http://localhost:3000/api/mock/v1/auth/me -WebSession $mockAuth
+```
 
 ## Browser checks
 
@@ -124,6 +161,7 @@ Decision: a 201 does **not** sign the browser in. The UI redirects to
 8. About — open [http://localhost:3000/about](http://localhost:3000/about). There is no Overview / Deploy / Sandboxes sidebar. The header About link stays on `/about`. Narrow viewport: hamburger opens the public nav and About is in it.
 9. Policy — open [http://localhost:3000/policy](http://localhost:3000/policy). Privacy and Acceptable use sections are present. Header and footer Policy links land on `/policy`. No analytics pixels; no FastAPI.
 10. Register — open [http://localhost:3000/register](http://localhost:3000/register). Mismatched or short passwords stay on the form (no POST). A valid submit lands on `/login?registered=1`. Duplicate email shows `That email is already registered.` Login, About, and Policy links work. Password fields are `type=password`.
+11. Login — from `/login?registered=1`, sign in with that email. Overview loads and the header shows the email plus **Sign out**. A wrong password stays on `/login` with `Invalid email or password.` (same copy for an unknown email). Sign out returns to `/login`. Confirm DevTools Application has `aerodeck_session` as HttpOnly and that `localStorage` has no token.
 
 ## What this is not
 

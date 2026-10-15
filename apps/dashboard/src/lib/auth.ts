@@ -27,3 +27,5 @@ export function isValidEmail(email: string): boolean {
 export function isStrongPassword(password: string): boolean {
   return password.length >= MIN_PASSWORD_LENGTH;
 }
+
+export const INVALID_CREDENTIALS_DETAIL = "Invalid email or password.";
