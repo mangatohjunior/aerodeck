@@ -18,15 +18,14 @@ docs/runbooks/          How to run, recover, and operate the platform
 
 Follow the runbooks; do not invent a parallel procedure.
 
-Stories #1–#16 are on `main`. The backlog is empty; the platform is not
-deployed until an operator finishes
-[docs/runbooks/deploy.md](docs/runbooks/deploy.md).
+Stories #1–#16 are on `main`. The platform is not deployed until an operator
+finishes [docs/runbooks/digitalocean-account.md](docs/runbooks/digitalocean-account.md)
+then [docs/runbooks/deploy.md](docs/runbooks/deploy.md).
 
-1. **Deploy (operator):** [docs/runbooks/deploy.md](docs/runbooks/deploy.md)
-   — DigitalOcean account, Spaces bucket, GitHub secrets, first apply
-   (project, VPC, Droplet, Postgres, Redis). The control-plane image is
-   published to DigitalOcean Container Registry on `main`; start it on the
-   Droplet yourself.
+1. **DigitalOcean account (operator):** [docs/runbooks/digitalocean-account.md](docs/runbooks/digitalocean-account.md)
+   — create the account, billing, API token, Spaces bucket, Container
+   Registry, and GitHub secrets. Then [deploy.md](docs/runbooks/deploy.md)
+   for first apply (CI only) and starting the control-plane container.
 2. **Local API:** [docs/runbooks/control-plane.md](docs/runbooks/control-plane.md)
    (venv, `.env`, `alembic upgrade head`, uvicorn, Celery worker).
    Traefik routes: [docs/runbooks/edge-routing.md](docs/runbooks/edge-routing.md).

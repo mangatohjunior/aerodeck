@@ -5,6 +5,7 @@ chat history.
 
 | Runbook | When to use it |
 | ------- | -------------- |
+| [DigitalOcean account](digitalocean-account.md) | Create the account, billing, token, Spaces bucket, registry, and GitHub secrets. Do this before the first apply. |
 | [Deploy](deploy.md) | What is left to get this into DigitalOcean; operator checklist and production gaps. |
 | [Control plane](control-plane.md) | Run the API, worker, and tests locally; apply Alembic migrations. |
 | [Edge routing](edge-routing.md) | Declare hostnames; Traefik snapshot, DNS records, DNS-01 certs. |

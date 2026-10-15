@@ -32,38 +32,26 @@ fakes. That is not a production deploy.
 
 Do these once. Tick them in this file or on the board as you go.
 
-### 1. DigitalOcean account
+### 1–3. Account, state bucket, GitHub credentials
 
-- [ ] Account exists; billing is enabled.
-- [ ] API token with write on projects, VPCs, Spaces, Droplets, databases, and Container Registry.
-- [ ] Optional: a Domain in DigitalOcean for public hostnames (`example.com`).
+Procedure (click-by-click): [digitalocean-account.md](digitalocean-account.md).
+Do **not** `terraform apply` from a laptop when this is done.
+
+- [ ] DigitalOcean account exists; billing is enabled.
+- [ ] Write API token stored as GitHub secret `DIGITALOCEAN_TOKEN`.
+- [ ] Spaces bucket `aerodeck-tfstate` in `nyc3` with versioning
+      ([terraform-state.md](terraform-state.md)).
+- [ ] Spaces access key stored as `SPACES_ACCESS_KEY_ID` /
+      `SPACES_SECRET_ACCESS_KEY`.
+- [ ] Container Registry named `aerodeck` (or `DOCR_NAME` + matching
+      `control_plane_image`).
+- [ ] GitHub environments `dev`, `staging`, and `production` (prod has a
+      reviewer; do not enable "prevent self review" on a solo account).
+- [ ] **IaC plan and apply** run on `main` with Apply **unchecked**; plans
+      succeed.
 
 Without the account, plan/apply jobs skip and stay green. That is expected.
-
-### 2. Terraform state bucket
-
-Procedure: [terraform-state.md](terraform-state.md).
-
-- [ ] Spaces bucket `aerodeck-tfstate` in `nyc3`.
-- [ ] Versioning on.
-- [ ] Private; no public list; HTTPS only.
-- [ ] Spaces access key with read/write on that bucket.
-
-The platform stack **uses** this bucket; it does not create it.
-
-### 3. GitHub Actions credentials
-
-Procedure: [iac-apply.md](iac-apply.md).
-
-- [ ] Repo secret `DIGITALOCEAN_TOKEN`.
-- [ ] Repo secrets `SPACES_ACCESS_KEY_ID` and `SPACES_SECRET_ACCESS_KEY`.
-- [ ] Container Registry named `aerodeck` (or set repo variable `DOCR_NAME`).
-      Procedure: [control-plane-image.md](control-plane-image.md).
-- [ ] Environments `dev` and `staging` (no required reviewers).
-- [ ] Environment `production` with at least one required reviewer.
-      Do **not** enable "prevent self review" on a solo maintainer account.
-
-All three secrets must be set together. Partial secrets fail the workflow.
+Saving secrets does not create Droplets.
 
 ### 4. First apply (project + VPC + runtime)
 
@@ -159,6 +147,7 @@ hosts stay API-enrolled ([ADR 0001](../adr/0001-sandbox-runtime-outside-iac.md))
 
 ## Related
 
+- Account bootstrap: [digitalocean-account.md](digitalocean-account.md)
 - Local API: [control-plane.md](control-plane.md)
 - State: [terraform-state.md](terraform-state.md)
 - Apply: [iac-apply.md](iac-apply.md)

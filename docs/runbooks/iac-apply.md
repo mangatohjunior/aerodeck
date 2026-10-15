@@ -21,12 +21,14 @@ If `DIGITALOCEAN_TOKEN`, `SPACES_ACCESS_KEY_ID`, and `SPACES_SECRET_ACCESS_KEY`
 are all unset, plan and apply **skip** so pull requests stay green. If only
 some of them are set, the workflow fails (misconfiguration).
 
-Full operator sequence (account → secrets → first apply of project, VPC,
-Droplet, Postgres, and Redis): [deploy.md](deploy.md). The control-plane
-image is published to DigitalOcean Container Registry on `main`
+Full operator sequence: [digitalocean-account.md](digitalocean-account.md)
+then [deploy.md](deploy.md). The control-plane image is published to
+DigitalOcean Container Registry on `main`
 ([control-plane-image.md](control-plane-image.md)) and still started by hand.
 
 ## Operator setup (once)
+
+Click-by-click: [digitalocean-account.md](digitalocean-account.md).
 
 1. Create the `aerodeck-tfstate` Spaces bucket with versioning
    ([terraform-state.md](terraform-state.md)).
@@ -57,7 +59,10 @@ that exact file; they do not re-plan.
 
 After secrets and the bucket exist, merge to `main` (or run **IaC plan and
 apply** with Apply checked). Expected first creates per environment: one
-project and one VPC ([platform-network.md](platform-network.md)).
+project, one VPC, one Droplet, Postgres, Redis, and firewalls
+([platform-network.md](platform-network.md),
+[platform-runtime.md](platform-runtime.md)). That **bills**. Plan first with
+Apply unchecked ([digitalocean-account.md](digitalocean-account.md) step 7–8).
 
 Prod stays queued on the `production` environment until a reviewer approves
 in the Actions UI.
