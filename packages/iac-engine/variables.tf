@@ -59,9 +59,9 @@ variable "do_project_environment" {
 }
 
 variable "region" {
-  description = "DigitalOcean region slug where regional resources (VPC, Droplets, databases) are created."
+  description = "DigitalOcean region slug for VPC, Droplets, and databases. Spaces state stays in nyc3 (backend.hcl). ams3 still sells Regular Basic so a Tier 1 team can start at s-1vcpu-1gb and resize up; NYC does not."
   type        = string
-  default     = "nyc3"
+  default     = "ams3"
 
   validation {
     condition = contains([
@@ -138,13 +138,13 @@ variable "extra_tags" {
 # --------------------------------------------------------------------------- #
 
 variable "droplet_size" {
-  description = "Droplet size slug. New teams are Tier 1: Basic Shared CPU Regular only (no Premium -amd/-intel) up to $48. nyc3 no longer has Regular 1GB/2GB; use s-2vcpu-4gb until the account tier is raised."
+  description = "Droplet size slug. Tier 1 is Regular Basic only (no Premium -amd/-intel) up to $48. Start at s-1vcpu-1gb in ams3; resize in-region (s-1vcpu-2gb, s-2vcpu-2gb, s-2vcpu-4gb, then Intel once the account tier allows it)."
   type        = string
-  default     = "s-2vcpu-4gb"
+  default     = "s-1vcpu-1gb"
 
   validation {
     condition     = can(regex("^s-[0-9]+vcpu-[0-9]+gb(-amd|-intel)?$", var.droplet_size))
-    error_message = "droplet_size must be a DigitalOcean Droplet slug such as s-2vcpu-4gb."
+    error_message = "droplet_size must be a DigitalOcean Droplet slug such as s-1vcpu-1gb."
   }
 }
 

@@ -61,10 +61,11 @@ After secrets and the bucket exist, run **IaC plan and apply** on `main`:
 environment **`dev`**, Apply **checked**. New DigitalOcean teams are
 [Tier 1](https://docs.digitalocean.com/platform/resource-limits/): Basic
 shared-CPU Droplets only (no Premium `-amd` / `-intel`), and often **one**
-managed database cluster. Regular `s-1vcpu-1gb` / `s-1vcpu-2gb` are not
-offered in nyc3; Premium `-amd` / `-intel` are restricted on Tier 1. This
-stack uses Regular `s-2vcpu-4gb` ($24, under the $48 cap) and runs Redis in
-Docker on the Droplet so Postgres can use that single cluster slot.
+managed database cluster. NYC does not sell Regular Basic (or Basic Intel)
+to this account. **ams3** does, including `s-1vcpu-1gb` up through Regular
+`s-2vcpu-4gb` and Basic Intel for later growth. This stack starts at
+Regular `s-1vcpu-1gb` in `ams3` and runs Redis in Docker on the Droplet so
+Postgres can use that single cluster slot. Spaces state stays in NYC.
 
 Do **not** apply staging or prod until
 **Settings → Resource Limits** shows room for another Droplet and another

@@ -82,10 +82,15 @@ def main() -> None:
                 raise SystemExit(f"envs/{env}.tfvars must set {key}")
         if "managed_cache_enabled" not in tfvars:
             raise SystemExit(f"envs/{env}.tfvars must set managed_cache_enabled")
-        if 'droplet_size           = "s-2vcpu-4gb"' not in tfvars:
+        if 'droplet_size           = "s-1vcpu-1gb"' not in tfvars:
             raise SystemExit(
-                f"envs/{env}.tfvars must use Regular s-2vcpu-4gb "
-                "(nyc3 has no Regular 1GB/2GB; Premium -amd is Tier-restricted)"
+                f"envs/{env}.tfvars must start at Regular s-1vcpu-1gb "
+                "(ams3 still sells it; NYC does not; Premium is Tier-restricted)"
+            )
+        if 'region                 = "ams3"' not in tfvars:
+            raise SystemExit(
+                f"envs/{env}.tfvars must use ams3 "
+                "(Regular Basic plus Intel growth path; Spaces stays in NYC)"
             )
 
     print("runtime module, VPC attachment, and env sizes look right")

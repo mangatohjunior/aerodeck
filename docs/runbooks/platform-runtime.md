@@ -26,15 +26,20 @@ Sizes (`envs/<env>.tfvars`):
 
 | Environment | Droplet | Postgres | Cache |
 | ----------- | ------- | -------- | ----- |
-| dev | `s-2vcpu-4gb` | `db-s-1vcpu-1gb` | Docker Redis on the Droplet (`managed_cache_enabled = false`) |
-| staging | `s-2vcpu-4gb` | `db-s-1vcpu-1gb` | same |
-| prod | `s-2vcpu-4gb` | `db-s-1vcpu-1gb` | same |
+| dev | `s-1vcpu-1gb` in `ams3` | `db-s-1vcpu-1gb` | Docker Redis on the Droplet (`managed_cache_enabled = false`) |
+| staging | `s-1vcpu-1gb` in `ams3` | `db-s-1vcpu-1gb` | same |
+| prod | `s-1vcpu-1gb` in `ams3` | `db-s-1vcpu-1gb` | same |
+
+Compute lives in **ams3** because `/v2/sizes` still lists Regular Basic
+there (`s-1vcpu-1gb` through `s-2vcpu-4gb`) and Basic Intel for later
+resizes. NYC lists neither. Spaces state and the registry stay in NYC;
+they do not have to match the Droplet region.
 
 New DigitalOcean teams cannot create Premium (`-amd` / `-intel`) Droplets
-until the account tier is raised. Regular `s-1vcpu-1gb` and `s-1vcpu-2gb`
-are not available in nyc3, so the stack uses Regular `s-2vcpu-4gb`. They
-also cannot create a second managed database cluster; leave
-`managed_cache_enabled = false` until **Resource Limits** allows it.
+until the account tier is raised. Start at Regular `s-1vcpu-1gb` and
+resize in `ams3` when you need more. They also cannot create a second
+managed database cluster; leave `managed_cache_enabled = false` until
+**Resource Limits** allows it.
 
 Outputs (`<env>/platform/terraform.tfstate`): `droplet_id`, `droplet_ipv4`,
 `droplet_private_ipv4`, `postgres_id`, `postgres_private_host`,
