@@ -138,13 +138,13 @@ variable "extra_tags" {
 # --------------------------------------------------------------------------- #
 
 variable "droplet_size" {
-  description = "Droplet size slug for the control-plane host."
+  description = "Droplet size slug for the control-plane host. nyc3 needs a current Basic slug (Premium AMD: s-1vcpu-2gb-amd)."
   type        = string
-  default     = "s-1vcpu-2gb"
+  default     = "s-1vcpu-2gb-amd"
 
   validation {
-    condition     = can(regex("^s-[0-9]+vcpu-[0-9]+gb$", var.droplet_size))
-    error_message = "droplet_size must be a DigitalOcean Droplet slug such as s-1vcpu-2gb."
+    condition     = can(regex("^s-[0-9]+vcpu-[0-9]+gb(-amd|-intel)?$", var.droplet_size))
+    error_message = "droplet_size must be a DigitalOcean Droplet slug such as s-1vcpu-2gb-amd."
   }
 }
 
@@ -215,13 +215,13 @@ variable "redis_size" {
 }
 
 variable "redis_version" {
-  description = "Managed Redis major version."
+  description = "Managed Valkey (Redis-compatible) major version."
   type        = string
-  default     = "7"
+  default     = "8"
 
   validation {
-    condition     = contains(["7"], var.redis_version)
-    error_message = "redis_version must be a supported DigitalOcean Redis major version."
+    condition     = contains(["8", "9"], var.redis_version)
+    error_message = "redis_version must be a supported DigitalOcean Valkey major version (8 or 9)."
   }
 }
 
