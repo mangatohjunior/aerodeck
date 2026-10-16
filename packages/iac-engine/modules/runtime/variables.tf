@@ -89,7 +89,7 @@ variable "redis_node_count" {
 }
 
 variable "ssh_key_ids" {
-  description = "DigitalOcean SSH key IDs or fingerprints injected on the Droplet. Empty means console-only access."
+  description = "DigitalOcean SSH key IDs or fingerprints at Droplet create time only. Ignored after create."
   type        = list(string)
   default     = []
 }

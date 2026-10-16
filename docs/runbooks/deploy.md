@@ -71,9 +71,9 @@ Droplet and both databases. No container is started.
 Procedure: [ssh-dev.md](ssh-dev.md). Until then, use the DigitalOcean
 **Droplet Console**.
 
-- [ ] SSH public key added in DigitalOcean (**Settings → Security**).
-- [ ] GitHub variables `SSH_KEY_IDS` and `SSH_ALLOW_CIDRS` (your `/32`).
-- [ ] **IaC plan and apply** on `main`, environment **dev**, Apply checked.
+- [ ] SSH public key pasted into `/root/.ssh/authorized_keys` via Droplet Console (do **not** set `SSH_KEY_IDS`; that replaces the box).
+- [ ] GitHub variable `SSH_ALLOW_CIDRS` (your `/32`).
+- [ ] **IaC plan and apply** on `main`, environment **dev**, Apply checked. Plan must not replace the Droplet.
 - [ ] `ssh root@<droplet-ipv4>` succeeds.
 
 ### 5. Control-plane process (image published, not started)

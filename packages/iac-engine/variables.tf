@@ -243,7 +243,7 @@ variable "managed_cache_enabled" {
 }
 
 variable "ssh_key_ids" {
-  description = "DigitalOcean SSH key IDs or fingerprints for the control-plane Droplet. Empty means console-only."
+  description = "DigitalOcean SSH key IDs or fingerprints at Droplet create time only. Ignored after create (ForceNew); do not set this on a live box."
   type        = list(string)
   default     = []
 }

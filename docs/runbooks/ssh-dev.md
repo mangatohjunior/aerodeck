@@ -52,12 +52,9 @@ macOS/Linux: `cat ~/.ssh/aerodeck_ed25519.pub`
 5. **Name**: `aerodeck-dev`.
 6. **Add SSH Key** (save).
 
-The key is now on the **account**. It is **not** on the Droplet until
-Terraform apply injects it (step 6).
-
-After save, DigitalOcean shows a **fingerprint** (colon-separated hex, or
-copy it from the key row). That value goes in GitHub `SSH_KEY_IDS`. You
-can also use the numeric key id on the same page.
+The key is now on the **account**. It is **not** on an existing Droplet.
+Do **not** put the fingerprint in `SSH_KEY_IDS` — that would replace the
+box. Paste the `.pub` line into `authorized_keys` via the console (step 6).
 
 ## 4. Your public IPv4
 
@@ -72,23 +69,35 @@ Repo → **Settings → Secrets and variables → Actions → Variables**.
 
 | Variable | Example | Maps to |
 | -------- | ------- | ------- |
-| `SSH_KEY_IDS` | fingerprint or id from the DigitalOcean SSH keys page | `ssh_key_ids` |
 | `SSH_ALLOW_CIDRS` | `203.0.113.10/32` | `ssh_allow_cidrs` |
 
-Comma-separate if you add a second key or CIDR. Do **not** commit these in
-`.tfvars`. Empty variables mean console-only, VPC-only SSH.
+Leave **`SSH_KEY_IDS` empty** on the live dev Droplet. Comma-separate a
+second CIDR if needed. Do **not** commit these in `.tfvars`. Empty CIDRs
+mean console-only, VPC-only SSH.
 
-## 6. Apply from CI
+## 6. Open port 22 without replacing the Droplet
 
-After the wiring is on `main`:
+The live Droplet was created with no SSH keys. DigitalOcean treats `ssh_keys`
+as ForceNew, so Terraform **must not** set `SSH_KEY_IDS` on this box. Leave
+that GitHub variable empty. IaC ignores `ssh_keys` so a later value cannot
+rebuild the Droplet.
 
-1. Actions → **IaC plan and apply** → **Run workflow**.
-2. Branch `main`, environment **dev**, Apply **checked**.
-3. Read the plan: firewall `22` from your `/32`, Droplet `ssh_keys` set.
+1. DigitalOcean → Droplets → `aerodeck-dev-control` → **Access** →
+   **Launch Droplet Console**.
+2. As root:
 
-Changing `ssh_keys` on an existing Droplet often **replaces** the Droplet.
-Postgres stays. Docker Redis and the control-plane container would need to
-be started again after a replace.
+```bash
+mkdir -p /root/.ssh
+chmod 700 /root/.ssh
+echo 'ssh-ed25519 PASTE_YOUR_PUB_LINE aerodeck-dev' >> /root/.ssh/authorized_keys
+chmod 600 /root/.ssh/authorized_keys
+```
+
+3. Set GitHub variable **`SSH_ALLOW_CIDRS` only** (`a.b.c.d/32` from
+   [https://ifconfig.me/ip](https://ifconfig.me/ip)).
+4. Actions → **IaC plan and apply** → **dev**, Apply **checked**.
+5. Read the plan: firewall `22` from your `/32`. The Droplet must **not**
+   be replaced. Postgres must **not** be replaced.
 
 If a plan tries to **destroy** `digitalocean_database_cluster.postgres`
 because of `lifecycle.prevent_destroy`, the live VPC is missing from state.
@@ -106,9 +115,9 @@ ssh -i ~/.ssh/aerodeck_ed25519 root@<droplet-ipv4>
 
 Windows PowerShell: `ssh -i $env:USERPROFILE\.ssh\aerodeck_ed25519 root@<ipv4>`.
 
-If `Permission denied`, the key is not on the Droplet yet (apply did not
-replace it, or `SSH_KEY_IDS` does not match). If `Connection timed out`,
-`SSH_ALLOW_CIDRS` is missing or is not your current IP.
+If `Permission denied`, the `.pub` line is not in `/root/.ssh/authorized_keys`
+yet (console step 6). If `Connection timed out`, `SSH_ALLOW_CIDRS` is missing
+or is not your current IP.
 
 ## Until this is applied
 
