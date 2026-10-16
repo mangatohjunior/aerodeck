@@ -95,7 +95,7 @@ In the DigitalOcean console:
    Rewrite the Postgres scheme to `postgresql+asyncpg`.
 
 The control-plane process is still started by hand on the Droplet. See
-[deploy.md](deploy.md) section 5 and [control-plane-image.md](control-plane-image.md).
+[startup-control-plane.md](startup-control-plane.md).
 
 ## Related
 

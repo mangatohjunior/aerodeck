@@ -68,8 +68,7 @@ image=$(cat /etc/aerodeck/control-plane-image)
 docker pull "$image"
 ```
 
-Start the API and worker with env vars from [deploy.md](deploy.md) section 5
-and [control-plane.md](control-plane.md).
+Start the API and worker: [startup-control-plane.md](startup-control-plane.md).
 
 ## Related
 

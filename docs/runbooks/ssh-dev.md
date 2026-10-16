@@ -126,6 +126,7 @@ DigitalOcean → Droplets → `aerodeck-dev-control` → **Access** →
 
 ## Related
 
+- Startup control plane: [startup-control-plane.md](startup-control-plane.md).
 - Deploy checklist: [deploy.md](deploy.md) section 4b.
 - Account bootstrap: [digitalocean-account.md](digitalocean-account.md).
 - Apply: [iac-apply.md](iac-apply.md).
