@@ -32,10 +32,10 @@ class FlakyProvisioner:
             raise self.error(f"attempt {self.calls} failed")
         return JobOutcome(kind, project_id, environment_id, changed=True, detail="done")
 
-    def provision(self, *, project_id: str, environment_id: str) -> JobOutcome:
+    def provision(self, *, project_id: str, environment_id: str, **_: str) -> JobOutcome:
         return self._attempt(JobKind.provision, project_id, environment_id)
 
-    def reconcile(self, *, project_id: str, environment_id: str) -> JobOutcome:
+    def reconcile(self, *, project_id: str, environment_id: str, **_: str) -> JobOutcome:
         return self._attempt(JobKind.reconcile, project_id, environment_id)
 
 
@@ -86,7 +86,7 @@ def test_noop_provisioner_changes_nothing(worker_app: Celery) -> None:
     assert result.successful()
     assert result.result["kind"] == "provision"
     assert result.result["changed"] is False
-    assert "#5" in result.result["detail"]
+    assert "AERODECK_IAC_WORKER" in result.result["detail"]
 
 
 def test_transient_failures_retry_until_success(worker_app: Celery, provisioner: FlakyProvisioner) -> None:

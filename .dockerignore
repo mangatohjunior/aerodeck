@@ -1,0 +1,8 @@
+.git
+**/.terraform
+**/__pycache__
+**/.venv
+**/.env
+apps/control-plane/tests
+apps/control-plane/.pytest_cache
+*.md

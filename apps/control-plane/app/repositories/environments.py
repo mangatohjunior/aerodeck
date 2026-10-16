@@ -3,6 +3,7 @@ from collections.abc import Sequence
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.models.project import Environment
 
@@ -18,7 +19,9 @@ class EnvironmentRepository:
 
     async def get(self, project_id: uuid.UUID, environment_id: uuid.UUID) -> Environment | None:
         result = await self._session.execute(
-            select(Environment).where(Environment.id == environment_id, Environment.project_id == project_id)
+            select(Environment)
+            .options(selectinload(Environment.project))
+            .where(Environment.id == environment_id, Environment.project_id == project_id)
         )
         return result.scalar_one_or_none()
 
