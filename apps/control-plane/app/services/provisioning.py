@@ -1,7 +1,7 @@
 """The work a job performs, behind a protocol so the worker does not care who does it.
 
-Only ``NoopProvisioner`` exists until the IaC engine is wired in (#5). It makes
-no changes and says so in its outcome.
+``NoopProvisioner`` is the default until the worker is started with
+``AERODECK_IAC_WORKER=true`` (#34). It makes no changes and says so.
 """
 
 import enum
@@ -37,16 +37,16 @@ class JobOutcome:
 
 
 class Provisioner(Protocol):
-    def provision(self, *, project_id: str, environment_id: str) -> JobOutcome: ...
+    def provision(self, *, project_id: str, environment_id: str, **meta: str) -> JobOutcome: ...
 
-    def reconcile(self, *, project_id: str, environment_id: str) -> JobOutcome: ...
+    def reconcile(self, *, project_id: str, environment_id: str, **meta: str) -> JobOutcome: ...
 
 
 class NoopProvisioner:
-    _DETAIL = "No infrastructure engine is connected yet (#5); nothing was changed."
+    _DETAIL = "IaC worker is not enabled (AERODECK_IAC_WORKER); nothing was changed."
 
-    def provision(self, *, project_id: str, environment_id: str) -> JobOutcome:
+    def provision(self, *, project_id: str, environment_id: str, **_: str) -> JobOutcome:
         return JobOutcome(JobKind.provision, project_id, environment_id, changed=False, detail=self._DETAIL)
 
-    def reconcile(self, *, project_id: str, environment_id: str) -> JobOutcome:
+    def reconcile(self, *, project_id: str, environment_id: str, **_: str) -> JobOutcome:
         return JobOutcome(JobKind.reconcile, project_id, environment_id, changed=False, detail=self._DETAIL)

@@ -44,7 +44,7 @@ The build job still compiles the Dockerfile.
 ## Local build (no push)
 
 ```bash
-docker build -t aerodeck/control-plane:dev apps/control-plane
+docker build -f apps/control-plane/Dockerfile -t aerodeck/control-plane:dev .
 ```
 
 ## After a push to main, verify

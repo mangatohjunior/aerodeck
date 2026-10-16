@@ -21,6 +21,9 @@ Plan and apply (CI only; prod needs a stored plan and approval):
 Tear down one environment after a smoke test (CI only):
 **[docs/runbooks/iac-destroy.md](../../docs/runbooks/iac-destroy.md)**.
 
+Tenant environments (`stacks/tenant`, worker-applied, separate state):
+**[docs/runbooks/provision-environments.md](../../docs/runbooks/provision-environments.md)**.
+
 ```bash
 terraform fmt -check
 terraform init -backend=false

@@ -39,10 +39,10 @@ class CeleryJobDispatcher:
     def __init__(self, app: Celery) -> None:
         self._app = app
 
-    def dispatch(self, kind: JobKind, *, project_id: str, environment_id: str) -> str:
+    def dispatch(self, kind: JobKind, *, project_id: str, environment_id: str, **meta: str) -> str:
         job_id = str(uuid.uuid4())
         self._app.tasks[_TASK_FOR_KIND[kind]].apply_async(
-            kwargs={"project_id": project_id, "environment_id": environment_id},
+            kwargs={"project_id": project_id, "environment_id": environment_id, **meta},
             task_id=job_id,
         )
         return job_id

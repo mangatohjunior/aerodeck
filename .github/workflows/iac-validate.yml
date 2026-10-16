@@ -80,5 +80,15 @@ jobs:
       - name: import missing VPC helpers
         run: python tests/test_import_missing_vpc.py
 
+      - name: tenant stack shape
+        run: python tests/test_tenant_stack.py
+
+      - name: Tenant stack validate
+        env:
+          TF_VAR_do_token: ci-dummy-token-not-a-secret
+        run: |
+          terraform -chdir=stacks/tenant init -backend=false
+          terraform -chdir=stacks/tenant validate
+
       - name: control-plane image publish shape
         run: python tests/test_image_publish.py

@@ -90,9 +90,9 @@ curl -s http://127.0.0.1:8000/api/v1/jobs/<job-id> \
   -H "authorization: Bearer $TOKEN"
 ```
 
-The worker's `NoopProvisioner` still succeeds and reports `changed: false`.
-The IaC engine exists, but the worker does not invoke it yet. Deploy leftovers:
-[deploy.md](deploy.md).
+Without `AERODECK_IAC_WORKER=true` the worker's `NoopProvisioner` reports
+`changed: false`. Enable the tenant Terraform path with
+[provision-environments.md](provision-environments.md).
 
 Without `AERODECK_REDIS_URL`, job routes return `503 queue_unavailable` and
 `/readyz` reports `queue: skipped`.
@@ -115,7 +115,7 @@ Local image (no registry). CI publishes SHA and `main` tags to DigitalOcean
 Container Registry ([control-plane-image.md](control-plane-image.md)).
 
 ```bash
-docker build -t aerodeck/control-plane:dev apps/control-plane
+docker build -f apps/control-plane/Dockerfile -t aerodeck/control-plane:dev .
 docker run --rm -p 8000:8000 \
   -e AERODECK_ENV=dev \
   -e AERODECK_AUTH_SIGNING_KEY=... \

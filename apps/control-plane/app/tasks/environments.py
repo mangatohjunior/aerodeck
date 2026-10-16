@@ -22,16 +22,22 @@ _provisioner: Provisioner = NoopProvisioner()
 
 
 def use_provisioner(provisioner: Provisioner) -> None:
-    """Worker bootstrap hook. The IaC engine (#5) installs its implementation here."""
+    """Worker bootstrap hook. ``worker.py`` installs ``TerraformProvisioner`` when enabled."""
     global _provisioner
     _provisioner = provisioner
 
 
-def _run(task: Task, kind: JobKind, project_id: str, environment_id: str) -> dict[str, str | bool]:
+def _run(
+    task: Task,
+    kind: JobKind,
+    project_id: str,
+    environment_id: str,
+    **meta: str,
+) -> dict[str, str | bool]:
     attempt = task.request.retries + 1
     logger.info("%s environment=%s project=%s attempt=%d", kind.value, environment_id, project_id, attempt)
     operation = _provisioner.provision if kind is JobKind.provision else _provisioner.reconcile
-    outcome = operation(project_id=project_id, environment_id=environment_id)
+    outcome = operation(project_id=project_id, environment_id=environment_id, **meta)
     logger.info("%s environment=%s changed=%s", kind.value, environment_id, outcome.changed)
     return outcome.as_dict()
 
@@ -44,8 +50,8 @@ def _run(task: Task, kind: JobKind, project_id: str, environment_id: str) -> dic
     retry_jitter=True,
     acks_late=True,
 )
-def provision_environment(self: Task, *, project_id: str, environment_id: str) -> dict[str, str | bool]:
-    return _run(self, JobKind.provision, project_id, environment_id)
+def provision_environment(self: Task, *, project_id: str, environment_id: str, **meta: str) -> dict[str, str | bool]:
+    return _run(self, JobKind.provision, project_id, environment_id, **meta)
 
 
 @shared_task(
@@ -56,5 +62,5 @@ def provision_environment(self: Task, *, project_id: str, environment_id: str) -
     retry_jitter=True,
     acks_late=True,
 )
-def reconcile_environment(self: Task, *, project_id: str, environment_id: str) -> dict[str, str | bool]:
-    return _run(self, JobKind.reconcile, project_id, environment_id)
+def reconcile_environment(self: Task, *, project_id: str, environment_id: str, **meta: str) -> dict[str, str | bool]:
+    return _run(self, JobKind.reconcile, project_id, environment_id, **meta)

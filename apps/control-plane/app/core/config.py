@@ -84,6 +84,14 @@ class Settings(BaseSettings):
     sandbox_image_root: str = "/var/lib/aerodeck/images"
     firecracker_api_url: str = "http://127.0.0.1:8080"
 
+    # Worker IaC (#34). Off by default so laptops and the API process stay Noop.
+    iac_worker: bool = False
+    iac_apply: bool = False
+    iac_engine_root: str = "/opt/aerodeck/iac-engine/stacks/tenant"
+    terraform_bin: str = "terraform"
+    spaces_access_id: SecretStr | None = None
+    spaces_secret_key: SecretStr | None = None
+
     @field_validator("auth_clients")
     @classmethod
     def _secret_hashes_are_sha256_hex(cls, clients: dict[str, str]) -> dict[str, str]:

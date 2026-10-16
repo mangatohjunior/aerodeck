@@ -13,12 +13,14 @@ on:
       - "apps/control-plane/**"
       - ".github/workflows/control-plane-image.yml"
       - "packages/iac-engine/tests/test_image_publish.py"
+      - "packages/iac-engine/stacks/tenant/**"
   push:
     branches: [main]
     paths:
       - "apps/control-plane/**"
       - ".github/workflows/control-plane-image.yml"
       - "packages/iac-engine/tests/test_image_publish.py"
+      - "packages/iac-engine/stacks/tenant/**"
 
 permissions:
   contents: read
@@ -53,7 +55,7 @@ jobs:
           docker build \
             --file apps/control-plane/Dockerfile \
             --tag "aerodeck/${IMAGE_REPO}:${GITHUB_SHA}" \
-            apps/control-plane
+            .
 
   push:
     name: push to DigitalOcean Container Registry
@@ -95,7 +97,7 @@ jobs:
             --file apps/control-plane/Dockerfile \
             --tag "${image}:${GITHUB_SHA}" \
             --tag "${image}:main" \
-            apps/control-plane
+            .
           echo "${DIGITALOCEAN_TOKEN}" | docker login registry.digitalocean.com \
             --username "${DIGITALOCEAN_TOKEN}" \
             --password-stdin

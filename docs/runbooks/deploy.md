@@ -21,7 +21,7 @@ Do not `terraform apply` from a laptop. Applies stay in CI
 | Network | Project + VPC module | First CI apply after secrets exist |
 | Runtime | Droplet + Postgres + Redis in the VPC | Same CI apply; bills for compute and databases |
 | Control plane | FastAPI image, Alembic `0007`, Celery worker, SHA-tagged DOCR image | Registry login on the Droplet, env vars, start the container |
-| Jobs | Queue + `NoopProvisioner` | A provisioner that actually runs Terraform |
+| Jobs | Queue + tenant Terraform when `AERODECK_IAC_WORKER=true` | Enable apply on the worker ([provision-environments.md](provision-environments.md)) |
 | Edge | Traefik HTTP snapshot, memory DNS, fake ACME | Traefik process, DigitalOcean domain + token, Let's Encrypt account |
 | Sandboxes | Boot / TTL reap / host enroll APIs | KVM hosts with Firecracker; enroll them via the API |
 
@@ -166,5 +166,6 @@ hosts stay API-enrolled ([ADR 0001](../adr/0001-sandbox-runtime-outside-iac.md))
 - Network: [platform-network.md](platform-network.md)
 - Runtime: [platform-runtime.md](platform-runtime.md)
 - Image: [control-plane-image.md](control-plane-image.md)
+- Tenant provision: [provision-environments.md](provision-environments.md)
 - Edge: [edge-routing.md](edge-routing.md)
 - Sandboxes: [sandboxes.md](sandboxes.md)

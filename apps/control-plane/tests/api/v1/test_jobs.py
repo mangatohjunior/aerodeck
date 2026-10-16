@@ -89,10 +89,10 @@ async def test_job_outcome_is_readable_afterwards(client: AsyncClient, auth: dic
 
 async def test_failed_job_reports_the_error(client: AsyncClient, auth: dict[str, str], environment: dict) -> None:
     class Broken:
-        def provision(self, *, project_id: str, environment_id: str) -> JobOutcome:
+        def provision(self, *, project_id: str, environment_id: str, **_: str) -> JobOutcome:
             raise PermanentJobError("region is not enabled for this account")
 
-        def reconcile(self, *, project_id: str, environment_id: str) -> JobOutcome:
+        def reconcile(self, *, project_id: str, environment_id: str, **_: str) -> JobOutcome:
             raise PermanentJobError("unreachable")
 
     tasks.use_provisioner(Broken())

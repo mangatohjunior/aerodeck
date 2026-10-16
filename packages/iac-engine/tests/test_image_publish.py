@@ -78,6 +78,19 @@ def main() -> None:
         raise SystemExit("Dockerfile must not put secrets in ARG or ENV")
     _must(DOCKERFILE, "USER aerodeck", "Dockerfile")
     _must(DOCKERFILE, "HEALTHCHECK", "Dockerfile")
+    _must(DOCKERFILE, "packages/iac-engine/stacks/tenant", "Dockerfile")
+    _must(DOCKERFILE, "packages/iac-engine/backend.hcl", "Dockerfile")
+    if "packages/iac-engine /opt" in DOCKERFILE:
+        raise SystemExit("copy only stacks/tenant plus backend.hcl, not the platform root module")
+    _must(DOCKERFILE, "terraform", "Dockerfile")
+    _must(WORKFLOW, "--file apps/control-plane/Dockerfile", "control-plane-image.yml")
+    contexts = re.findall(
+        r"docker build\s+\\?\s+--file apps/control-plane/Dockerfile[\s\S]*?((?:apps/control-plane)|\.)\s*$",
+        WORKFLOW,
+        re.M,
+    )
+    if not contexts or any(ctx != "." for ctx in contexts):
+        raise SystemExit("docker build context must be the repository root (.) so stacks/tenant is copied")
 
     _must(VARS, 'variable "control_plane_image"', "variables.tf")
     _must(VARS, "registry.digitalocean.com", "variables.tf")

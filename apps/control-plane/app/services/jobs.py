@@ -19,7 +19,7 @@ logger = get_logger("services.jobs")
 
 
 class JobDispatcher(Protocol):
-    def dispatch(self, kind: JobKind, *, project_id: str, environment_id: str) -> str: ...
+    def dispatch(self, kind: JobKind, *, project_id: str, environment_id: str, **meta: str) -> str: ...
 
     def state(self, job_id: str) -> JobState: ...
 
@@ -45,6 +45,10 @@ class JobService:
             kind,
             project_id=str(environment.project_id),
             environment_id=str(environment.id),
+            project_slug=environment.project.slug,
+            environment_slug=environment.slug,
+            environment_kind=environment.kind.value,
+            region=environment.region,
         )
         logger.info("queued %s job %s for environment %s", kind.value, job_id, environment.id)
         return JobTicket(job_id=job_id, kind=kind, project_id=environment.project_id, environment_id=environment.id)
