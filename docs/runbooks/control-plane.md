@@ -111,6 +111,9 @@ CI runs both legs plus `alembic upgrade / downgrade / upgrade` on PostgreSQL 16
 
 ## Docker
 
+On the **dev Droplet**, do not improvise `docker run`. Follow
+[startup-control-plane.md](startup-control-plane.md).
+
 Local image (no registry). CI publishes SHA and `main` tags to DigitalOcean
 Container Registry ([control-plane-image.md](control-plane-image.md)).
 

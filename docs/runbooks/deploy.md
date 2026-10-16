@@ -78,26 +78,14 @@ Procedure: [ssh-dev.md](ssh-dev.md). Until then, use the DigitalOcean
 
 ### 5. Control-plane process (image published, not started)
 
-CI builds `apps/control-plane` on pull requests and, on `main`, pushes
-`<git sha>` and `main` to DigitalOcean Container Registry
-([control-plane-image.md](control-plane-image.md)). Terraform writes that
-reference to `/etc/aerodeck/control-plane-image` on the Droplet. It does
-not log in or start the process. On `aerodeck-<env>-control`:
+Procedure: [startup-control-plane.md](startup-control-plane.md). CI publishes
+the image; Terraform only writes `/etc/aerodeck/control-plane-image`. Start
+is still on the Droplet.
 
-- [ ] `AERODECK_DATABASE_URL` from `terraform output postgres_private_uri`
-      (`postgresql+asyncpg://…` on the private host).
-- [ ] `AERODECK_REDIS_URL` from `terraform output redis_private_uri`.
-- [ ] `alembic upgrade head` (expect `0007`).
-- [ ] `AERODECK_AUTH_SIGNING_KEY` (≥ 32 random characters, unique per env).
-- [ ] `AERODECK_AUTH_CLIENTS` with SHA-256 digests of client secrets — never
-      the secrets themselves.
-- [ ] `AERODECK_ENV=production` so `/docs` is off.
-- [ ] `docker pull` the image in `/etc/aerodeck/control-plane-image` (registry
-      login required on the Droplet).
-- [ ] Start API and worker from that image
-      ([control-plane.md](control-plane.md) Docker section).
-- [ ] `GET /healthz` is 200; `GET /readyz` shows `database: ok` and
-      `queue: ok`.
+- [ ] Registry login with the DigitalOcean token; `docker pull` the image file.
+- [ ] `sudo bash /root/start-on-droplet.sh '<private postgresql:// URI>'`.
+- [ ] On the Droplet, `GET /healthz` is 200; `GET /readyz` is `database: ok`
+      and `queue: ok`.
 
 ### 6. Edge (Traefik + real DNS + real TLS)
 
@@ -166,6 +154,7 @@ hosts stay API-enrolled ([ADR 0001](../adr/0001-sandbox-runtime-outside-iac.md))
 - Network: [platform-network.md](platform-network.md)
 - Runtime: [platform-runtime.md](platform-runtime.md)
 - Image: [control-plane-image.md](control-plane-image.md)
+- Startup control plane: [startup-control-plane.md](startup-control-plane.md)
 - Tenant provision: [provision-environments.md](provision-environments.md)
 - Edge: [edge-routing.md](edge-routing.md)
 - Sandboxes: [sandboxes.md](sandboxes.md)
