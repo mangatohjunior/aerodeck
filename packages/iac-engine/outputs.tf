@@ -91,3 +91,29 @@ output "control_plane_image" {
   description = "OCI image reference written to the Droplet (/etc/aerodeck/control-plane-image). Pin a SHA tag in tfvars to freeze a build."
   value       = var.control_plane_image
 }
+
+output "edge_id" {
+  description = "Traefik Droplet ID."
+  value       = module.edge.edge_id
+}
+
+output "edge_name" {
+  description = "Traefik Droplet name (aerodeck-<environment>-edge)."
+  value       = module.edge.edge_name
+}
+
+output "edge_ipv4" {
+  description = "Public IPv4 of Traefik. edge.<dns_zone> A record uses this."
+  value       = module.edge.edge_ipv4
+}
+
+output "edge_private_ipv4" {
+  description = "Private IPv4 of the Traefik Droplet on the environment VPC."
+  value       = module.edge.edge_private_ipv4
+}
+
+output "traefik_provider_token" {
+  description = "Copy onto the control plane as AERODECK_TRAEFIK_PROVIDER_TOKEN. Sensitive."
+  value       = module.edge.traefik_provider_token
+  sensitive   = true
+}

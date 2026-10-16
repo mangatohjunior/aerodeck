@@ -67,7 +67,7 @@ in DigitalOcean → **Networking → Domains**. Keep records in DigitalOcean;
 **do not** add them at Namecheap.
 
 Wait for NS to propagate (`nslookup -type=NS aero-deck.app`) before Traefik
-and DNS-01 (#35) publish records. Intended names (none exist until then):
+and DNS-01 publish records. Intended names:
 
 | Hostname | Role |
 | -------- | ---- |
@@ -116,10 +116,12 @@ The issuer presents a TXT record at `_acme-challenge.<hostname>` through the
 DNS-01 provider, then stores the cert. `GET` on that certificate never returns
 PEM or the private key. Traefik receives them only on `GET /api/v1/edge/traefik`.
 
-| `AERODECK_DNS01_PROVIDER` | What happens |
-| ------------------------- | ------------ |
-| `memory` (default) | In-process TXT store + fake ACME (self-signed, 90 days). Laptop/CI. |
-| `digitalocean` | TXT records via the DigitalOcean Domains API. Needs `AERODECK_DIGITALOCEAN_TOKEN`. |
+| Setting | What happens |
+| ------- | ------------ |
+| `AERODECK_DNS01_PROVIDER=memory` | In-process TXT store. Laptop/CI. |
+| `AERODECK_DNS01_PROVIDER=digitalocean` | TXT via the DigitalOcean Domains API. Needs `AERODECK_DIGITALOCEAN_TOKEN`. |
+| `AERODECK_ACME_ISSUER=fake` (default) | Self-signed cert, issuer CN `AeroDeck Fake CA`. |
+| `AERODECK_ACME_ISSUER=letsencrypt` | RFC 8555 against `AERODECK_ACME_DIRECTORY_URL` (staging by default). Needs `AERODECK_ACME_ACCOUNT_EMAIL` and an RSA PEM in `AERODECK_ACME_ACCOUNT_KEY`. Missing either is `503 acme_unavailable`. |
 
 Renew one route: `POST .../certificate/renew`. Renew everything due in the
 next 30 days (`AERODECK_CERTIFICATE_RENEW_BEFORE_DAYS`):
@@ -130,17 +132,36 @@ curl -s -X POST http://127.0.0.1:8000/api/v1/edge/certificates/renew-due \
 ```
 
 After issue, the Traefik snapshot puts the router on `websecure` and includes
-`tls.certificates`. Let's Encrypt is not wired until an ACME account exists;
-the fake issuer still exercises the DNS-01 path.
+`tls.certificates`. Switch production LE by setting the directory URL to
+`https://acme-v02.api.letsencrypt.org/directory` after staging works.
+
+## Traefik Droplet
+
+`packages/iac-engine/modules/edge` creates `aerodeck-<env>-edge` in the same
+VPC. Cloud-init runs pinned Traefik v3 (`--network host`) polling
+`http://<control private ipv4>:8000/api/v1/edge/traefik`. Terraform also
+creates the `edge.aero-deck.app` **A** record.
+
+Apply from CI only ([iac-apply.md](iac-apply.md)). After apply:
+
+```bash
+terraform output -raw traefik_provider_token
+terraform output edge_ipv4
+```
+
+Put the token on the control plane as `AERODECK_TRAEFIK_PROVIDER_TOKEN`
+(`/etc/aerodeck/control-plane.env`, then
+[startup-control-plane.md](startup-control-plane.md)). Do not commit it.
 
 ## What this does not do
 
-- Talk to Let's Encrypt until an account is configured.
-- `terraform apply` a Traefik Droplet. Applies stay in CI
-  ([iac-apply.md](iac-apply.md)).
+- Put Traefik on the control-plane Droplet.
+- Open port 8000 to the public internet.
+- Store Let's Encrypt account keys in Git.
 
 ## Related
 
 - #10 — route declarations.
 - #11 — TLS from DNS-01.
 - #12 — public DNS records (this section).
+- #35 — Traefik Droplet and Let's Encrypt issuer.

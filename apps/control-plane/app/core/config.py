@@ -69,14 +69,18 @@ class Settings(BaseSettings):
     # DNS-01 TXT publisher. "memory" is the fake used in tests and local laptops.
     dns01_provider: Literal["memory", "digitalocean"] = "memory"
     digitalocean_token: SecretStr | None = None
-    # Fake ACME lifetime. Real Let's Encrypt is not wired until an account exists.
+    # Fake ACME until AERODECK_ACME_ISSUER=letsencrypt and an account key exist.
+    acme_issuer: Literal["fake", "letsencrypt"] = "fake"
+    acme_directory_url: str = "https://acme-staging-v02.api.letsencrypt.org/directory"
+    acme_account_email: str | None = None
+    acme_account_key: SecretStr | None = None
     acme_lifetime_days: int = Field(default=90, ge=1, le=366)
     certificate_renew_before_days: int = Field(default=30, ge=1, le=60)
 
     # Public address record created and deleted with each route.
     dns_records_provider: Literal["memory", "digitalocean"] = "memory"
     dns_record_type: Literal["A", "AAAA", "CNAME"] = "CNAME"
-    dns_record_target: str = "edge.example.com"
+    dns_record_target: str = "edge.aero-deck.app"
     dns_record_ttl: int = Field(default=300, ge=30, le=86_400)
 
     # Firecracker microVMs. "memory" is the fake used in tests and local laptops.

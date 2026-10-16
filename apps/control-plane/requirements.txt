@@ -20,7 +20,7 @@ alembic>=1.13,<2.0
 # Outbound HTTP (DigitalOcean API, webhooks).
 httpx>=0.27,<1.0
 
-# Fake ACME certificates (self-signed) until Let's Encrypt is configured.
+# Certificates: fake ACME (self-signed) and Let's Encrypt (RFC 8555 + cryptography).
 cryptography>=43.0,<46.0
 
 # Background work. The API process does not run the worker; the orchestrator

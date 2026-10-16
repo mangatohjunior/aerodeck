@@ -1,7 +1,7 @@
 """Issue certificates after a DNS-01 TXT record is in place.
 
-The fake issuer is the default until a Let's Encrypt account is configured.
-It still drives Dns01Provider so tests prove the DNS API is on the path.
+The fake issuer is the default. ``LetsEncryptIssuer`` is selected when
+``AERODECK_ACME_ISSUER=letsencrypt``. Both drive Dns01Provider.
 """
 
 from dataclasses import dataclass
@@ -21,6 +21,11 @@ from app.services.dns01 import Dns01Provider
 class IssuerError(AppError):
     status_code = 502
     code = "issuer_failed"
+
+
+class AcmeUnavailableError(AppError):
+    status_code = 503
+    code = "acme_unavailable"
 
 
 @dataclass(frozen=True, slots=True)

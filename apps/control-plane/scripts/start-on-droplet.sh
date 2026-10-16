@@ -53,6 +53,29 @@ umask 077
   printf 'AERODECK_AUTH_SIGNING_KEY=%q\n' "${AERODECK_AUTH_SIGNING_KEY}"
   printf 'AERODECK_DATABASE_URL=%q\n' "${AERODECK_DATABASE_URL}"
   printf 'AERODECK_REDIS_URL=%q\n' "${REDIS_URL}"
+  for key in \
+    AERODECK_AUTH_CLIENTS \
+    AERODECK_TRAEFIK_PROVIDER_TOKEN \
+    AERODECK_DIGITALOCEAN_TOKEN \
+    AERODECK_DNS_RECORDS_PROVIDER \
+    AERODECK_DNS_RECORD_TYPE \
+    AERODECK_DNS_RECORD_TARGET \
+    AERODECK_DNS_RECORD_TTL \
+    AERODECK_DNS01_PROVIDER \
+    AERODECK_ACME_ISSUER \
+    AERODECK_ACME_DIRECTORY_URL \
+    AERODECK_ACME_ACCOUNT_EMAIL \
+    AERODECK_ACME_ACCOUNT_KEY \
+    AERODECK_IAC_WORKER \
+    AERODECK_IAC_APPLY \
+    AERODECK_SPACES_ACCESS_ID \
+    AERODECK_SPACES_SECRET_KEY
+  do
+    val="${!key:-}"
+    if [[ -n "${val}" ]]; then
+      printf '%s=%q\n' "${key}" "${val}"
+    fi
+  done
 } > "${ENV_FILE}"
 chmod 600 "${ENV_FILE}"
 load_env
@@ -71,10 +94,7 @@ docker run --rm --network host --name aerodeck-migrate \
 docker rm -f aerodeck-api aerodeck-worker >/dev/null 2>&1 || true
 
 docker run -d --name aerodeck-api --network host --restart unless-stopped \
-  -e AERODECK_ENV \
-  -e AERODECK_AUTH_SIGNING_KEY \
-  -e AERODECK_DATABASE_URL \
-  -e AERODECK_REDIS_URL \
+  --env-file "${ENV_FILE}" \
   "${IMAGE}"
 
 wait_for_health() {
@@ -100,10 +120,7 @@ curl -fsS http://127.0.0.1:8000/readyz
 echo
 
 docker run -d --name aerodeck-worker --network host --restart unless-stopped \
-  -e AERODECK_ENV \
-  -e AERODECK_AUTH_SIGNING_KEY \
-  -e AERODECK_DATABASE_URL \
-  -e AERODECK_REDIS_URL \
+  --env-file "${ENV_FILE}" \
   "${IMAGE}" \
   celery -A app.worker worker --queues aerodeck --loglevel INFO
 

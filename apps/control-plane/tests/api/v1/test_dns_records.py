@@ -35,7 +35,7 @@ async def test_creating_a_route_publishes_dns(
     body = response.json()
     assert body["hostname"] == "payments.example.com"
     assert body["record_type"] == "CNAME"
-    assert body["data"] == "edge.example.com"
+    assert body["data"] == "edge.aero-deck.app"
     assert body["ttl"] == 300
     assert body["status"] == "published"
     assert "provider_record_id" not in body

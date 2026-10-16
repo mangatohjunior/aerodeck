@@ -117,6 +117,10 @@ The script:
 Alembic needs `AERODECK_AUTH_SIGNING_KEY` as well as the database URL; the
 script generates one on first run and reuses it after that.
 
+The script rewrites core keys but **keeps** extra `AERODECK_*` values already
+in the env file (Traefik token, DigitalOcean DNS, Let's Encrypt, IaC worker).
+Containers start with `--env-file /etc/aerodeck/control-plane.env`.
+
 Later starts (same env file, no URI):
 
 ```bash
