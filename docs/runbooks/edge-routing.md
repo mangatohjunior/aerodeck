@@ -18,7 +18,7 @@ curl -s -X POST http://127.0.0.1:8000/api/v1/projects/<project-id>/routes \
   -H 'content-type: application/json' \
   -d '{
     "environment_id": "<environment-id>",
-    "hostname": "payments.example.com",
+    "hostname": "payments.aero-deck.app",
     "path_prefix": "/",
     "backend_host": "10.10.1.20",
     "backend_port": 8080
@@ -59,6 +59,28 @@ providers:
 Point `backend_host` at a name or address Traefik can reach (Docker service
 name, private VPC IP). Until DigitalOcean exists, use a local process.
 
+## Zone: aero-deck.app
+
+The product zone is **`aero-deck.app`** (registered at Namecheap; nameservers
+are DigitalOcean `ns1`/`ns2`/`ns3.digitalocean.com`). The zone already exists
+in DigitalOcean → **Networking → Domains**. Keep records in DigitalOcean;
+**do not** add them at Namecheap.
+
+Wait for NS to propagate (`nslookup -type=NS aero-deck.app`) before Traefik
+and DNS-01 (#35) publish records. Intended names (none exist until then):
+
+| Hostname | Role |
+| -------- | ---- |
+| `aero-deck.app` | Public site (`/about`, `/policy`) |
+| `app.aero-deck.app` | Operator console |
+| `api.aero-deck.app` | Control plane (via Traefik, not Droplet `:8000`) |
+| `edge.aero-deck.app` | Traefik entry (`A` to the Traefik public IPv4) |
+| `<project>.aero-deck.app` | Tenant apps; CNAME to `edge.aero-deck.app` |
+
+The API publishes those tenant records when a route is created
+(`AERODECK_DNS_RECORDS_PROVIDER=digitalocean`,
+`AERODECK_DNS_RECORD_TARGET=edge.aero-deck.app`). Port 8000 stays VPC-only.
+
 ## Public DNS records
 
 Creating an enabled route publishes an address record for its hostname.
@@ -73,7 +95,7 @@ curl -s http://127.0.0.1:8000/api/v1/projects/<project-id>/routes/<route-id>/dns
 | ------- | ------- | ---- |
 | `AERODECK_DNS_RECORDS_PROVIDER` | `memory` | In-process store, or `digitalocean` |
 | `AERODECK_DNS_RECORD_TYPE` | `CNAME` | `A`, `AAAA`, or `CNAME` |
-| `AERODECK_DNS_RECORD_TARGET` | `edge.example.com` | Value the hostname should resolve to (Traefik) |
+| `AERODECK_DNS_RECORD_TARGET` | `edge.aero-deck.app` | Value the hostname should resolve to (Traefik) |
 | `AERODECK_DNS_RECORD_TTL` | `300` | TTL in seconds |
 | `AERODECK_DIGITALOCEAN_TOKEN` | unset | Required when the provider is `digitalocean` |
 

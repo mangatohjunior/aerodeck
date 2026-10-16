@@ -103,7 +103,8 @@ not log in or start the process. On `aerodeck-<env>-control`:
 
 Procedure: [edge-routing.md](edge-routing.md). Defaults are in-memory.
 
-- [ ] DigitalOcean Domain exists for the zone you will publish.
+- [x] DigitalOcean Domain **`aero-deck.app`** exists (NS at Namecheap already
+      point at DigitalOcean). Records stay in DigitalOcean; Traefik is #35.
 - [ ] `AERODECK_DIGITALOCEAN_TOKEN` on the control plane (same or scoped token).
 - [ ] `AERODECK_DNS_RECORDS_PROVIDER=digitalocean`.
 - [ ] `AERODECK_DNS_RECORD_TARGET` set to the Traefik public name or address.
