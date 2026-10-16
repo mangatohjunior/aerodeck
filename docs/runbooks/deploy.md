@@ -22,7 +22,7 @@ Do not `terraform apply` from a laptop. Applies stay in CI
 | Runtime | Droplet + Postgres + Redis in the VPC | Same CI apply; bills for compute and databases |
 | Control plane | FastAPI image, Alembic `0007`, Celery worker, SHA-tagged DOCR image | Registry login on the Droplet, env vars, start the container |
 | Jobs | Queue + tenant Terraform when `AERODECK_IAC_WORKER=true` | Enable apply on the worker ([provision-environments.md](provision-environments.md)) |
-| Edge | Traefik HTTP snapshot, memory DNS, fake ACME | Traefik process, DigitalOcean domain + token, Let's Encrypt account |
+| Edge | Traefik Droplet + HTTP snapshot, memory DNS default, fake ACME default | Enable DigitalOcean DNS + Let's Encrypt on the control plane |
 | Sandboxes | Boot / TTL reap / host enroll APIs | KVM hosts with Firecracker; enroll them via the API |
 
 Laptop/CI can exercise the API with the in-memory DNS, ACME, and hypervisor
@@ -92,17 +92,17 @@ is still on the Droplet.
 Procedure: [edge-routing.md](edge-routing.md). Defaults are in-memory.
 
 - [x] DigitalOcean Domain **`aero-deck.app`** exists (NS at Namecheap already
-      point at DigitalOcean). Records stay in DigitalOcean; Traefik is #35.
+      point at DigitalOcean). Records stay in DigitalOcean.
+- [ ] **IaC plan and apply** on `main` so `aerodeck-dev-edge` exists (second
+      Droplet, public 80/443). Do not apply from a laptop.
+- [ ] `terraform output -raw traefik_provider_token` copied to
+      `AERODECK_TRAEFIK_PROVIDER_TOKEN` on the control plane.
 - [ ] `AERODECK_DIGITALOCEAN_TOKEN` on the control plane (same or scoped token).
 - [ ] `AERODECK_DNS_RECORDS_PROVIDER=digitalocean`.
-- [ ] `AERODECK_DNS_RECORD_TARGET` set to the Traefik public name or address.
-- [ ] Traefik v3 process polling `GET /api/v1/edge/traefik` with
-      `AERODECK_TRAEFIK_PROVIDER_TOKEN`.
-- [ ] `AERODECK_DNS01_PROVIDER=digitalocean` once you want real TXT challenges.
-- [ ] Let's Encrypt (or another ACME) account — fake ACME is still the issuer.
-
-A Traefik Droplet is **not** in the platform stack. Add it as a later module
-in the environment VPC; do not apply it from a laptop.
+- [ ] `AERODECK_DNS_RECORD_TARGET=edge.aero-deck.app`.
+- [ ] `AERODECK_DNS01_PROVIDER=digitalocean`.
+- [ ] `AERODECK_ACME_ISSUER=letsencrypt` plus account email and RSA PEM
+      (`AERODECK_ACME_ACCOUNT_KEY`). Staging directory is the default.
 
 ### 7. Sandboxes (optional, separate from DigitalOcean)
 
