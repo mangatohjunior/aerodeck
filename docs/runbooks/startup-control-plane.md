@@ -119,7 +119,8 @@ script generates one on first run and reuses it after that.
 
 The script rewrites core keys but **keeps** extra `AERODECK_*` values already
 in the env file (Traefik token, DigitalOcean DNS, Let's Encrypt, IaC worker).
-Containers start with `--env-file /etc/aerodeck/control-plane.env`.
+The file is bash-quoted (`%q`) so it can be sourced; Docker gets `-e NAME`
+from the sourced shell (not `--env-file`) so PEM account keys keep newlines.
 
 Later starts (same env file, no URI):
 
