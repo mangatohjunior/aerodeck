@@ -190,8 +190,9 @@ stack: [iac-destroy.md](iac-destroy.md).
 - **SSH key**: [ssh-dev.md](ssh-dev.md). Paste the pubkey via Droplet
   Console into `authorized_keys`. Set GitHub `SSH_ALLOW_CIDRS` only, then
   apply **dev**. Leave `SSH_KEY_IDS` empty so the live Droplet is not replaced.
-- **Domain**: add a domain in DigitalOcean when you do real DNS/TLS
-  ([edge-routing.md](edge-routing.md)). Skip until story #35.
+- **Domain**: zone **`aero-deck.app`** is already in DigitalOcean →
+  Networking → Domains. Nameservers at the registrar are DigitalOcean.
+  Host layout: [edge-routing.md](edge-routing.md). Traefik is story #35.
 
 ## If something already exists
 
