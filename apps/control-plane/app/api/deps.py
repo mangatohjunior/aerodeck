@@ -23,7 +23,7 @@ from app.repositories.projects import ProjectRepository
 from app.repositories.routes import RouteRepository
 from app.repositories.sandbox_hosts import SandboxHostRepository
 from app.repositories.sandboxes import SandboxRepository
-from app.services.acme import AcmeIssuer, FakeAcmeIssuer
+from app.services.acme import AcmeIssuer, AcmeUnavailableError, FakeAcmeIssuer
 from app.services.auth import AuthenticatedClient, AuthService
 from app.services.certificates import CertificateService
 from app.services.dns01 import DigitalOceanDns01, Dns01Provider, Dns01UnavailableError, MemoryDns01
@@ -37,6 +37,7 @@ from app.services.dns_records import (
 from app.services.environments import EnvironmentService
 from app.services.hypervisor import FirecrackerHypervisor, Hypervisor, MemoryHypervisor, SandboxUnavailableError
 from app.services.jobs import JobDispatcher, JobService
+from app.services.letsencrypt import LetsEncryptIssuer
 from app.services.projects import ProjectService
 from app.services.routes import RouteService
 from app.services.sandbox_hosts import SandboxHostService
@@ -168,6 +169,17 @@ Dns01ProviderDep = Annotated[Dns01Provider, Depends(get_dns01_provider)]
 
 
 def get_acme_issuer(dns: Dns01ProviderDep, settings: SettingsDep) -> AcmeIssuer:
+    if settings.acme_issuer == "letsencrypt":
+        email = (settings.acme_account_email or "").strip()
+        key = settings.acme_account_key.get_secret_value() if settings.acme_account_key else ""
+        if not email or not key:
+            raise AcmeUnavailableError("AERODECK_ACME_ACCOUNT_EMAIL and AERODECK_ACME_ACCOUNT_KEY are required")
+        return LetsEncryptIssuer(
+            dns,
+            directory_url=settings.acme_directory_url,
+            account_email=email,
+            account_key_pem=key,
+        )
     return FakeAcmeIssuer(dns, lifetime=timedelta(days=settings.acme_lifetime_days))
 
 

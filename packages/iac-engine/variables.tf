@@ -258,3 +258,29 @@ variable "ssh_allow_cidrs" {
     error_message = "Each ssh_allow_cidrs entry must be an IPv4 CIDR block."
   }
 }
+
+# --------------------------------------------------------------------------- #
+# Edge Traefik (#35)
+# --------------------------------------------------------------------------- #
+
+variable "dns_zone" {
+  description = "DigitalOcean Domain that already exists. Terraform creates edge.<zone> A to the Traefik Droplet."
+  type        = string
+  default     = "aero-deck.app"
+
+  validation {
+    condition     = can(regex("^[a-z0-9.-]+\\.[a-z]{2,}$", var.dns_zone))
+    error_message = "dns_zone must be a DNS name such as aero-deck.app."
+  }
+}
+
+variable "traefik_image" {
+  description = "Pinned Traefik v3 image for the edge Droplet. Never latest."
+  type        = string
+  default     = "traefik:v3.2.3"
+
+  validation {
+    condition     = can(regex("^traefik:v[0-9]+\\.[0-9]+\\.[0-9]+$", var.traefik_image))
+    error_message = "traefik_image must be a pinned traefik:vMAJOR.MINOR.PATCH tag."
+  }
+}

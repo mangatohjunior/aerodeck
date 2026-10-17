@@ -80,6 +80,9 @@ jobs:
       - name: import missing VPC helpers
         run: python tests/test_import_missing_vpc.py
 
+      - name: edge module shape
+        run: python tests/test_edge.py
+
       - name: tenant stack shape
         run: python tests/test_tenant_stack.py
 

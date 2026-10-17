@@ -17,6 +17,10 @@ terraform {
       source  = "digitalocean/digitalocean"
       version = ">= 2.100.0, < 3.0.0"
     }
+    random = {
+      source  = "hashicorp/random"
+      version = ">= 3.6.0, < 4.0.0"
+    }
   }
 
   # Partial backend. Non-secret values live in backend.hcl; the state key is
@@ -92,4 +96,26 @@ module "runtime" {
   ssh_allow_cidrs       = var.ssh_allow_cidrs
   control_plane_image   = var.control_plane_image
   managed_cache_enabled = var.managed_cache_enabled
+}
+
+# --------------------------------------------------------------------------- #
+# Edge — Traefik in the environment VPC (#35). Public 80/443; polls :8000.
+# --------------------------------------------------------------------------- #
+
+module "edge" {
+  source = "./modules/edge"
+
+  name_prefix                = local.name_prefix
+  region                     = var.region
+  tags                       = local.common_tags
+  vpc_id                     = module.network.vpc_id
+  vpc_ip_range               = module.network.vpc_ip_range
+  project_id                 = module.network.project_id
+  droplet_size               = var.droplet_size
+  droplet_image              = var.droplet_image
+  ssh_key_ids                = var.ssh_key_ids
+  ssh_allow_cidrs            = var.ssh_allow_cidrs
+  control_plane_private_ipv4 = module.runtime.droplet_private_ipv4
+  traefik_image              = var.traefik_image
+  dns_zone                   = var.dns_zone
 }

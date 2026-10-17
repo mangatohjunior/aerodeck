@@ -1,7 +1,8 @@
 # Platform runtime (Droplet + Postgres + Redis)
 
-Each environment VPC gets a control-plane **Droplet**, managed **PostgreSQL**,
-and managed **Redis**. Declared in `packages/iac-engine/modules/runtime`.
+Each environment VPC gets a control-plane **Droplet**, a Traefik **edge**
+Droplet, managed **PostgreSQL**, and managed **Redis**. Runtime is
+`packages/iac-engine/modules/runtime`; edge is `modules/edge`.
 Applied in CI ([iac-apply.md](iac-apply.md)), not from a laptop.
 
 This module creates the host and data stores. It writes `control_plane_image`
@@ -14,6 +15,9 @@ or start the container ([control-plane-image.md](control-plane-image.md)).
 | -------- | ---- | ----- |
 | Droplet | `aerodeck-<env>-control` | Ubuntu in `aerodeck-<env>-<region>-vpc` (`vpc_uuid`). Docker plus `/etc/aerodeck/control-plane-image`. |
 | Droplet firewall | `aerodeck-<env>-control-fw` | SSH from the VPC (or `ssh_allow_cidrs`). Port 8000 from the VPC only. |
+| Edge Droplet | `aerodeck-<env>-edge` | Traefik v3, public 80/443, polls control `:8000` over the VPC. |
+| Edge firewall | `aerodeck-<env>-edge-fw` | SSH like control. 80/443 from the internet. |
+| DNS | `edge.aero-deck.app` | A record to the edge public IPv4. |
 | PostgreSQL | `aerodeck-<env>-pg` | `engine = pg`, `private_network_uuid`. `prevent_destroy`. |
 | Valkey (Redis-compatible) | `aerodeck-<env>-redis` | `engine = valkey` (DigitalOcean no longer creates new Redis clusters). `private_network_uuid`. `prevent_destroy`. |
 | Database firewalls | (attached to each cluster) | Trusted source is the control-plane Droplet only. |
@@ -42,7 +46,8 @@ managed database cluster; leave `managed_cache_enabled = false` until
 **Resource Limits** allows it.
 
 Outputs (`<env>/platform/terraform.tfstate`): `droplet_id`, `droplet_ipv4`,
-`droplet_private_ipv4`, `postgres_id`, `postgres_private_host`,
+`droplet_private_ipv4`, `edge_id`, `edge_ipv4`, `edge_private_ipv4`,
+`traefik_provider_token` (sensitive), `postgres_id`, `postgres_private_host`,
 `postgres_private_uri` (sensitive), `redis_id`, `redis_private_host`,
 `redis_private_uri` (sensitive), `control_plane_image`. Network outputs from
 [platform-network.md](platform-network.md) are unchanged.
@@ -74,13 +79,12 @@ terraform init \
 terraform plan -var-file=envs/${ENV}.tfvars -out=${ENV}.tfplan
 ```
 
-Expected creates (in addition to project + VPC): one Droplet, two database
-clusters, two database firewalls, one Droplet firewall, and one
-`digitalocean_project_resources` set.
+Expected creates (in addition to project + VPC): two Droplets (control +
+edge), two database clusters, two database firewalls, two Droplet firewalls,
+edge A record, and project membership for both Droplets.
 
 Do **not** `terraform apply` from a laptop. Procedure:
-[iac-apply.md](iac-apply.md). First apply bills for the Droplet and both
-managed databases.
+[iac-apply.md](iac-apply.md). Apply bills for both Droplets and Postgres.
 
 ## After a future apply, verify
 
@@ -103,3 +107,4 @@ The control-plane process is still started by hand on the Droplet. See
 - #7 — project + VPC ([platform-network.md](platform-network.md)).
 - #8 — apply only from CI ([iac-apply.md](iac-apply.md)).
 - #33 — publish the control-plane image ([control-plane-image.md](control-plane-image.md)).
+- #35 — Traefik edge Droplet ([edge-routing.md](edge-routing.md)).
