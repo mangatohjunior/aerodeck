@@ -41,9 +41,6 @@ export async function GET(
       },
     });
   } catch (cause) {
-    if (cause instanceof ControlPlaneError && cause.message.includes("not found (404)")) {
-      return jsonError(404, "Deployment not found.", "not_found");
-    }
     const detail = cause instanceof ControlPlaneError ? cause.message : "request failed";
     console.error("event=console_deployment_logs_failed detail=%s", detail);
     return jsonError(502, "Control plane request failed.", "control_plane_unavailable");

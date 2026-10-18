@@ -14,7 +14,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { deploymentLogsUrl, markDeploymentSucceeded } from "@/lib/api";
+import { deploymentLogsUrl } from "@/lib/api";
 import type { Deployment, DeploymentStatus, ProjectSource } from "@/lib/types";
 
 type DeploymentStatusViewProps = {
@@ -37,21 +37,8 @@ function logSourceCopy(source: ProjectSource): { sseLabel: string; targetLabel: 
 
 export function DeploymentStatusView({ deployment, logSource }: DeploymentStatusViewProps) {
   const [status, setStatus] = useState<DeploymentStatus>(deployment.status);
-  const [error, setError] = useState<string | null>(null);
   const running = status === "running" || status === "queued";
   const copy = logSourceCopy(logSource);
-
-  function handleComplete() {
-    if (logSource !== "control-plane") {
-      setStatus("succeeded");
-      return;
-    }
-    void markDeploymentSucceeded(deployment.id)
-      .then(() => setStatus("succeeded"))
-      .catch((cause: unknown) => {
-        setError(cause instanceof Error ? cause.message : "Could not record the deployment status.");
-      });
-  }
 
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
@@ -105,14 +92,9 @@ export function DeploymentStatusView({ deployment, logSource }: DeploymentStatus
         </CardContent>
       </Card>
 
-      {error ? (
-        <p className="text-sm text-destructive" role="alert">
-          {error}
-        </p>
-      ) : null}
       <Terminal
         streamUrl={deploymentLogsUrl(deployment.id, logSource)}
-        onComplete={handleComplete}
+        onComplete={() => setStatus("succeeded")}
       />
     </div>
   );

@@ -41,10 +41,3 @@ class DeploymentService:
 
     async def list(self, *, limit: int, offset: int) -> tuple[Sequence[Deployment], int]:
         return await self._deployments.list(limit=limit, offset=offset)
-
-    async def mark_succeeded(self, deployment_id: uuid.UUID) -> Deployment:
-        deployment = await self.get(deployment_id)
-        deployment.status = DeploymentStatus.succeeded
-        stored = await self._deployments.save(deployment)
-        logger.info("deployment succeeded %s", stored.id)
-        return stored

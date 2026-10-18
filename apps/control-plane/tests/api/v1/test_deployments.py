@@ -14,37 +14,13 @@ async def test_deployment_logs_require_a_token(client: AsyncClient) -> None:
 async def test_deployment_logs_stream_mock_sse_lines(
     client: AsyncClient, auth: dict[str, str]
 ) -> None:
-    created = await client.post(DEPLOYMENTS, json={"repo_url": REPO}, headers=auth)
-    assert created.status_code == 201, created.text
-    deployment_id = created.json()["id"]
-
-    response = await client.get(f"{DEPLOYMENTS}/{deployment_id}/logs", headers=auth)
+    response = await client.get(f"/api/v1/deployments/{uuid4()}/logs", headers=auth)
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("text/event-stream")
     body = response.text
     assert "data: Initializing Terraform..." in body
     assert "data: Provisioning K3s..." in body
     assert "data: Done" in body
-
-    finished = await client.post(f"{DEPLOYMENTS}/{deployment_id}/succeeded", headers=auth)
-    assert finished.status_code == 200, finished.text
-    assert finished.json()["status"] == "succeeded"
-
-    fetched = await client.get(f"{DEPLOYMENTS}/{deployment_id}", headers=auth)
-    assert fetched.status_code == 200, fetched.text
-    assert fetched.json()["status"] == "succeeded"
-
-
-async def test_unknown_deployment_does_not_stream(client: AsyncClient, auth: dict[str, str]) -> None:
-    missing = uuid4()
-    response = await client.get(f"{DEPLOYMENTS}/{missing}/logs", headers=auth)
-
-    assert response.status_code == 404
-    assert response.json()["code"] == "not_found"
-    assert "Initializing Terraform" not in response.text
-
-    finished = await client.post(f"{DEPLOYMENTS}/{missing}/succeeded", headers=auth)
-    assert finished.status_code == 404
 
 
 async def test_create_stores_a_github_repository(client: AsyncClient, auth: dict[str, str]) -> None:

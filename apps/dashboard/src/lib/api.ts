@@ -80,15 +80,6 @@ export async function fetchLogSource(): Promise<ProjectSource> {
   return body.source;
 }
 
-export async function markDeploymentSucceeded(id: string): Promise<Deployment> {
-  const response = await fetch(`/api/console/deployments/${encodeURIComponent(id)}/succeeded`, {
-    method: "POST",
-    credentials: "same-origin",
-    cache: "no-store",
-  });
-  return readJson(response);
-}
-
 export function deploymentLogsUrl(id: string, source: ProjectSource): string {
   const deploymentId = encodeURIComponent(id);
   if (source === "control-plane") {
