@@ -43,6 +43,8 @@ def main() -> None:
         raise SystemExit("the edge Droplet is not a stateful store; do not prevent_destroy it")
     if 'port_range       = "8000"' in MODULE:
         raise SystemExit("edge firewall must not expose control-plane :8000")
+    if 'port_range       = "3000"' in MODULE:
+        raise SystemExit("edge firewall must not publish the operator console")
 
     _must(CLOUD, "/api/v1/edge/traefik", "cloud-init.yaml")
     _must(CLOUD, "--network host", "cloud-init.yaml")

@@ -21,6 +21,7 @@ chat history.
 | [Destroy from CI](iac-destroy.md) | Tear down one environment after a smoke-test apply. Manual, main only. |
 | [Issue workflow](issue-workflow.md) | How Epics and Stories move across the board. |
 | [Dashboard mock](dashboard-mock.md) | Run the Next.js console and curl `/api/mock/v1` without FastAPI. |
+| [Dashboard console](dashboard-console.md) | Serve the operator console and read live projects from the control plane. |
 
 Do not `terraform apply` against shared state from a laptop. Procedure:
 [iac-apply.md](iac-apply.md).
