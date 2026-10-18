@@ -103,7 +103,7 @@ export function AppSidebar({ mobileOpen, onCloseMobile }: AppSidebarProps) {
 
         <div className="border-t border-sidebar-border p-4">
           <p className="text-[11px] text-muted-foreground">
-            Projects load on the server. Deploys stay on{" "}
+            Projects and sandboxes load on the server. Deploys stay on{" "}
             <span className="font-mono text-primary/80">/api/mock/v1</span>
           </p>
         </div>

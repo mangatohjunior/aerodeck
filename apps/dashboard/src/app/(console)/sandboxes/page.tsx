@@ -5,27 +5,33 @@ import { useEffect, useState } from "react";
 import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import { fetchSandboxes } from "@/lib/api";
-import type { Sandbox } from "@/lib/types";
+import { fetchSandboxPage } from "@/lib/api";
+import type { SandboxPage } from "@/lib/types";
 
 export default function SandboxesPage() {
-  const [rows, setRows] = useState<Sandbox[]>([]);
+  const [page, setPage] = useState<SandboxPage | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchSandboxes()
-      .then(setRows)
+    fetchSandboxPage()
+      .then(setPage)
       .catch((cause: unknown) => {
         setError(cause instanceof Error ? cause.message : "Failed to load sandboxes.");
       });
   }, []);
+
+  const rows = page?.items ?? [];
 
   return (
     <div className="mx-auto w-full max-w-4xl">
       <PageHeader
         eyebrow="Runtime"
         title="Sandboxes"
-        description="Mock Firecracker guests. These rows do not boot a microVM."
+        description={
+          page?.source === "control-plane"
+            ? "Live guests from GET /api/v1/projects/{id}/sandboxes."
+            : "Local seed. The server uses the control plane when CONTROL_PLANE_URL is set."
+        }
       />
       {error ? (
         <p className="text-sm text-destructive" role="alert">
@@ -34,6 +40,9 @@ export default function SandboxesPage() {
       ) : (
         <Card>
           <CardContent className="divide-y divide-border pt-0">
+            {page && rows.length === 0 ? (
+              <p className="py-4 text-sm text-muted-foreground">No sandboxes yet.</p>
+            ) : null}
             {rows.map((row) => (
               <div key={row.id} className="flex flex-wrap items-center gap-3 py-4 first:pt-4">
                 <div className="min-w-0 flex-1">

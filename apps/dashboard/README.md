@@ -1,9 +1,9 @@
 # AeroDeck dashboard
 
 Next.js App Router operator console. The browser keeps the session cookie.
-Projects are loaded by the server from the control plane when
+Projects and sandboxes are loaded by the server from the control plane when
 `CONTROL_PLANE_URL` is set; otherwise Overview shows the local seed.
-Sandboxes, deployments, and sign-in stay on `/api/mock/v1`.
+Deployments and sign-in stay on `/api/mock/v1`.
 
 Procedures: [docs/runbooks/dashboard-mock.md](../../docs/runbooks/dashboard-mock.md)
 and [docs/runbooks/dashboard-console.md](../../docs/runbooks/dashboard-console.md).

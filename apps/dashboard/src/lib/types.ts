@@ -31,6 +31,14 @@ export type Sandbox = {
   created_at: string;
 };
 
+export type SandboxPage = {
+  items: Sandbox[];
+  total: number;
+  limit: number;
+  offset: number;
+  source: ProjectSource;
+};
+
 export type Deployment = {
   id: string;
   repo_url: string;

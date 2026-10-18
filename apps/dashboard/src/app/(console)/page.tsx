@@ -14,17 +14,17 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { fetchDeployments, fetchProjectPage, fetchSandboxes } from "@/lib/api";
-import type { Deployment, ProjectPage, Sandbox } from "@/lib/types";
+import { fetchDeployments, fetchProjectPage, fetchSandboxPage } from "@/lib/api";
+import type { Deployment, ProjectPage, SandboxPage } from "@/lib/types";
 
 export default function OverviewPage() {
   const [projects, setProjects] = useState<ProjectPage | null>(null);
-  const [sandboxes, setSandboxes] = useState<Sandbox[]>([]);
+  const [sandboxes, setSandboxes] = useState<SandboxPage | null>(null);
   const [deployments, setDeployments] = useState<Deployment[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    Promise.all([fetchProjectPage(), fetchSandboxes(), fetchDeployments()])
+    Promise.all([fetchProjectPage(), fetchSandboxPage(), fetchDeployments()])
       .then(([nextProjects, nextSandboxes, nextDeployments]) => {
         setProjects(nextProjects);
         setSandboxes(nextSandboxes);
@@ -35,14 +35,15 @@ export default function OverviewPage() {
       });
   }, []);
 
-  const runningSandboxes = sandboxes.filter((row) => row.status === "running").length;
+  const sandboxRows = sandboxes?.items ?? [];
+  const runningSandboxes = sandboxRows.filter((row) => row.status === "running").length;
 
   return (
     <div className="mx-auto w-full max-w-5xl">
       <PageHeader
         eyebrow="Overview"
         title="AeroDeck console"
-        description="Projects are read by this server from the control plane. Sandboxes and deployments on this page stay local."
+        description="Projects and sandboxes are read by this server from the control plane. Deployments on this page stay local."
         actions={
           <LinkButton href="/deploy">
             <Rocket data-icon="inline-start" />
@@ -68,7 +69,11 @@ export default function OverviewPage() {
               icon={Box}
               label="Sandboxes"
               value={runningSandboxes}
-              hint={`${sandboxes.length} total · Firecracker`}
+              hint={
+                sandboxes?.source === "control-plane"
+                  ? `${sandboxRows.length} total · Live control plane`
+                  : `${sandboxRows.length} total · Local seed`
+              }
             />
             <StatCard
               icon={Activity}

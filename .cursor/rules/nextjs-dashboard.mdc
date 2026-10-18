@@ -1,5 +1,5 @@
 ---
-description: Next.js operator dashboard guardrails. Enforces App Router, Tailwind, shadcn/ui, session cookies in the browser, and server-side control-plane calls for projects.
+description: Next.js operator dashboard guardrails. Enforces App Router, Tailwind, shadcn/ui, session cookies in the browser, and server-side control-plane calls for projects and sandboxes.
 globs: apps/dashboard/**/*.{ts,tsx,css,json}
 alwaysApply: false
 ---
@@ -40,8 +40,9 @@ apps/dashboard/src/
 The browser never calls FastAPI. The session cookie stays on this origin. Control-plane bearers and client secrets stay on the server.
 
 - `GET /api/console/projects` requires `aerodeck_session`. The route handler then calls `GET /api/v1/projects` with an enrolled client (`CONTROL_PLANE_URL`, `CONTROL_PLANE_CLIENT_ID`, `CONTROL_PLANE_CLIENT_SECRET`). Those names must not be `NEXT_PUBLIC_*`.
-- When those variables are unset, that route returns the in-memory seed and `source: "mock"`.
-- Sandboxes, deployments, register, login, logout, and the terminal stay on `/api/mock/v1`.
+- `GET /api/console/sandboxes` uses the same session and client. It lists `GET /api/v1/projects/{project_id}/sandboxes` for each project on that page.
+- When those variables are unset, both routes return the in-memory seed and `source: "mock"`.
+- Deployments, register, login, logout, and the terminal stay on `/api/mock/v1`.
 - **Forbidden in client components:** `fetch` to the FastAPI origin, `EventSource` against control-plane `/api/v1`, and JWTs in `localStorage` or query strings.
 - Clicking **Deploy** POSTs `/api/mock/v1/deployments` and navigates to `/deployments/{id}`.
 - Register POSTs `{ email, password }` to `/api/mock/v1/auth/register`. Passwords are hashed in the mock store and never returned.
