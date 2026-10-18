@@ -79,6 +79,9 @@ export function NewDeploymentForm({ controlPlane = false }: { controlPlane?: boo
     repoUrl.trim().length > 0 &&
     (!controlPlane || (environmentKey.length > 0 && !loadingEnvironments));
 
+  const environmentInvalid =
+    !!environmentsError || error === "Select an environment to provision.";
+
   return (
     <Card className="overflow-hidden ring-primary/15">
       <div className="h-1 bg-gradient-to-r from-primary via-runway to-primary/40" />
@@ -126,8 +129,10 @@ export function NewDeploymentForm({ controlPlane = false }: { controlPlane?: boo
                   "h-10 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none",
                   "focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50",
                   "disabled:cursor-not-allowed disabled:opacity-50",
+                  "aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20",
                 )}
                 value={environmentKey}
+                aria-invalid={environmentInvalid ? true : undefined}
                 disabled={submitting || loadingEnvironments || environments.length === 0}
                 onChange={(event) => {
                   setEnvironmentKey(event.target.value);

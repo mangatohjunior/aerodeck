@@ -173,6 +173,47 @@ describe("listControlPlaneProjects", () => {
       },
     );
   });
+
+  it("pages through projects past the first limit", async () => {
+    clearControlPlaneTokenCache();
+    const first = {
+      id: "11111111-1111-4111-8111-111111111111",
+      slug: "payments",
+      name: "Payments",
+      description: null,
+      created_at: "2026-10-18T00:00:00.000Z",
+      updated_at: "2026-10-18T00:00:00.000Z",
+    };
+    const second = {
+      ...first,
+      id: "22222222-2222-4222-8222-222222222222",
+      slug: "platform",
+      name: "Platform",
+    };
+    const urls: string[] = [];
+    const fetchImpl: typeof fetch = async (input) => {
+      const url = String(input);
+      if (url.endsWith("/api/v1/auth/token")) {
+        return jsonResponse({ access_token: "issued-bearer", expires_in: 900 });
+      }
+      urls.push(url);
+      if (url.includes("offset=0")) {
+        return jsonResponse({ items: [first], total: 2, limit: 200, offset: 0 });
+      }
+      if (url.includes("offset=1")) {
+        return jsonResponse({ items: [second], total: 2, limit: 200, offset: 1 });
+      }
+      return jsonResponse({ items: [], total: 2, limit: 200, offset: 2 });
+    };
+
+    const page = await listControlPlaneProjects(config, { fetch: fetchImpl });
+    assert.equal(page.total, 2);
+    assert.deepEqual(
+      page.items.map((row) => row.slug),
+      ["payments", "platform"],
+    );
+    assert.equal(urls.filter((url) => url.includes("/api/v1/projects?")).length, 2);
+  });
 });
 
 const projectRow = {

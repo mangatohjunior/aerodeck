@@ -3,6 +3,7 @@ import type { Deployment, DeploymentStatus, EnvironmentOption, Project, Sandbox 
 const CLIENT_ID_MAX = 128;
 const CLIENT_SECRET_MAX = 512;
 const PAGE_LIMIT = 200;
+const PAGE_CAP = 20;
 const REFRESH_SKEW_SECONDS = 30;
 
 export type ControlPlaneConfig = {
@@ -79,26 +80,38 @@ export async function listControlPlaneProjects(
   const fetchImpl = options.fetch ?? fetch;
   const now = options.now ?? Date.now;
   const accessToken = await accessTokenFor(config, fetchImpl, now);
-  const response = await fetchImpl(
-    `${config.baseUrl}/api/v1/projects?limit=${PAGE_LIMIT}`,
-    {
-      headers: {
-        accept: "application/json",
-        authorization: `Bearer ${accessToken}`,
+  const items: Project[] = [];
+  let offset = 0;
+  let total = 0;
+  let limit = PAGE_LIMIT;
+  for (let page = 0; page < PAGE_CAP; page += 1) {
+    const response = await fetchImpl(
+      `${config.baseUrl}/api/v1/projects?limit=${PAGE_LIMIT}&offset=${offset}`,
+      {
+        headers: {
+          accept: "application/json",
+          authorization: `Bearer ${accessToken}`,
+        },
+        cache: "no-store",
       },
-      cache: "no-store",
-    },
-  );
-  if (!response.ok) {
-    throw new ControlPlaneError(
-      `control plane projects request failed (${response.status})`,
-      response.status,
     );
+    if (!response.ok) {
+      throw new ControlPlaneError(
+        `control plane projects request failed (${response.status})`,
+        response.status,
+      );
+    }
+    const parsed = parseProjectPage(await response.json());
+    items.push(...parsed.items);
+    total = parsed.total;
+    limit = parsed.limit;
+    if (parsed.items.length === 0 || items.length >= total) {
+      break;
+    }
+    offset += parsed.items.length;
   }
-  return parseProjectPage(await response.json());
+  return { items, total, limit, offset: 0 };
 }
-
-const PAGE_CAP = 20;
 
 export async function listControlPlaneSandboxes(
   config: ControlPlaneConfig,
