@@ -36,6 +36,13 @@ from app.core.queue import ping_broker
 logger = get_logger("services.deployment_logs")
 
 DONE_LINE = "Done"
+# Console Terminal treats Done as success → markDeploymentSucceeded. Publish Done
+# only after a successful provision; failures publish the class-name line and stop.
+# Enqueue seeds QUEUED before the worker runs so empty-stream stub Done cannot win the race.
+PROVISION_QUEUED_LINE = "Queued environment provision..."
+PROVISION_START_LINE = "Starting environment provision..."
+PROVISION_SUCCESS_LINE = "Environment provision finished."
+PROVISION_QUEUE_FAILED_LINE = "Provision queue failed"
 MAX_LINES = 10_000
 MAX_LINE_CHARS = 4_096
 DEFAULT_FOLLOW_IDLE_SECONDS = DEPLOYMENT_LOG_FOLLOW_IDLE_SECONDS_DEFAULT
@@ -62,6 +69,16 @@ _memory: dict[str, list[str]] = {}
 def clear_memory_log_lines() -> None:
     """Test seam: drop in-memory lines between tests."""
     _memory.clear()
+
+
+def memory_log_lines(deployment_id: uuid.UUID) -> list[str]:
+    """Test seam: sync snapshot of in-memory lines (empty list when none)."""
+    return list(_memory.get(str(deployment_id), []))
+
+
+def memory_log_store_empty() -> bool:
+    """Test seam: True when no in-memory deployment log buckets exist."""
+    return not _memory
 
 
 def _key(deployment_id: uuid.UUID) -> str:
@@ -149,6 +166,31 @@ def publish_line_sync(redis_url: str | None, deployment_id: uuid.UUID, line: str
             _write_redis_sync(client, _key(deployment_id), text)
     except RedisError as exc:
         raise _map_redis_error(exc) from exc
+
+
+def provision_failure_line(exc: BaseException) -> str:
+    """Terminal failure line: exception class only — never ``str(exc)`` (may hold TF stderr)."""
+    return f"Provision failed: {type(exc).__name__}"
+
+
+def publish_provision_lines_sync(
+    redis_url: str | None,
+    deployment_id: uuid.UUID,
+    *lines: str,
+) -> None:
+    """Publish worker progress. Log-store failures must not fail the provision job.
+
+    Each line is attempted independently so a later ``Done`` still tries after a skip.
+    """
+    for line in lines:
+        try:
+            publish_line_sync(redis_url, deployment_id, line)
+        except (RedisError, QueueUnavailableError, ValueError) as exc:
+            logger.warning(
+                "event=deployment_log_publish_skipped deployment=%s error_type=%s",
+                deployment_id,
+                type(exc).__name__,
+            )
 
 
 async def publish_line(redis_url: str | None, deployment_id: uuid.UUID, line: str) -> None:

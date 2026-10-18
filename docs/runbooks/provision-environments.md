@@ -50,6 +50,29 @@ curl -s http://127.0.0.1:8000/api/v1/jobs/<job-id> \
   -H "authorization: Bearer $TOKEN"
 ```
 
+To stream progress on a console deployment's terminal, pass that deployment's
+id in the JSON body (the deployment must already exist):
+
+```bash
+curl -s -X POST \
+  http://127.0.0.1:8000/api/v1/projects/<project-id>/environments/<env-id>/provision \
+  -H "authorization: Bearer $TOKEN" \
+  -H "content-type: application/json" \
+  -d '{"deployment_id":"<deployment-id>"}'
+```
+
+Enqueue publishes `Queued environment provision...` before returning 202 so the
+log store is non-empty and the empty-stream stub (which ends in `Done`) cannot
+race the worker. If broker dispatch fails after that seed, it also publishes
+`Provision queue failed` (still no `Done`) before the error propagates. The
+worker then adds start, then on success `Environment provision finished.` and
+`Done`, or on final failure only `Provision failed: <ExceptionClass>` (no
+`Done`). The console treats `Done` as deployment success, so failures must not
+emit it; the SSE follower ends on follow-idle instead. Those lines never include
+exception message text or provisioner `detail` (Terraform stdout/stderr can hold
+secrets). Mapping the Deploy form onto this call is a separate story. A `failed`
+deployment status is out of scope here.
+
 Dry-run detail contains `terraform plan only`. Apply detail contains
 `applied stored plan`. Locks retry (`TransientJobError`). Policy or bad
 input fails permanently.

@@ -6,7 +6,7 @@ from app.api.deps import EnvironmentServiceDep, JobServiceDep, PaginationDep
 from app.schemas.auth import ErrorResponse
 from app.schemas.common import Page
 from app.schemas.environment import EnvironmentCreate, EnvironmentRead, EnvironmentUpdate
-from app.schemas.job import JobAccepted
+from app.schemas.job import JobAccepted, ProvisionJobCreate
 from app.services.provisioning import JobKind
 
 router = APIRouter(prefix="/projects/{project_id}/environments", tags=["environments"])
@@ -87,8 +87,15 @@ async def delete_environment(
     await environments.delete(project_id, environment_id)
 
 
-async def _enqueue(kind: JobKind, project_id: uuid.UUID, environment_id: uuid.UUID, jobs: JobServiceDep) -> JobAccepted:
-    ticket = await jobs.enqueue(kind, project_id, environment_id)
+async def _enqueue(
+    kind: JobKind,
+    project_id: uuid.UUID,
+    environment_id: uuid.UUID,
+    jobs: JobServiceDep,
+    *,
+    deployment_id: uuid.UUID | None = None,
+) -> JobAccepted:
+    ticket = await jobs.enqueue(kind, project_id, environment_id, deployment_id=deployment_id)
     return JobAccepted(
         job_id=uuid.UUID(ticket.job_id),
         kind=ticket.kind,
@@ -102,13 +109,21 @@ async def _enqueue(kind: JobKind, project_id: uuid.UUID, environment_id: uuid.UU
     response_model=JobAccepted,
     status_code=status.HTTP_202_ACCEPTED,
     summary="Queue a provisioning job for an environment",
-    description="Returns at once with a job id. Poll `GET /api/v1/jobs/{job_id}` for the outcome.",
+    description=(
+        "Returns at once with a job id. Poll `GET /api/v1/jobs/{job_id}` for the outcome. "
+        "Optional body `deployment_id` ties the job to a console deployment so the worker "
+        "publishes progress onto `GET /api/v1/deployments/{id}/logs`."
+    ),
     responses=_UNAUTHENTICATED | _NOT_FOUND | _QUEUE_DOWN,
 )
 async def provision_environment(
-    project_id: uuid.UUID, environment_id: uuid.UUID, jobs: JobServiceDep
+    project_id: uuid.UUID,
+    environment_id: uuid.UUID,
+    jobs: JobServiceDep,
+    body: ProvisionJobCreate | None = None,
 ) -> JobAccepted:
-    return await _enqueue(JobKind.provision, project_id, environment_id, jobs)
+    deployment_id = body.deployment_id if body is not None else None
+    return await _enqueue(JobKind.provision, project_id, environment_id, jobs, deployment_id=deployment_id)
 
 
 @router.post(

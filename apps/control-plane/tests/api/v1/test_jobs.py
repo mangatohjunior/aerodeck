@@ -73,6 +73,112 @@ async def test_provision_returns_a_job_at_once(client: AsyncClient, auth: dict[s
     assert body["status"] == "queued"
 
 
+async def test_provision_rejects_unknown_deployment_id(
+    client: AsyncClient, auth: dict[str, str], environment: dict
+) -> None:
+    response = await client.post(
+        job_url(environment, "provision"),
+        headers=auth,
+        json={"deployment_id": str(uuid.uuid4())},
+    )
+
+    assert response.status_code == 404
+    assert response.json()["code"] == "not_found"
+
+
+async def test_provision_dispatch_failure_after_seed_publishes_queue_failed(
+    client: AsyncClient,
+    auth: dict[str, str],
+    environment: dict,
+    queued_app: FastAPI,
+    dispatcher: CeleryJobDispatcher,
+) -> None:
+    from app.api.deps import get_job_dispatcher
+    from app.services.deployment_logs import (
+        PROVISION_QUEUE_FAILED_LINE,
+        PROVISION_QUEUED_LINE,
+        clear_memory_log_lines,
+        published_lines,
+    )
+    from app.services.provisioning import JobKind
+
+    clear_memory_log_lines()
+
+    class BrokenDispatcher:
+        def dispatch(self, kind: JobKind, *, project_id: str, environment_id: str, **meta: str) -> str:
+            raise ConnectionError("broker down")
+
+        def state(self, job_id: str):  # pragma: no cover
+            raise AssertionError("state should not be called")
+
+    queued_app.dependency_overrides[get_job_dispatcher] = lambda: BrokenDispatcher()
+    try:
+        created = await client.post(
+            "/api/v1/deployments",
+            headers=auth,
+            json={"repo_url": "https://github.com/acme/payments"},
+        )
+        assert created.status_code == 201, created.text
+        deployment_id = created.json()["id"]
+
+        # Lifespan error middleware re-raises unhandled errors in tests.
+        with pytest.raises(ConnectionError, match="broker down"):
+            await client.post(
+                job_url(environment, "provision"),
+                headers=auth,
+                json={"deployment_id": deployment_id},
+            )
+
+        lines = await published_lines(None, uuid.UUID(deployment_id))
+        assert lines == [PROVISION_QUEUED_LINE, PROVISION_QUEUE_FAILED_LINE]
+    finally:
+        queued_app.dependency_overrides[get_job_dispatcher] = lambda: dispatcher
+        clear_memory_log_lines()
+
+
+async def test_provision_with_deployment_id_publishes_log_lines(
+    client: AsyncClient, auth: dict[str, str], environment: dict, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from app.services.deployment_logs import (
+        DONE_LINE,
+        PROVISION_QUEUED_LINE,
+        PROVISION_START_LINE,
+        PROVISION_SUCCESS_LINE,
+        clear_memory_log_lines,
+        published_lines,
+    )
+    from app.tasks import environments as env_tasks
+
+    clear_memory_log_lines()
+    monkeypatch.setattr(env_tasks, "get_settings", lambda: make_settings(database_url=None, redis_url=None))
+
+    created = await client.post(
+        "/api/v1/deployments",
+        headers=auth,
+        json={"repo_url": "https://github.com/acme/payments"},
+    )
+    assert created.status_code == 201, created.text
+    deployment_id = created.json()["id"]
+
+    accepted = await client.post(
+        job_url(environment, "provision"),
+        headers=auth,
+        json={"deployment_id": deployment_id},
+    )
+    assert accepted.status_code == 202, accepted.text
+
+    job = await client.get(f"/api/v1/jobs/{accepted.json()['job_id']}", headers=auth)
+    assert job.json()["status"] == "succeeded"
+
+    lines = await published_lines(None, uuid.UUID(deployment_id))
+    assert lines is not None
+    assert lines[0] == PROVISION_QUEUED_LINE
+    assert lines[1] == PROVISION_START_LINE
+    assert lines[-2] == PROVISION_SUCCESS_LINE
+    assert lines[-1] == DONE_LINE
+    clear_memory_log_lines()
+
+
 async def test_job_outcome_is_readable_afterwards(client: AsyncClient, auth: dict[str, str], environment: dict) -> None:
     accepted = (await client.post(job_url(environment, "reconcile"), headers=auth)).json()
 

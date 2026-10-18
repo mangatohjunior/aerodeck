@@ -10,13 +10,17 @@ from app.services.deployment_logs import (
     DONE_LINE,
     MAX_LINE_CHARS,
     MAX_LINES,
+    PROVISION_QUEUED_LINE,
     clear_memory_log_lines,
     ensure_log_store_ready,
     iter_deployment_log_lines,
+    provision_failure_line,
     publish_line,
     publish_line_sync,
+    publish_provision_lines_sync,
     published_lines,
 )
+from app.services.provisioning import PermanentJobError
 
 
 @pytest.fixture(autouse=True)
@@ -132,6 +136,16 @@ async def test_memory_stream_does_not_invent_done() -> None:
 
 
 @pytest.mark.asyncio
+async def test_queued_seed_line_prevents_stub_done() -> None:
+    """Enqueue seeds a non-Done line so empty-store stub Done cannot race the worker."""
+    deployment_id = uuid4()
+    await publish_line(None, deployment_id, PROVISION_QUEUED_LINE)
+    lines = await _collect(iter_deployment_log_lines(None, deployment_id))
+    assert lines == [PROVISION_QUEUED_LINE]
+    assert DONE_LINE not in lines
+
+
+@pytest.mark.asyncio
 async def test_memory_stream_includes_publisher_done() -> None:
     deployment_id = uuid4()
     await publish_line(None, deployment_id, "Apply complete")
@@ -222,6 +236,29 @@ async def test_redis_empty_list_stubs_after_short_grace(monkeypatch: pytest.Monk
     )
     assert lines == ["Initializing Terraform...", "Provisioning K3s...", DONE_LINE]
     client.lrange.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_redis_queued_seed_follows_without_stubbing_done(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A pre-worker queued line keeps SSE on follow-idle, not the stub Done path."""
+    monkeypatch.setattr(deployment_logs_mod, "_LINE_PACE_SECONDS", 0)
+    monkeypatch.setattr(deployment_logs_mod, "_FOLLOW_POLL_SECONDS", 0)
+    stored = [PROVISION_QUEUED_LINE.encode()]
+    client = _async_list_client(stored)
+    monkeypatch.setattr(
+        "app.services.deployment_logs.aioredis.from_url",
+        lambda *_args, **_kwargs: client,
+    )
+    lines = await _collect(
+        iter_deployment_log_lines(
+            "redis://example/0",
+            uuid4(),
+            follow_idle_seconds=0,
+            first_publish_grace_seconds=0,
+        )
+    )
+    assert lines == [PROVISION_QUEUED_LINE]
+    assert DONE_LINE not in lines
 
 
 @pytest.mark.asyncio
@@ -381,3 +418,46 @@ async def test_mid_stream_redis_failure_ends_cleanly(monkeypatch: pytest.MonkeyP
     lines = await _collect(iter_deployment_log_lines("redis://example/0", uuid4()))
     assert lines == ["partial"]
     client.aclose.assert_awaited_once()
+
+
+def test_provision_failure_line_is_class_name_only() -> None:
+    exc = PermanentJobError("terraform stderr with dop_v1_live_SECRET and spaces keys")
+    assert provision_failure_line(exc) == "Provision failed: PermanentJobError"
+    assert "dop_v1" not in provision_failure_line(exc)
+    assert "SECRET" not in provision_failure_line(exc)
+
+
+@pytest.mark.asyncio
+async def test_publish_provision_lines_sync_writes_all_lines() -> None:
+    deployment_id = uuid4()
+    publish_provision_lines_sync(None, deployment_id, "one", "two", DONE_LINE)
+    assert await published_lines(None, deployment_id) == ["one", "two", DONE_LINE]
+
+
+@pytest.mark.asyncio
+async def test_publish_provision_lines_sync_keeps_trying_after_store_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    deployment_id = uuid4()
+    calls: list[str] = []
+
+    def flaky(_redis_url: str | None, _deployment_id: object, line: str) -> None:
+        calls.append(line)
+        if line == "boom":
+            raise QueueUnavailableError("Deployment log store is unavailable")
+
+    monkeypatch.setattr(deployment_logs_mod, "publish_line_sync", flaky)
+    publish_provision_lines_sync(None, deployment_id, "ok", "boom", DONE_LINE)
+    assert calls == ["ok", "boom", DONE_LINE]
+
+
+@pytest.mark.asyncio
+async def test_publish_provision_lines_sync_propagates_unexpected_errors(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def boom(_redis_url: str | None, _deployment_id: object, line: str) -> None:
+        raise RuntimeError("bug")
+
+    monkeypatch.setattr(deployment_logs_mod, "publish_line_sync", boom)
+    with pytest.raises(RuntimeError, match="bug"):
+        publish_provision_lines_sync(None, uuid4(), "one")
