@@ -202,6 +202,34 @@ export async function authenticateControlPlaneUser(
   return parseControlPlaneUser(await response.json());
 }
 
+export async function linkControlPlaneGoogleUser(
+  config: ControlPlaneConfig,
+  email: string,
+  subject: string,
+  options: ListOptions = {},
+): Promise<ControlPlaneUser> {
+  const fetchImpl = options.fetch ?? fetch;
+  const now = options.now ?? Date.now;
+  const accessToken = await accessTokenFor(config, fetchImpl, now);
+  const response = await fetchImpl(`${config.baseUrl}/api/v1/console-users/google`, {
+    method: "POST",
+    headers: {
+      accept: "application/json",
+      authorization: `Bearer ${accessToken}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ email, subject }),
+    cache: "no-store",
+  });
+  if (response.status === 409) {
+    throw new ControlPlaneError("control plane google link conflict (409)");
+  }
+  if (!response.ok) {
+    throw new ControlPlaneError(`control plane google link request failed (${response.status})`);
+  }
+  return parseControlPlaneUser(await response.json());
+}
+
 const DEPLOYMENT_PAGE_CAP = 20;
 const DEPLOYMENT_STATUSES = new Set<DeploymentStatus>(["queued", "running", "succeeded"]);
 

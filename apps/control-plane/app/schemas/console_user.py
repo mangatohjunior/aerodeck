@@ -23,6 +23,18 @@ class ConsoleUserCreate(BaseModel):
         return value.lower()
 
 
+class ConsoleUserGoogleLink(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    email: Email
+    subject: Annotated[str, Field(min_length=1, max_length=255)]
+
+    @field_validator("email")
+    @classmethod
+    def normalize_email(cls, value: str) -> str:
+        return value.lower()
+
+
 class ConsoleUserRead(BaseModel):
     model_config = ConfigDict(extra="forbid", from_attributes=True)
 

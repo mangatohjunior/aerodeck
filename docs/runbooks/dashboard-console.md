@@ -17,8 +17,10 @@ stays on `/api/mock/v1/deployments/{id}/logs` when it is not. Sign-in still
 posts to `/api/mock/v1/auth/login`. When the console client is set, that
 route checks `POST /api/v1/console-users/login` and sets `aerodeck_session`
 from the stored user. A wrong password and an unknown email return the same
-error. Without the client, sign-in uses the mock store.
-Registration uses `POST /api/v1/console-users` through
+error. Without the client, sign-in uses the mock store. A real Google callback
+links that verified email with `POST /api/v1/console-users/google` when the
+console client is also set. The mock Google profile stays in the dashboard
+process. Registration uses `POST /api/v1/console-users` through
 `POST /api/console/register` when the console client is set, and stays on
 `/api/mock/v1/auth/register` when it is not. When `CONTROL_PLANE_URL` is
 unset, projects and sandboxes fall back to the local seed.
