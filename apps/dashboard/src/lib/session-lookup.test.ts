@@ -6,7 +6,6 @@ import {
   controlPlaneSessionToRevoke,
   isMissingControlPlaneSession,
   lookupSession,
-  shouldRevokeControlPlaneSession,
 } from "./session-lookup";
 
 const config: ControlPlaneConfig = {
@@ -85,7 +84,7 @@ describe("lookupSession", () => {
       token: "control-plane-token",
       config,
     });
-    assert.equal(shouldRevokeControlPlaneSession("mock-google-token", null, mockUser), false);
-    assert.equal(shouldRevokeControlPlaneSession(undefined, config, undefined), false);
+    assert.equal(controlPlaneSessionToRevoke("mock-google-token", null, mockUser), null);
+    assert.equal(controlPlaneSessionToRevoke(undefined, config, undefined), null);
   });
 });

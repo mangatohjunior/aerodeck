@@ -29,14 +29,6 @@ export function controlPlaneSessionToRevoke(
   return { token, config };
 }
 
-export function shouldRevokeControlPlaneSession(
-  token: string | undefined,
-  config: ControlPlaneConfig | null,
-  mockUser: PublicUser | undefined,
-): boolean {
-  return controlPlaneSessionToRevoke(token, config, mockUser) !== null;
-}
-
 export async function lookupSession(lookup: SessionLookup): Promise<SessionRead> {
   if (!lookup.token) {
     return { status: "anonymous" };

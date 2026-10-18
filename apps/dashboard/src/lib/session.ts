@@ -13,7 +13,6 @@ export {
   controlPlaneSessionToRevoke,
   isMissingControlPlaneSession,
   lookupSession,
-  shouldRevokeControlPlaneSession,
 } from "@/lib/session-lookup";
 
 export async function readSession(): Promise<SessionRead> {
