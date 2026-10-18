@@ -7,7 +7,6 @@ records that the stream finished. Neither call touches DigitalOcean.
 """
 
 import uuid
-from uuid import UUID
 
 from fastapi import APIRouter, status
 from fastapi.responses import StreamingResponse
@@ -75,7 +74,7 @@ async def succeed_deployment(deployment_id: uuid.UUID, deployments: DeploymentSe
     responses=_NOT_FOUND | _UNAUTHENTICATED | _UNAVAILABLE,
 )
 async def stream_deployment_logs(
-    deployment_id: UUID,
+    deployment_id: uuid.UUID,
     deployments: DeploymentServiceDep,
     settings: SettingsDep,
 ) -> StreamingResponse:

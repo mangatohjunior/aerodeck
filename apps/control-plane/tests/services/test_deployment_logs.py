@@ -201,9 +201,8 @@ async def test_published_lines_reads_redis_in_batches(monkeypatch: pytest.Monkey
 
 
 @pytest.mark.asyncio
-async def test_redis_empty_list_uses_stub_after_idle(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_redis_empty_list_uses_stub_immediately(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(deployment_logs_mod, "_SSE_PACE_SECONDS", 0)
-    monkeypatch.setattr(deployment_logs_mod, "_FOLLOW_POLL_SECONDS", 0)
     client = AsyncMock()
     client.llen = AsyncMock(return_value=0)
     monkeypatch.setattr(
@@ -211,14 +210,7 @@ async def test_redis_empty_list_uses_stub_after_idle(monkeypatch: pytest.MonkeyP
         lambda *_args, **_kwargs: client,
     )
     body = b"".join(
-        [
-            chunk
-            async for chunk in iter_deployment_log_sse(
-                "redis://example/0",
-                uuid4(),
-                follow_idle_seconds=1,
-            )
-        ]
+        [chunk async for chunk in iter_deployment_log_sse("redis://example/0", uuid4())]
     )
     assert b"data: Initializing Terraform...\n\n" in body
     assert body.endswith(b"data: Done\n\n")
@@ -226,36 +218,15 @@ async def test_redis_empty_list_uses_stub_after_idle(monkeypatch: pytest.MonkeyP
 
 
 @pytest.mark.asyncio
-async def test_redis_waits_for_first_line_before_stubbing(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(deployment_logs_mod, "_SSE_PACE_SECONDS", 0)
-    monkeypatch.setattr(deployment_logs_mod, "_FOLLOW_POLL_SECONDS", 0)
-    stored: list[bytes] = []
+async def test_redis_publish_refuses_when_at_max_lines(monkeypatch: pytest.MonkeyPatch) -> None:
+    stored: list[bytes] = [f"x{i}".encode() for i in range(MAX_LINES)]
     client = _async_list_client(stored)
-
-    async def llen(_key: str) -> int:
-        if len(stored) == 0:
-            stored.extend([b"from-worker", b"Done"])
-        return len(stored)
-
-    client.llen = AsyncMock(side_effect=llen)
     monkeypatch.setattr(
         "app.services.deployment_logs.aioredis.from_url",
         lambda *_args, **_kwargs: client,
     )
-    body = b"".join(
-        [
-            chunk
-            async for chunk in iter_deployment_log_sse(
-                "redis://example/0",
-                uuid4(),
-                follow_idle_seconds=1,
-            )
-        ]
-    )
-    assert body == b"data: from-worker\n\ndata: Done\n\n"
-    assert b"Initializing Terraform" not in body
+    with pytest.raises(ValueError, match="at most"):
+        await publish_line("redis://example/0", uuid4(), "one-more")
 
 
 @pytest.mark.asyncio

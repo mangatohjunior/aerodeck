@@ -1,4 +1,5 @@
 from pathlib import Path
+from unittest.mock import AsyncMock
 from uuid import UUID, uuid4
 
 import pytest
@@ -105,6 +106,40 @@ async def test_deployment_logs_return_503_when_redis_is_down(
     response = await client.get(f"{DEPLOYMENTS}/{deployment_id}/logs", headers=auth)
     assert response.status_code == 503
     assert response.json()["code"] == "queue_unavailable"
+
+
+async def test_deployment_logs_with_redis_empty_list_emit_stub_immediately(
+    app: FastAPI,
+    client: AsyncClient,
+    auth: dict[str, str],
+    database_url: str,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Redis-enabled envs without a publisher must not wait follow-idle for Done."""
+    created = await client.post(DEPLOYMENTS, json={"repo_url": REPO}, headers=auth)
+    assert created.status_code == 201, created.text
+    deployment_id = created.json()["id"]
+
+    app.dependency_overrides[get_settings] = lambda: make_settings(
+        database_url,
+        certificate_key_dir=str(tmp_path / "cert-keys"),
+        redis_url="redis://example/0",
+        deployment_log_follow_idle_seconds=1800,
+    )
+    monkeypatch.setattr("app.services.deployment_logs.ping_broker", AsyncMock())
+    redis_client = AsyncMock()
+    redis_client.llen = AsyncMock(return_value=0)
+    monkeypatch.setattr(
+        "app.services.deployment_logs.aioredis.from_url",
+        lambda *_args, **_kwargs: redis_client,
+    )
+
+    response = await client.get(f"{DEPLOYMENTS}/{deployment_id}/logs", headers=auth)
+    assert response.status_code == 200
+    assert "data: Initializing Terraform..." in response.text
+    assert "data: Done" in response.text
+    redis_client.lrange.assert_not_called()
 
 
 async def test_unknown_deployment_does_not_stream(client: AsyncClient, auth: dict[str, str]) -> None:
