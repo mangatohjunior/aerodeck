@@ -30,12 +30,12 @@ not a Docker tag and not a filesystem path. Path separators are rejected.
 | `AERODECK_FIRECRACKER_API_URL` | `http://127.0.0.1:8080` | Firecracker HTTP API (required when the hypervisor is `firecracker`) |
 
 `GET /api/v1/projects/{id}/sandboxes` lists them. `hypervisor_vm_id` is never
-returned. Mutations need a token; list and get do not.
+returned. Every call needs a token ([control-plane.md](control-plane.md)).
 
 ## Destroy on TTL
 
 A running sandbox whose `expires_at` is in the past is torn down when you GET
-it, or in batch:
+it, when the worker beat fires, or in a manual batch:
 
 ```bash
 curl -s -X POST http://127.0.0.1:8000/api/v1/sandboxes/reap-expired \
@@ -43,7 +43,20 @@ curl -s -X POST http://127.0.0.1:8000/api/v1/sandboxes/reap-expired \
 ```
 
 The hypervisor receives a stop (`SendCtrlAltDel` on Firecracker; in-memory
-pop). The row stays with `status: stopped`. Reaping again returns `[]`.
+pop). The row stays with `status: stopped`. Reaping again returns `[]`. A
+hypervisor 502 on one VM is logged and the rest of the batch continues.
+
+The worker runs beat in the same process:
+
+```bash
+celery -A app.worker worker --beat --queues aerodeck --loglevel INFO
+```
+
+| Setting | Default | Role |
+| ------- | ------- | ---- |
+| `AERODECK_SANDBOX_REAP_INTERVAL_SECONDS` | `60` | How often beat enqueues the reap. `0` disables the schedule; the POST stays. |
+
+No KVM is required. The laptop/CI hypervisor is still `memory`.
 
 ## Enroll a hypervisor host
 
@@ -75,3 +88,4 @@ enrolled.
 - #14 — boot a microVM.
 - #15 — destroy on TTL.
 - #16 — enroll sandbox hosts (this section).
+- #37 — scheduled reap (this section).

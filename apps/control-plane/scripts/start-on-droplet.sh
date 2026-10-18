@@ -139,6 +139,6 @@ echo
 docker run -d --name aerodeck-worker --network host --restart unless-stopped \
   "${DOCKER_ENV_FLAGS[@]}" \
   "${IMAGE}" \
-  celery -A app.worker worker --queues aerodeck --loglevel INFO
+  celery -A app.worker worker --beat --queues aerodeck --loglevel INFO
 
 echo "saved env at ${ENV_FILE}; next time: sudo bash $0"

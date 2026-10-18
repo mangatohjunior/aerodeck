@@ -87,6 +87,8 @@ class Settings(BaseSettings):
     sandbox_hypervisor: Literal["memory", "firecracker"] = "memory"
     sandbox_image_root: str = "/var/lib/aerodeck/images"
     firecracker_api_url: str = "http://127.0.0.1:8080"
+    # Celery beat interval. 0 disables the schedule; POST /sandboxes/reap-expired still works.
+    sandbox_reap_interval_seconds: int = Field(default=60, ge=0, le=86_400)
 
     # Worker IaC (#34). Off by default so laptops and the API process stay Noop.
     iac_worker: bool = False

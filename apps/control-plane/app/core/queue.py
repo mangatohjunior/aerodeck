@@ -5,6 +5,7 @@ from redis import asyncio as aioredis
 
 from app.core.config import Settings, get_settings
 from app.tasks.environments import TASK_NAMES
+from app.tasks.sandboxes import REAP_TASK
 
 
 def create_celery_app(settings: Settings) -> Celery:
@@ -12,8 +13,14 @@ def create_celery_app(settings: Settings) -> Celery:
         "aerodeck",
         broker=settings.redis_url,
         backend=settings.redis_url,
-        include=["app.tasks.environments"],
+        include=["app.tasks.environments", "app.tasks.sandboxes"],
     )
+    beat_schedule = {}
+    if settings.sandbox_reap_interval_seconds > 0:
+        beat_schedule["reap-expired-sandboxes"] = {
+            "task": REAP_TASK,
+            "schedule": float(settings.sandbox_reap_interval_seconds),
+        }
     app.conf.update(
         task_default_queue=settings.job_queue,
         task_serializer="json",
@@ -30,6 +37,7 @@ def create_celery_app(settings: Settings) -> Celery:
         result_expires=settings.job_result_ttl_seconds,
         result_extended=True,
         broker_connection_retry_on_startup=True,
+        beat_schedule=beat_schedule,
     )
     app.finalize()
     for name in TASK_NAMES:

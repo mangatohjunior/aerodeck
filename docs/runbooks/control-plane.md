@@ -75,10 +75,12 @@ The API process never runs Celery. Same image, different command:
 
 ```bash
 cd apps/control-plane
-celery -A app.worker worker --queues aerodeck --loglevel INFO
+celery -A app.worker worker --beat --queues aerodeck --loglevel INFO
 ```
 
-On Windows use `--pool solo` if the default pool fails to start.
+`--beat` reaps expired sandboxes on `AERODECK_SANDBOX_REAP_INTERVAL_SECONDS`
+(default 60; `0` disables the schedule). On Windows use `--pool solo` if the
+default pool fails to start.
 
 Enqueue work, then poll:
 
@@ -130,7 +132,8 @@ docker run --rm -p 8000:8000 \
 # Worker from the same image:
 docker run --rm \
   -e AERODECK_AUTH_SIGNING_KEY=... \
+  -e AERODECK_DATABASE_URL=... \
   -e AERODECK_REDIS_URL=... \
   aerodeck/control-plane:dev \
-  celery -A app.worker worker --queues aerodeck --loglevel INFO
+  celery -A app.worker worker --beat --queues aerodeck --loglevel INFO
 ```
