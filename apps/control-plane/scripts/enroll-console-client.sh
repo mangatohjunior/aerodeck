@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Enroll (or rotate) the operator-console API client on the control Droplet.
-# Re-running replaces the client secret. The previous value in
-# /etc/aerodeck/dashboard.env stops working. This replaces the whole
-# AERODECK_AUTH_CLIENTS map with the console client.
+# Re-running replaces the client secret. The previous console secret in
+# /etc/aerodeck/dashboard.env stops working. GOOGLE_CLIENT_ID and
+# GOOGLE_CLIENT_SECRET already in that file are kept and are not printed.
+# This replaces the whole AERODECK_AUTH_CLIENTS map with the console client.
 #
 #   sudo bash enroll-console-client.sh
 #
@@ -30,12 +31,9 @@ DIGEST=$(SECRET="${SECRET}" python3 -c "import hashlib,os; print(hashlib.sha256(
 # The start script sources this file (last assignment wins) and rewrites one copy.
 printf 'AERODECK_AUTH_CLIENTS=%q\n' "{\"${CLIENT_ID}\":\"${DIGEST}\"}" >> "${CONTROL_ENV}"
 
-cat > "${DASHBOARD_ENV}" <<EOF
-CONTROL_PLANE_URL=http://127.0.0.1:8000
-CONTROL_PLANE_CLIENT_ID=${CLIENT_ID}
-CONTROL_PLANE_CLIENT_SECRET=${SECRET}
-EOF
-chmod 600 "${DASHBOARD_ENV}"
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+CLIENT_ID="${CLIENT_ID}" SECRET="${SECRET}" DASHBOARD_ENV="${DASHBOARD_ENV}" \
+  python3 "${SCRIPT_DIR}/dashboard_env.py"
 unset SECRET DIGEST
 
 bash /root/start-on-droplet.sh

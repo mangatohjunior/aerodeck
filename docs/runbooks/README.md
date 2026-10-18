@@ -22,6 +22,7 @@ chat history.
 | [Issue workflow](issue-workflow.md) | How Epics and Stories move across the board. |
 | [Dashboard mock](dashboard-mock.md) | Run the Next.js console and curl `/api/mock/v1` without FastAPI. |
 | [Dashboard console](dashboard-console.md) | Serve the operator console and read live projects from the control plane. |
+| [Google sign-in](google-sign-in.md) | Create the OAuth client and keep its secret on the dashboard server. |
 
 Do not `terraform apply` against shared state from a laptop. Procedure:
 [iac-apply.md](iac-apply.md).
