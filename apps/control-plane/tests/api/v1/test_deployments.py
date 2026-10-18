@@ -1,6 +1,8 @@
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from httpx import AsyncClient
+
+from app.services.deployment_logs import publish_line
 
 DEPLOYMENTS = "/api/v1/deployments"
 REPO = "https://github.com/mangatohjunior/aerodeck"
@@ -33,6 +35,25 @@ async def test_deployment_logs_stream_mock_sse_lines(
     fetched = await client.get(f"{DEPLOYMENTS}/{deployment_id}", headers=auth)
     assert fetched.status_code == 200, fetched.text
     assert fetched.json()["status"] == "succeeded"
+
+
+async def test_deployment_logs_prefer_published_lines(
+    client: AsyncClient, auth: dict[str, str]
+) -> None:
+    created = await client.post(DEPLOYMENTS, json={"repo_url": REPO}, headers=auth)
+    assert created.status_code == 201, created.text
+    deployment_id = UUID(created.json()["id"])
+
+    await publish_line(None, deployment_id, "Plan: 1 to add")
+    await publish_line(None, deployment_id, "Apply complete")
+
+    response = await client.get(f"{DEPLOYMENTS}/{deployment_id}/logs", headers=auth)
+    assert response.status_code == 200
+    body = response.text
+    assert "data: Plan: 1 to add" in body
+    assert "data: Apply complete" in body
+    assert "Initializing Terraform" not in body
+    assert "Provisioning K3s" not in body
 
 
 async def test_unknown_deployment_does_not_stream(client: AsyncClient, auth: dict[str, str]) -> None:

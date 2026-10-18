@@ -14,7 +14,10 @@ follow the same split. The terminal reads
 `GET /api/v1/deployments/{id}/logs` through
 `GET /api/console/deployments/{id}/logs` when the console client is set, and
 stays on `/api/mock/v1/deployments/{id}/logs` when it is not. An unknown
-deployment id does not stream. When the stub emits `Done`, the dashboard
+deployment id does not stream. When the worker has published lines for that
+id (Redis list `aerodeck:deployment-logs:{id}`, or the in-process store when
+Redis is unset), the control-plane stream prefers those lines; otherwise it
+keeps the three-line stub. When the stream emits `Done`, the dashboard
 server records `succeeded` with `POST /api/v1/deployments/{id}/succeeded`.
 The mock log route still marks its own row succeeded. Sign-in still
 posts to `/api/mock/v1/auth/login`. When the console client is set, that

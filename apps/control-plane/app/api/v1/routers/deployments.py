@@ -1,9 +1,9 @@
 """Deployment records and log streams.
 
 ``POST /api/v1/deployments`` stores a GitHub repository request. It does not
-call DigitalOcean. ``GET /api/v1/deployments/{deployment_id}/logs`` streams the stub for a stored
-row. ``POST .../succeeded`` records that the stub finished. Neither call
-touches DigitalOcean.
+call DigitalOcean. ``GET /api/v1/deployments/{deployment_id}/logs`` streams
+worker-published lines when present, otherwise the stub. ``POST .../succeeded``
+records that the stream finished. Neither call touches DigitalOcean.
 """
 
 import asyncio
@@ -14,10 +14,11 @@ from uuid import UUID
 from fastapi import APIRouter, status
 from fastapi.responses import StreamingResponse
 
-from app.api.deps import DeploymentServiceDep, PaginationDep
+from app.api.deps import DeploymentServiceDep, PaginationDep, SettingsDep
 from app.schemas.auth import ErrorResponse
 from app.schemas.common import Page
 from app.schemas.deployment import DeploymentCreate, DeploymentRead
+from app.services.deployment_logs import STUB_LOG_LINES, published_lines
 
 router = APIRouter(prefix="/deployments", tags=["deployments"])
 
@@ -68,35 +69,28 @@ async def succeed_deployment(deployment_id: uuid.UUID, deployments: DeploymentSe
     return DeploymentRead.model_validate(await deployments.mark_succeeded(deployment_id))
 
 
-# Same lines the dashboard Terminal prints. Keep this list the contract until
-# the worker publishes real events.
-_MOCK_LOG_LINES = (
-    "Initializing Terraform...",
-    "Provisioning K3s...",
-    "Done",
-)
-
-
-async def _mock_log_stream() -> AsyncIterator[bytes]:
-    for line in _MOCK_LOG_LINES:
+async def _paced_sse(lines: tuple[str, ...] | list[str]) -> AsyncIterator[bytes]:
+    for line in lines:
         yield f"data: {line}\n\n".encode()
         await asyncio.sleep(0.05)
 
 
 @router.get(
     "/{deployment_id}/logs",
-    summary="Stream deployment logs (SSE stub)",
+    summary="Stream deployment logs (SSE)",
     response_class=StreamingResponse,
     responses=_NOT_FOUND | _UNAUTHENTICATED,
 )
 async def stream_deployment_logs(
     deployment_id: UUID,
     deployments: DeploymentServiceDep,
+    settings: SettingsDep,
 ) -> StreamingResponse:
-    """Stub SSE stream for a stored deployment. An unknown id does not stream."""
+    """Stream published lines when present; otherwise the stub for a stored deployment."""
     await deployments.get(deployment_id)
+    lines = await published_lines(settings.redis_url, deployment_id)
     return StreamingResponse(
-        _mock_log_stream(),
+        _paced_sse(lines if lines is not None else STUB_LOG_LINES),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
