@@ -383,11 +383,20 @@ export async function createControlPlaneDeployment(
 ): Promise<Deployment> {
   const fetchImpl = options.fetch ?? fetch;
   const now = options.now ?? Date.now;
+  const hasProject =
+    typeof options.projectId === "string" && options.projectId.length > 0;
+  const hasEnvironment =
+    typeof options.environmentId === "string" && options.environmentId.length > 0;
+  if (hasProject !== hasEnvironment) {
+    throw new ControlPlaneError(
+      "projectId and environmentId must both be set or both omitted",
+    );
+  }
   const accessToken = await accessTokenFor(config, fetchImpl, now);
   const body: Record<string, string> = { repo_url: repoUrl };
-  if (options.projectId && options.environmentId) {
-    body.project_id = options.projectId;
-    body.environment_id = options.environmentId;
+  if (hasProject && hasEnvironment) {
+    body.project_id = options.projectId as string;
+    body.environment_id = options.environmentId as string;
   }
   const response = await fetchImpl(`${config.baseUrl}/api/v1/deployments`, {
     method: "POST",

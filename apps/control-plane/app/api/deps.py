@@ -131,7 +131,11 @@ SandboxServiceDep = Annotated[SandboxService, Depends(get_sandbox_service)]
 
 
 def get_environment_service(session: SessionDep, projects: ProjectServiceDep) -> EnvironmentService:
-    return EnvironmentService(EnvironmentRepository(session), projects)
+    return EnvironmentService(
+        EnvironmentRepository(session),
+        projects,
+        DeploymentRepository(session),
+    )
 
 
 EnvironmentServiceDep = Annotated[EnvironmentService, Depends(get_environment_service)]

@@ -1,7 +1,7 @@
 import uuid
 from collections.abc import Sequence
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.deployment import Deployment
@@ -23,6 +23,14 @@ class DeploymentRepository:
         await self.add(deployment)
         await self._session.refresh(deployment)
         return deployment
+
+    async def clear_environment_link(self, environment_id: uuid.UUID) -> None:
+        """Null both link columns so the both-or-neither invariant survives env delete."""
+        await self._session.execute(
+            update(Deployment)
+            .where(Deployment.environment_id == environment_id)
+            .values(project_id=None, environment_id=None)
+        )
 
     async def list(self, *, limit: int, offset: int) -> tuple[Sequence[Deployment], int]:
         total = await self._session.scalar(select(func.count()).select_from(Deployment))

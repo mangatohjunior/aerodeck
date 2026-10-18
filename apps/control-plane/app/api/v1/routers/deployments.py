@@ -51,7 +51,7 @@ async def list_deployments(page: PaginationDep, deployments: DeploymentServiceDe
     response_model=DeploymentRead,
     status_code=status.HTTP_201_CREATED,
     summary="Create a deployment",
-    responses=_UNAUTHENTICATED,
+    responses=_UNAUTHENTICATED | _NOT_FOUND,
 )
 async def create_deployment(body: DeploymentCreate, deployments: DeploymentServiceDep) -> DeploymentRead:
     return DeploymentRead.model_validate(await deployments.create(body))

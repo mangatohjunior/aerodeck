@@ -1025,6 +1025,24 @@ describe("control plane deployments", () => {
     assert.equal(listed[0]?.id, deploymentRow.id);
   });
 
+  it("rejects a partial environment link on create", async () => {
+    clearControlPlaneTokenCache();
+    await assert.rejects(
+      () =>
+        createControlPlaneDeployment(config, "https://github.com/mangatohjunior/aerodeck", {
+          projectId: "11111111-1111-4111-8111-111111111111",
+          fetch: async () => {
+            throw new Error("must not call fetch");
+          },
+        }),
+      (cause: unknown) => {
+        assert.ok(cause instanceof ControlPlaneError);
+        assert.match(cause.message, /both be set or both omitted/);
+        return true;
+      },
+    );
+  });
+
   it("does not include the upstream body when create fails", async () => {
     clearControlPlaneTokenCache();
     const fetchImpl: typeof fetch = async (input) => {

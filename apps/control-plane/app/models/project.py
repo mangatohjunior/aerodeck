@@ -32,7 +32,11 @@ class Project(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
 class Environment(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "environments"
-    __table_args__ = (UniqueConstraint("project_id", "slug", name="uq_environments_project_id_slug"),)
+    __table_args__ = (
+        UniqueConstraint("project_id", "slug", name="uq_environments_project_id_slug"),
+        # Target for deployments composite FK (project_id, environment_id).
+        UniqueConstraint("project_id", "id", name="uq_environments_project_id_id"),
+    )
 
     project_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True

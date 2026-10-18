@@ -17,7 +17,7 @@ class DeploymentService:
     def __init__(
         self,
         deployments: DeploymentRepository,
-        environments: EnvironmentService | None = None,
+        environments: EnvironmentService,
     ) -> None:
         self._deployments = deployments
         self._environments = environments
@@ -30,8 +30,6 @@ class DeploymentService:
         project_id = data.project_id
         environment_id = data.environment_id
         if project_id is not None and environment_id is not None:
-            if self._environments is None:
-                raise RuntimeError("environment link requires EnvironmentService")
             await self._environments.get(project_id, environment_id)
         stored = await self._deployments.add(
             Deployment(

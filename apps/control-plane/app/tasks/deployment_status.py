@@ -9,20 +9,33 @@ here too.
 import asyncio
 import uuid
 
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.core.config import get_settings
 from app.core.db import SessionLocal, bind_engine, create_engine, unbind_engine
 from app.core.logging import get_logger
 from app.repositories.deployments import DeploymentRepository
+from app.repositories.environments import EnvironmentRepository
+from app.repositories.projects import ProjectRepository
 from app.services.deployments import DeploymentService
+from app.services.environments import EnvironmentService
+from app.services.projects import ProjectService
 
 logger = get_logger("tasks.deployment_status")
+
+
+def _deployment_service(session: AsyncSession) -> DeploymentService:
+    deployments = DeploymentRepository(session)
+    projects = ProjectService(ProjectRepository(session))
+    environments = EnvironmentService(EnvironmentRepository(session), projects, deployments)
+    return DeploymentService(deployments, environments)
 
 
 async def mark_deployment_failed_isolated(deployment_id: uuid.UUID) -> None:
     """Commit failed on its own session so a later request rollback cannot undo it."""
     async with SessionLocal() as session:
         try:
-            service = DeploymentService(DeploymentRepository(session))
+            service = _deployment_service(session)
             await service.mark_failed(deployment_id)
             await session.commit()
         except Exception:
