@@ -1,7 +1,7 @@
 import { connection, NextResponse } from "next/server";
 
 import {
-  isDeploymentLogId,
+  isControlPlaneUuid,
   readControlPlaneConfig,
   succeedControlPlaneDeployment,
 } from "@/lib/control-plane";
@@ -25,7 +25,7 @@ export async function POST(
   }
 
   const { id } = await context.params;
-  if (!isDeploymentLogId(id)) {
+  if (!isControlPlaneUuid(id)) {
     return jsonError(400, "Deployment id must be a UUID.", "invalid_deployment_id");
   }
 

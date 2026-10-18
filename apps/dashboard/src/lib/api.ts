@@ -1,11 +1,13 @@
 import { MOCK_API_PREFIX } from "@/lib/catalog";
-import type {
-  ApiError,
-  Deployment,
-  ProjectPage,
-  ProjectSource,
-  PublicUser,
-  SandboxPage,
+import {
+  PROVISION_ENQUEUE_FAILED,
+  type ApiError,
+  type Deployment,
+  type EnvironmentOptionPage,
+  type ProjectPage,
+  type ProjectSource,
+  type PublicUser,
+  type SandboxPage,
 } from "@/lib/types";
 
 export class SessionEnded extends Error {
@@ -15,6 +17,32 @@ export class SessionEnded extends Error {
   }
 }
 
+/** Deployment row exists but provision was not queued — do not open the terminal yet. */
+export class ProvisionEnqueueFailed extends Error {
+  readonly deploymentId: string;
+
+  constructor(detail: string, deploymentId: string) {
+    super(detail);
+    this.name = "ProvisionEnqueueFailed";
+    this.deploymentId = deploymentId;
+  }
+}
+
+/** Map a failed Deploy create response; used by createDeployment and tests. */
+export function errorFromFailedCreate(body: ApiError, status: number): Error {
+  if (
+    body.code === PROVISION_ENQUEUE_FAILED &&
+    typeof body.deployment_id === "string" &&
+    body.deployment_id.length > 0
+  ) {
+    return new ProvisionEnqueueFailed(
+      body.detail ?? `Request failed (${status})`,
+      body.deployment_id,
+    );
+  }
+  return new Error(body.detail ?? `Request failed (${status})`);
+}
+
 async function readJson<T>(response: Response): Promise<T> {
   const body = (await response.json()) as T | ApiError;
   if (!response.ok) {
@@ -22,6 +50,14 @@ async function readJson<T>(response: Response): Promise<T> {
     throw new Error(error.detail ?? `Request failed (${response.status})`);
   }
   return body as T;
+}
+
+async function readCreateDeploymentResponse(response: Response): Promise<Deployment> {
+  const body = (await response.json()) as Deployment | ApiError;
+  if (!response.ok) {
+    throw errorFromFailedCreate(body as ApiError, response.status);
+  }
+  return body as Deployment;
 }
 
 export async function fetchHealth(): Promise<{ status: string; mode: string }> {
@@ -60,15 +96,45 @@ export async function fetchDeployment(id: string, controlPlane = false): Promise
   return readJson(response);
 }
 
-export async function createDeployment(repoUrl: string, controlPlane = false): Promise<Deployment> {
+export async function fetchEnvironments(): Promise<EnvironmentOptionPage> {
+  const response = await fetch("/api/console/environments", {
+    credentials: "same-origin",
+    cache: "no-store",
+  });
+  return readJson(response);
+}
+
+export async function createDeployment(
+  repoUrl: string,
+  controlPlane: true,
+  target: { projectId: string; environmentId: string },
+): Promise<Deployment>;
+export async function createDeployment(
+  repoUrl: string,
+  controlPlane?: false,
+  target?: undefined,
+): Promise<Deployment>;
+export async function createDeployment(
+  repoUrl: string,
+  controlPlane = false,
+  target?: { projectId: string; environmentId: string },
+): Promise<Deployment> {
+  if (controlPlane && (!target?.projectId || !target?.environmentId)) {
+    throw new Error("Select an environment to provision.");
+  }
   const path = controlPlane ? "/api/console/deployments" : `${MOCK_API_PREFIX}/deployments`;
+  const body: Record<string, string> = { repo_url: repoUrl };
+  if (controlPlane && target) {
+    body.project_id = target.projectId;
+    body.environment_id = target.environmentId;
+  }
   const response = await fetch(path, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     credentials: "same-origin",
-    body: JSON.stringify({ repo_url: repoUrl }),
+    body: JSON.stringify(body),
   });
-  return readJson(response);
+  return readCreateDeploymentResponse(response);
 }
 
 export async function fetchLogSource(): Promise<ProjectSource> {

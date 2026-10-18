@@ -1,8 +1,9 @@
-import type { Deployment, DeploymentStatus, Project, Sandbox } from "./types";
+import type { Deployment, DeploymentStatus, EnvironmentOption, Project, Sandbox } from "./types";
 
 const CLIENT_ID_MAX = 128;
 const CLIENT_SECRET_MAX = 512;
 const PAGE_LIMIT = 200;
+const PAGE_CAP = 20;
 const REFRESH_SKEW_SECONDS = 30;
 
 export type ControlPlaneConfig = {
@@ -37,11 +38,19 @@ const tokens = new Map<string, CachedToken>();
 
 export class ControlPlaneError extends Error {
   readonly status?: number;
+  /** Set when a deployment row was created but a later step (e.g. provision) failed. */
+  readonly deploymentId?: string;
 
-  constructor(message: string, status?: number) {
-    super(message);
+  constructor(
+    message: string,
+    status?: number,
+    deploymentId?: string,
+    options?: ErrorOptions,
+  ) {
+    super(message, options);
     this.name = "ControlPlaneError";
     this.status = status;
+    this.deploymentId = deploymentId;
   }
 }
 
@@ -71,26 +80,43 @@ export async function listControlPlaneProjects(
   const fetchImpl = options.fetch ?? fetch;
   const now = options.now ?? Date.now;
   const accessToken = await accessTokenFor(config, fetchImpl, now);
-  const response = await fetchImpl(
-    `${config.baseUrl}/api/v1/projects?limit=${PAGE_LIMIT}`,
-    {
-      headers: {
-        accept: "application/json",
-        authorization: `Bearer ${accessToken}`,
+  const items: Project[] = [];
+  let offset = 0;
+  let total = 0;
+  let limit = PAGE_LIMIT;
+  for (let page = 0; page < PAGE_CAP; page += 1) {
+    const response = await fetchImpl(
+      `${config.baseUrl}/api/v1/projects?limit=${PAGE_LIMIT}&offset=${offset}`,
+      {
+        headers: {
+          accept: "application/json",
+          authorization: `Bearer ${accessToken}`,
+        },
+        cache: "no-store",
       },
-      cache: "no-store",
-    },
-  );
-  if (!response.ok) {
+    );
+    if (!response.ok) {
+      throw new ControlPlaneError(
+        `control plane projects request failed (${response.status})`,
+        response.status,
+      );
+    }
+    const parsed = parseProjectPage(await response.json());
+    items.push(...parsed.items);
+    total = parsed.total;
+    limit = parsed.limit;
+    if (parsed.items.length === 0 || items.length >= total) {
+      break;
+    }
+    offset += parsed.items.length;
+  }
+  if (items.length < total) {
     throw new ControlPlaneError(
-      `control plane projects request failed (${response.status})`,
-      response.status,
+      `control plane projects list exceeded page cap (${PAGE_CAP})`,
     );
   }
-  return parseProjectPage(await response.json());
+  return { items, total, limit, offset: 0 };
 }
-
-const SANDBOX_PAGE_CAP = 20;
 
 export async function listControlPlaneSandboxes(
   config: ControlPlaneConfig,
@@ -108,11 +134,11 @@ export async function listControlPlaneSandboxes(
   return { items, total: items.length };
 }
 
-const DEPLOYMENT_ID =
+const CONTROL_PLANE_UUID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-export function isDeploymentLogId(deploymentId: string): boolean {
-  return DEPLOYMENT_ID.test(deploymentId);
+export function isControlPlaneUuid(value: string): boolean {
+  return CONTROL_PLANE_UUID.test(value);
 }
 
 export async function openControlPlaneDeploymentLogs(
@@ -120,7 +146,7 @@ export async function openControlPlaneDeploymentLogs(
   deploymentId: string,
   options: ListOptions = {},
 ): Promise<ReadableStream<Uint8Array>> {
-  if (!isDeploymentLogId(deploymentId)) {
+  if (!isControlPlaneUuid(deploymentId)) {
     throw new ControlPlaneError("control plane deployment id was not a uuid");
   }
   const fetchImpl = options.fetch ?? fetch;
@@ -153,7 +179,7 @@ export async function succeedControlPlaneDeployment(
   deploymentId: string,
   options: ListOptions = {},
 ): Promise<Deployment> {
-  if (!isDeploymentLogId(deploymentId)) {
+  if (!isControlPlaneUuid(deploymentId)) {
     throw new ControlPlaneError("control plane deployment id was not a uuid");
   }
   const fetchImpl = options.fetch ?? fetch;
@@ -291,7 +317,6 @@ export async function revokeControlPlaneSession(
   throw new ControlPlaneError(`control plane session logout failed (${response.status})`, response.status);
 }
 
-const DEPLOYMENT_PAGE_CAP = 20;
 const DEPLOYMENT_STATUSES = new Set<DeploymentStatus>(["queued", "running", "succeeded"]);
 
 export async function listControlPlaneDeployments(
@@ -304,7 +329,7 @@ export async function listControlPlaneDeployments(
   const items: Deployment[] = [];
   let offset = 0;
   let total = 0;
-  for (let page = 0; page < DEPLOYMENT_PAGE_CAP; page += 1) {
+  for (let page = 0; page < PAGE_CAP; page += 1) {
     const response = await fetchImpl(
       `${config.baseUrl}/api/v1/deployments?limit=${PAGE_LIMIT}&offset=${offset}`,
       {
@@ -325,6 +350,11 @@ export async function listControlPlaneDeployments(
     if (parsed.items.length === 0 || items.length >= total) {
       break;
     }
+  }
+  if (items.length < total) {
+    throw new ControlPlaneError(
+      `control plane deployments list exceeded page cap (${PAGE_CAP})`,
+    );
   }
   return items;
 }
@@ -356,12 +386,143 @@ export async function createControlPlaneDeployment(
   return parseDeployment(await response.json());
 }
 
+export async function listControlPlaneEnvironments(
+  config: ControlPlaneConfig,
+  options: ListOptions = {},
+): Promise<EnvironmentOption[]> {
+  const projects = await listControlPlaneProjects(config, options);
+  const fetchImpl = options.fetch ?? fetch;
+  const now = options.now ?? Date.now;
+  const accessToken = await accessTokenFor(config, fetchImpl, now);
+  const items: EnvironmentOption[] = [];
+  for (const project of projects.items) {
+    const page = await listProjectEnvironments(config, project, accessToken, fetchImpl);
+    items.push(...page);
+  }
+  return items;
+}
+
+async function discardResponseBody(response: Response): Promise<void> {
+  await response.body?.cancel();
+}
+
+/** Existence check before create+provision. UI listing uses listControlPlaneEnvironments. */
+export async function getControlPlaneEnvironment(
+  config: ControlPlaneConfig,
+  projectId: string,
+  environmentId: string,
+  options: ListOptions = {},
+): Promise<void> {
+  if (!isControlPlaneUuid(projectId) || !isControlPlaneUuid(environmentId)) {
+    throw new ControlPlaneError("control plane environment ids were not uuids");
+  }
+  const fetchImpl = options.fetch ?? fetch;
+  const now = options.now ?? Date.now;
+  const accessToken = await accessTokenFor(config, fetchImpl, now);
+  const response = await fetchImpl(
+    `${config.baseUrl}/api/v1/projects/${encodeURIComponent(projectId)}/environments/${encodeURIComponent(environmentId)}`,
+    {
+      headers: {
+        accept: "application/json",
+        authorization: `Bearer ${accessToken}`,
+      },
+      cache: "no-store",
+    },
+  );
+  if (response.status === 404) {
+    await discardResponseBody(response);
+    throw new ControlPlaneError("control plane environment was not found (404)", 404);
+  }
+  if (!response.ok) {
+    await discardResponseBody(response);
+    throw new ControlPlaneError(
+      `control plane environment request failed (${response.status})`,
+      response.status,
+    );
+  }
+  await discardResponseBody(response);
+}
+
+export async function provisionControlPlaneEnvironment(
+  config: ControlPlaneConfig,
+  projectId: string,
+  environmentId: string,
+  deploymentId: string,
+  options: ListOptions = {},
+): Promise<void> {
+  if (
+    !isControlPlaneUuid(projectId) ||
+    !isControlPlaneUuid(environmentId) ||
+    !isControlPlaneUuid(deploymentId)
+  ) {
+    throw new ControlPlaneError("control plane provision ids were not uuids");
+  }
+  const fetchImpl = options.fetch ?? fetch;
+  const now = options.now ?? Date.now;
+  const accessToken = await accessTokenFor(config, fetchImpl, now);
+  const response = await fetchImpl(
+    `${config.baseUrl}/api/v1/projects/${encodeURIComponent(projectId)}/environments/${encodeURIComponent(environmentId)}/provision`,
+    {
+      method: "POST",
+      headers: {
+        accept: "application/json",
+        authorization: `Bearer ${accessToken}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ deployment_id: deploymentId }),
+      cache: "no-store",
+    },
+  );
+  if (response.status === 404) {
+    await discardResponseBody(response);
+    throw new ControlPlaneError("control plane provision target was not found (404)", 404);
+  }
+  if (response.status === 503) {
+    await discardResponseBody(response);
+    throw new ControlPlaneError("control plane provision queue unavailable (503)", 503);
+  }
+  if (!response.ok) {
+    await discardResponseBody(response);
+    throw new ControlPlaneError(`control plane provision request failed (${response.status})`, response.status);
+  }
+  await discardResponseBody(response);
+}
+
+export async function createControlPlaneDeploymentAndProvision(
+  config: ControlPlaneConfig,
+  input: { repoUrl: string; projectId: string; environmentId: string },
+  options: ListOptions = {},
+): Promise<Deployment> {
+  // Resolve the environment first so a bad target never creates a deployment row.
+  await getControlPlaneEnvironment(config, input.projectId, input.environmentId, options);
+  const deployment = await createControlPlaneDeployment(config, input.repoUrl, options);
+  try {
+    await provisionControlPlaneEnvironment(
+      config,
+      input.projectId,
+      input.environmentId,
+      deployment.id,
+      options,
+    );
+  } catch (cause) {
+    // Deployment exists; attach its id for the console error payload (do not navigate —
+    // opening logs before a seed line would hit stub Done).
+    if (cause instanceof ControlPlaneError) {
+      throw new ControlPlaneError(cause.message, cause.status, deployment.id, { cause });
+    }
+    const message =
+      cause instanceof Error ? cause.message : "control plane provision request failed";
+    throw new ControlPlaneError(message, 502, deployment.id, { cause });
+  }
+  return deployment;
+}
+
 export async function getControlPlaneDeployment(
   config: ControlPlaneConfig,
   deploymentId: string,
   options: ListOptions = {},
 ): Promise<Deployment> {
-  if (!isDeploymentLogId(deploymentId)) {
+  if (!isControlPlaneUuid(deploymentId)) {
     throw new ControlPlaneError("control plane deployment id was not a uuid");
   }
   const fetchImpl = options.fetch ?? fetch;
@@ -386,18 +547,95 @@ export async function getControlPlaneDeployment(
   return parseDeployment(await response.json());
 }
 
+async function listProjectEnvironments(
+  config: ControlPlaneConfig,
+  project: Project,
+  accessToken: string,
+  fetchImpl: typeof fetch,
+): Promise<EnvironmentOption[]> {
+  return listPaginatedProjectCollection(
+    config,
+    project.id,
+    accessToken,
+    fetchImpl,
+    "environments",
+    (body) => {
+      if (!body || typeof body !== "object" || !Array.isArray((body as { items?: unknown }).items)) {
+        throw new ControlPlaneError("control plane environments response was not a page");
+      }
+      const record = body as { items: unknown[]; total?: unknown };
+      const pageItems = record.items.map((row) => parseEnvironmentOption(row, project));
+      return {
+        items: pageItems,
+        total: typeof record.total === "number" ? record.total : pageItems.length,
+      };
+    },
+  );
+}
+
+function parseEnvironmentOption(
+  value: unknown,
+  project: Pick<Project, "id" | "slug" | "name">,
+): EnvironmentOption {
+  if (!value || typeof value !== "object") {
+    throw new ControlPlaneError("control plane environments response was not a page");
+  }
+  const row = value as Record<string, unknown>;
+  if (
+    typeof row.id !== "string" ||
+    typeof row.project_id !== "string" ||
+    typeof row.slug !== "string" ||
+    typeof row.name !== "string" ||
+    typeof row.kind !== "string" ||
+    typeof row.region !== "string"
+  ) {
+    throw new ControlPlaneError("control plane environments response was not a page");
+  }
+  if (row.project_id !== project.id) {
+    throw new ControlPlaneError("control plane environments response was not a page");
+  }
+  return {
+    id: row.id,
+    project_id: row.project_id,
+    project_slug: project.slug,
+    project_name: project.name,
+    slug: row.slug,
+    name: row.name,
+    kind: row.kind,
+    region: row.region,
+  };
+}
+
 async function listProjectSandboxes(
   config: ControlPlaneConfig,
   projectId: string,
   accessToken: string,
   fetchImpl: typeof fetch,
 ): Promise<Sandbox[]> {
-  const items: Sandbox[] = [];
+  return listPaginatedProjectCollection(
+    config,
+    projectId,
+    accessToken,
+    fetchImpl,
+    "sandboxes",
+    parseSandboxPage,
+  );
+}
+
+async function listPaginatedProjectCollection<T>(
+  config: ControlPlaneConfig,
+  projectId: string,
+  accessToken: string,
+  fetchImpl: typeof fetch,
+  resource: "sandboxes" | "environments",
+  parsePage: (body: unknown) => { items: T[]; total: number },
+): Promise<T[]> {
+  const items: T[] = [];
   let offset = 0;
   let total = 0;
-  for (let page = 0; page < SANDBOX_PAGE_CAP; page += 1) {
+  for (let page = 0; page < PAGE_CAP; page += 1) {
     const response = await fetchImpl(
-      `${config.baseUrl}/api/v1/projects/${encodeURIComponent(projectId)}/sandboxes?limit=${PAGE_LIMIT}&offset=${offset}`,
+      `${config.baseUrl}/api/v1/projects/${encodeURIComponent(projectId)}/${resource}?limit=${PAGE_LIMIT}&offset=${offset}`,
       {
         headers: {
           accept: "application/json",
@@ -408,17 +646,22 @@ async function listProjectSandboxes(
     );
     if (!response.ok) {
       throw new ControlPlaneError(
-        `control plane sandboxes request failed (${response.status})`,
+        `control plane ${resource} request failed (${response.status})`,
         response.status,
       );
     }
-    const parsed = parseSandboxPage(await response.json());
+    const parsed = parsePage(await response.json());
     items.push(...parsed.items);
     total = parsed.total;
     if (parsed.items.length === 0 || items.length >= total) {
       break;
     }
     offset += parsed.items.length;
+  }
+  if (items.length < total) {
+    throw new ControlPlaneError(
+      `control plane ${resource} list exceeded page cap (${PAGE_CAP})`,
+    );
   }
   return items;
 }

@@ -7,11 +7,13 @@ import {
   ControlPlaneError,
   listControlPlaneProjects,
   listControlPlaneSandboxes,
+  listControlPlaneEnvironments,
   openControlPlaneDeploymentLogs,
   succeedControlPlaneDeployment,
   readControlPlaneConfig,
   authenticateControlPlaneUser,
   createControlPlaneDeployment,
+  createControlPlaneDeploymentAndProvision,
   getControlPlaneDeployment,
   createControlPlaneSession,
   linkControlPlaneGoogleUser,
@@ -171,6 +173,84 @@ describe("listControlPlaneProjects", () => {
       },
     );
   });
+
+  it("pages through projects past the first limit", async () => {
+    clearControlPlaneTokenCache();
+    const first = {
+      id: "11111111-1111-4111-8111-111111111111",
+      slug: "payments",
+      name: "Payments",
+      description: null,
+      created_at: "2026-10-18T00:00:00.000Z",
+      updated_at: "2026-10-18T00:00:00.000Z",
+    };
+    const second = {
+      ...first,
+      id: "22222222-2222-4222-8222-222222222222",
+      slug: "platform",
+      name: "Platform",
+    };
+    const urls: string[] = [];
+    const fetchImpl: typeof fetch = async (input) => {
+      const url = String(input);
+      if (url.endsWith("/api/v1/auth/token")) {
+        return jsonResponse({ access_token: "issued-bearer", expires_in: 900 });
+      }
+      urls.push(url);
+      if (url.includes("offset=0")) {
+        return jsonResponse({ items: [first], total: 2, limit: 200, offset: 0 });
+      }
+      if (url.includes("offset=1")) {
+        return jsonResponse({ items: [second], total: 2, limit: 200, offset: 1 });
+      }
+      return jsonResponse({ items: [], total: 2, limit: 200, offset: 2 });
+    };
+
+    const page = await listControlPlaneProjects(config, { fetch: fetchImpl });
+    assert.equal(page.total, 2);
+    assert.deepEqual(
+      page.items.map((row) => row.slug),
+      ["payments", "platform"],
+    );
+    assert.equal(urls.filter((url) => url.includes("/api/v1/projects?")).length, 2);
+  });
+
+  it("throws when the project list exceeds the page cap", async () => {
+    clearControlPlaneTokenCache();
+    const fetchImpl: typeof fetch = async (input) => {
+      const url = String(input);
+      if (url.endsWith("/api/v1/auth/token")) {
+        return jsonResponse({ access_token: "issued-bearer", expires_in: 900 });
+      }
+      // Always return one item and a huge total so the cap loop never finishes.
+      const offsetMatch = /offset=(\d+)/.exec(url);
+      const offset = offsetMatch ? Number(offsetMatch[1]) : 0;
+      return jsonResponse({
+        items: [
+          {
+            id: `11111111-1111-4111-8111-${String(offset).padStart(12, "0")}`,
+            slug: `p-${offset}`,
+            name: `Project ${offset}`,
+            description: null,
+            created_at: "2026-10-18T00:00:00.000Z",
+            updated_at: "2026-10-18T00:00:00.000Z",
+          },
+        ],
+        total: 10_000,
+        limit: 200,
+        offset,
+      });
+    };
+
+    await assert.rejects(
+      () => listControlPlaneProjects(config, { fetch: fetchImpl }),
+      (cause: unknown) => {
+        assert.ok(cause instanceof ControlPlaneError);
+        assert.match(cause.message, /exceeded page cap/);
+        return true;
+      },
+    );
+  });
 });
 
 const projectRow = {
@@ -194,6 +274,112 @@ const sandboxRow = {
   created_at: "2026-10-18T00:00:00.000Z",
   host_id: null,
 };
+
+const environmentRow = {
+  id: "55555555-5555-4555-8555-555555555555",
+  project_id: projectRow.id,
+  slug: "prod",
+  name: "Prod",
+  kind: "prod",
+  region: "ams3",
+  created_at: "2026-10-18T00:00:00.000Z",
+  updated_at: "2026-10-18T00:00:00.000Z",
+};
+
+describe("listControlPlaneEnvironments", () => {
+  it("lists every project's environments with one bearer", async () => {
+    clearControlPlaneTokenCache();
+    const calls: string[] = [];
+    const fetchImpl: typeof fetch = async (input, init) => {
+      const url = String(input);
+      calls.push(url);
+      const headers = new Headers(init?.headers);
+      if (url.endsWith("/api/v1/auth/token")) {
+        return jsonResponse({ access_token: "issued-bearer", expires_in: 900 });
+      }
+      if (url.includes("/api/v1/projects?") && !url.includes("/environments")) {
+        assert.equal(headers.get("authorization"), "Bearer issued-bearer");
+        return jsonResponse({
+          items: [
+            projectRow,
+            { ...projectRow, id: "22222222-2222-4222-8222-222222222222", slug: "platform" },
+          ],
+          total: 2,
+          limit: 200,
+          offset: 0,
+        });
+      }
+      assert.equal(headers.get("authorization"), "Bearer issued-bearer");
+      if (url.includes(projectRow.id) && url.includes("offset=0")) {
+        return jsonResponse({ items: [environmentRow], total: 2, limit: 200, offset: 0 });
+      }
+      if (url.includes(projectRow.id)) {
+        return jsonResponse({
+          items: [{ ...environmentRow, id: "66666666-6666-4666-8666-666666666666", slug: "staging" }],
+          total: 2,
+          limit: 200,
+          offset: 1,
+        });
+      }
+      return jsonResponse({ items: [], total: 0, limit: 200, offset: 0 });
+    };
+
+    const items = await listControlPlaneEnvironments(config, { fetch: fetchImpl });
+    assert.equal(items.length, 2);
+    assert.equal(items[0]?.slug, "prod");
+    assert.equal(items[0]?.project_slug, "payments");
+    assert.equal(calls.filter((url) => url.endsWith("/api/v1/auth/token")).length, 1);
+    assert.equal(calls.filter((url) => url.includes("/environments?")).length, 3);
+    assert.equal(JSON.stringify(items).includes("super-secret"), false);
+  });
+
+  it("does not include the upstream body when an environment list fails", async () => {
+    clearControlPlaneTokenCache();
+    const fetchImpl: typeof fetch = async (input) => {
+      const url = String(input);
+      if (url.endsWith("/api/v1/auth/token")) {
+        return jsonResponse({ access_token: "issued-bearer", expires_in: 900 });
+      }
+      if (url.includes("/api/v1/projects?") && !url.includes("/environments")) {
+        return jsonResponse({ items: [projectRow], total: 1, limit: 200, offset: 0 });
+      }
+      return jsonResponse({ detail: "nope", client_secret: "super-secret" }, 503);
+    };
+
+    await assert.rejects(
+      () => listControlPlaneEnvironments(config, { fetch: fetchImpl }),
+      (cause: unknown) => {
+        assert.ok(cause instanceof ControlPlaneError);
+        assert.equal(cause.message.includes("super-secret"), false);
+        assert.match(cause.message, /environments request failed \(503\)/);
+        return true;
+      },
+    );
+  });
+
+  it("rejects a malformed environments page", async () => {
+    clearControlPlaneTokenCache();
+    const fetchImpl: typeof fetch = async (input) => {
+      const url = String(input);
+      if (url.endsWith("/api/v1/auth/token")) {
+        return jsonResponse({ access_token: "issued-bearer", expires_in: 900 });
+      }
+      if (url.includes("/api/v1/projects?") && !url.includes("/environments")) {
+        return jsonResponse({ items: [projectRow], total: 1, limit: 200, offset: 0 });
+      }
+      return jsonResponse({ items: "nope" });
+    };
+
+    await assert.rejects(
+      () => listControlPlaneEnvironments(config, { fetch: fetchImpl }),
+      (cause: unknown) => {
+        assert.ok(cause instanceof ControlPlaneError);
+        assert.match(cause.message, /was not a page/);
+        return true;
+      },
+    );
+  });
+});
 
 describe("listControlPlaneSandboxes", () => {
   it("lists every project's sandboxes with one bearer", async () => {
@@ -365,6 +551,231 @@ describe("openControlPlaneDeploymentLogs", () => {
         assert.ok(cause instanceof ControlPlaneError);
         assert.equal(cause.message.includes("super-secret"), false);
         assert.match(cause.message, /not found \(404\)/);
+        return true;
+      },
+    );
+  });
+});
+
+describe("createControlPlaneDeploymentAndProvision", () => {
+  it("resolves the environment, creates the deployment, then queues provision", async () => {
+    clearControlPlaneTokenCache();
+    const projectId = "11111111-1111-4111-8111-111111111111";
+    const environmentId = "22222222-2222-4222-8222-222222222222";
+    const deploymentId = "33333333-3333-4333-8333-333333333333";
+    const calls: string[] = [];
+    const fetchImpl: typeof fetch = async (input, init) => {
+      const url = String(input);
+      if (url.endsWith("/api/v1/auth/token")) {
+        return jsonResponse({ access_token: "issued-bearer", expires_in: 900 });
+      }
+      calls.push(`${init?.method ?? "GET"} ${url}`);
+      if (url.endsWith(`/projects/${projectId}/environments/${environmentId}`)) {
+        return jsonResponse({
+          id: environmentId,
+          project_id: projectId,
+          slug: "prod",
+          name: "Prod",
+          kind: "prod",
+          region: "ams3",
+          created_at: "2026-10-18T00:00:00.000Z",
+          updated_at: "2026-10-18T00:00:00.000Z",
+        });
+      }
+      if (url.endsWith("/api/v1/deployments") && init?.method === "POST") {
+        return jsonResponse({
+          id: deploymentId,
+          repo_url: "https://github.com/acme/payments",
+          owner: "acme",
+          repo: "payments",
+          status: "running",
+          started_at: "2026-10-18T00:00:00.000Z",
+        });
+      }
+      if (url.endsWith(`/environments/${environmentId}/provision`) && init?.method === "POST") {
+        assert.equal(init.body, JSON.stringify({ deployment_id: deploymentId }));
+        return jsonResponse({
+          job_id: "44444444-4444-4444-8444-444444444444",
+          kind: "provision",
+          project_id: projectId,
+          environment_id: environmentId,
+          status: "queued",
+        });
+      }
+      return jsonResponse({ detail: "unexpected", secret: "super-secret" }, 500);
+    };
+
+    const deployment = await createControlPlaneDeploymentAndProvision(
+      config,
+      {
+        repoUrl: "https://github.com/acme/payments",
+        projectId,
+        environmentId,
+      },
+      { fetch: fetchImpl },
+    );
+    assert.equal(deployment.id, deploymentId);
+    assert.ok(calls.some((call) => call.includes(`/environments/${environmentId}`) && call.startsWith("GET")));
+    assert.ok(calls.some((call) => call.includes("/api/v1/deployments") && call.startsWith("POST")));
+    assert.ok(calls.some((call) => call.includes("/provision") && call.startsWith("POST")));
+  });
+
+  it("does not create a deployment when the environment is missing", async () => {
+    clearControlPlaneTokenCache();
+    const projectId = "11111111-1111-4111-8111-111111111111";
+    const environmentId = "22222222-2222-4222-8222-222222222222";
+    let created = false;
+    const fetchImpl: typeof fetch = async (input, init) => {
+      const url = String(input);
+      if (url.endsWith("/api/v1/auth/token")) {
+        return jsonResponse({ access_token: "issued-bearer", expires_in: 900 });
+      }
+      if (url.endsWith(`/environments/${environmentId}`)) {
+        return jsonResponse({ detail: "missing", secret: "super-secret" }, 404);
+      }
+      if (url.endsWith("/api/v1/deployments") && init?.method === "POST") {
+        created = true;
+      }
+      return jsonResponse({ detail: "unexpected" }, 500);
+    };
+
+    await assert.rejects(
+      () =>
+        createControlPlaneDeploymentAndProvision(
+          config,
+          {
+            repoUrl: "https://github.com/acme/payments",
+            projectId,
+            environmentId,
+          },
+          { fetch: fetchImpl },
+        ),
+      (cause: unknown) => {
+        assert.ok(cause instanceof ControlPlaneError);
+        assert.equal(cause.message.includes("super-secret"), false);
+        assert.match(cause.message, /not found \(404\)/);
+        return true;
+      },
+    );
+    assert.equal(created, false);
+  });
+
+  it("attaches the deployment id when provision enqueue fails after create", async () => {
+    clearControlPlaneTokenCache();
+    const projectId = "11111111-1111-4111-8111-111111111111";
+    const environmentId = "22222222-2222-4222-8222-222222222222";
+    const deploymentId = "33333333-3333-4333-8333-333333333333";
+    const fetchImpl: typeof fetch = async (input, init) => {
+      const url = String(input);
+      if (url.endsWith("/api/v1/auth/token")) {
+        return jsonResponse({ access_token: "issued-bearer", expires_in: 900 });
+      }
+      if (url.endsWith(`/environments/${environmentId}`) && (init?.method ?? "GET") === "GET") {
+        return jsonResponse({
+          id: environmentId,
+          project_id: projectId,
+          slug: "prod",
+          name: "Prod",
+          kind: "prod",
+          region: "ams3",
+          created_at: "2026-10-18T00:00:00.000Z",
+          updated_at: "2026-10-18T00:00:00.000Z",
+        });
+      }
+      if (url.endsWith("/api/v1/deployments") && init?.method === "POST") {
+        return jsonResponse({
+          id: deploymentId,
+          repo_url: "https://github.com/acme/payments",
+          owner: "acme",
+          repo: "payments",
+          status: "running",
+          started_at: "2026-10-18T00:00:00.000Z",
+        });
+      }
+      if (url.endsWith(`/environments/${environmentId}/provision`) && init?.method === "POST") {
+        return jsonResponse({ detail: "queue down", secret: "super-secret" }, 503);
+      }
+      return jsonResponse({ detail: "unexpected" }, 500);
+    };
+
+    await assert.rejects(
+      () =>
+        createControlPlaneDeploymentAndProvision(
+          config,
+          {
+            repoUrl: "https://github.com/acme/payments",
+            projectId,
+            environmentId,
+          },
+          { fetch: fetchImpl },
+        ),
+      (cause: unknown) => {
+        assert.ok(cause instanceof ControlPlaneError);
+        assert.equal(cause.status, 503);
+        assert.equal(cause.deploymentId, deploymentId);
+        assert.equal(cause.message.includes("super-secret"), false);
+        assert.match(cause.message, /queue unavailable \(503\)/);
+        assert.ok(cause.cause instanceof ControlPlaneError);
+        return true;
+      },
+    );
+  });
+
+  it("attaches the deployment id when provision throws a non-ControlPlaneError", async () => {
+    clearControlPlaneTokenCache();
+    const projectId = "11111111-1111-4111-8111-111111111111";
+    const environmentId = "22222222-2222-4222-8222-222222222222";
+    const deploymentId = "33333333-3333-4333-8333-333333333333";
+    const fetchImpl: typeof fetch = async (input, init) => {
+      const url = String(input);
+      if (url.endsWith("/api/v1/auth/token")) {
+        return jsonResponse({ access_token: "issued-bearer", expires_in: 900 });
+      }
+      if (url.endsWith(`/environments/${environmentId}`) && (init?.method ?? "GET") === "GET") {
+        return jsonResponse({
+          id: environmentId,
+          project_id: projectId,
+          slug: "prod",
+          name: "Prod",
+          kind: "prod",
+          region: "ams3",
+          created_at: "2026-10-18T00:00:00.000Z",
+          updated_at: "2026-10-18T00:00:00.000Z",
+        });
+      }
+      if (url.endsWith("/api/v1/deployments") && init?.method === "POST") {
+        return jsonResponse({
+          id: deploymentId,
+          repo_url: "https://github.com/acme/payments",
+          owner: "acme",
+          repo: "payments",
+          status: "running",
+          started_at: "2026-10-18T00:00:00.000Z",
+        });
+      }
+      if (url.endsWith(`/environments/${environmentId}/provision`) && init?.method === "POST") {
+        throw new TypeError("network down");
+      }
+      return jsonResponse({ detail: "unexpected" }, 500);
+    };
+
+    await assert.rejects(
+      () =>
+        createControlPlaneDeploymentAndProvision(
+          config,
+          {
+            repoUrl: "https://github.com/acme/payments",
+            projectId,
+            environmentId,
+          },
+          { fetch: fetchImpl },
+        ),
+      (cause: unknown) => {
+        assert.ok(cause instanceof ControlPlaneError);
+        assert.equal(cause.status, 502);
+        assert.equal(cause.deploymentId, deploymentId);
+        assert.match(cause.message, /network down/);
+        assert.ok(cause.cause instanceof TypeError);
         return true;
       },
     );
