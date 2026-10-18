@@ -50,7 +50,7 @@ describe("lookupSession", () => {
       token: "expired-token",
       config,
       resolve: async () => {
-        throw new ControlPlaneError("control plane session was not found (404)");
+        throw new ControlPlaneError("control plane session was not found (404)", 404);
       },
     });
     assert.deepEqual(session, { status: "anonymous" });
@@ -69,11 +69,11 @@ describe("lookupSession", () => {
 
   it("treats only a not-found resolve as signed out", () => {
     assert.equal(
-      isMissingControlPlaneSession(new ControlPlaneError("control plane session was not found (404)")),
+      isMissingControlPlaneSession(new ControlPlaneError("control plane session was not found (404)", 404)),
       true,
     );
     assert.equal(
-      isMissingControlPlaneSession(new ControlPlaneError("control plane session request failed (502)")),
+      isMissingControlPlaneSession(new ControlPlaneError("control plane session request failed (502)", 502)),
       false,
     );
   });

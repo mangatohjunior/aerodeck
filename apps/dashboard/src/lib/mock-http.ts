@@ -11,8 +11,8 @@ export function jsonControlPlaneError(
   cause: unknown,
   event: string,
   notFoundDetail = "Deployment not found.",
-) {
-  if (cause instanceof ControlPlaneError && cause.message.includes("not found (404)")) {
+): NextResponse {
+  if (cause instanceof ControlPlaneError && cause.status === 404) {
     return jsonError(404, notFoundDetail, "not_found");
   }
   const detail = cause instanceof ControlPlaneError ? cause.message : "request failed";

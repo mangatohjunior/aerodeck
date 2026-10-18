@@ -92,6 +92,8 @@ async def test_missing_deployment_is_not_found(client: AsyncClient, auth: dict[s
 async def test_deployment_routes_require_a_token(client: AsyncClient) -> None:
     created = await client.post(DEPLOYMENTS, json={"repo_url": REPO})
     listed = await client.get(DEPLOYMENTS)
+    succeeded = await client.post(f"{DEPLOYMENTS}/{uuid4()}/succeeded")
 
     assert created.status_code == 401
     assert listed.status_code == 401
+    assert succeeded.status_code == 401

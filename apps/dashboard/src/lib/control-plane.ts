@@ -36,9 +36,12 @@ type ListOptions = {
 const tokens = new Map<string, CachedToken>();
 
 export class ControlPlaneError extends Error {
-  constructor(message: string) {
+  readonly status?: number;
+
+  constructor(message: string, status?: number) {
     super(message);
     this.name = "ControlPlaneError";
+    this.status = status;
   }
 }
 
@@ -81,6 +84,7 @@ export async function listControlPlaneProjects(
   if (!response.ok) {
     throw new ControlPlaneError(
       `control plane projects request failed (${response.status})`,
+      response.status,
     );
   }
   return parseProjectPage(await response.json());
@@ -133,11 +137,12 @@ export async function openControlPlaneDeploymentLogs(
     },
   );
   if (response.status === 404) {
-    throw new ControlPlaneError("control plane deployment logs were not found (404)");
+    throw new ControlPlaneError("control plane deployment logs were not found (404)", 404);
   }
   if (!response.ok || !response.body) {
     throw new ControlPlaneError(
       `control plane deployment logs request failed (${response.status})`,
+      response.status,
     );
   }
   return response.body;
@@ -166,10 +171,10 @@ export async function succeedControlPlaneDeployment(
     },
   );
   if (response.status === 404) {
-    throw new ControlPlaneError("control plane deployment was not found (404)");
+    throw new ControlPlaneError("control plane deployment was not found (404)", 404);
   }
   if (!response.ok) {
-    throw new ControlPlaneError(`control plane deployment request failed (${response.status})`);
+    throw new ControlPlaneError(`control plane deployment request failed (${response.status})`, response.status);
   }
   return parseDeployment(await response.json());
 }
@@ -194,7 +199,7 @@ export function registerControlPlaneUser(
     options,
     (response) => {
       if (response.status === 409) {
-        throw new ControlPlaneError("control plane register conflict (409)");
+        throw new ControlPlaneError("control plane register conflict (409)", 409);
       }
     },
   );
@@ -214,7 +219,7 @@ export function authenticateControlPlaneUser(
     options,
     async (response) => {
       if (response.status === 401 && (await errorCode(response)) === "invalid_credentials") {
-        throw new ControlPlaneError("control plane login rejected (401)");
+        throw new ControlPlaneError("control plane login rejected (401)", 401);
       }
     },
   );
@@ -234,7 +239,7 @@ export function linkControlPlaneGoogleUser(
     options,
     (response) => {
       if (response.status === 409) {
-        throw new ControlPlaneError("control plane google link conflict (409)");
+        throw new ControlPlaneError("control plane google link conflict (409)", 409);
       }
     },
   );
@@ -247,10 +252,10 @@ export async function createControlPlaneSession(
 ): Promise<{ token: string; user: ControlPlaneUser }> {
   const response = await authorizedPost(config, "/api/v1/console-sessions", { user_id: userId }, options);
   if (response.status === 404) {
-    throw new ControlPlaneError("control plane session user was not found (404)");
+    throw new ControlPlaneError("control plane session user was not found (404)", 404);
   }
   if (!response.ok) {
-    throw new ControlPlaneError(`control plane session request failed (${response.status})`);
+    throw new ControlPlaneError(`control plane session request failed (${response.status})`, response.status);
   }
   const body = (await response.json()) as { token?: unknown; user?: unknown };
   if (typeof body.token !== "string" || body.token.length === 0) {
@@ -266,10 +271,10 @@ export async function readControlPlaneSession(
 ): Promise<ControlPlaneUser> {
   const response = await authorizedPost(config, "/api/v1/console-sessions/resolve", { token }, options);
   if (response.status === 404) {
-    throw new ControlPlaneError("control plane session was not found (404)");
+    throw new ControlPlaneError("control plane session was not found (404)", 404);
   }
   if (!response.ok) {
-    throw new ControlPlaneError(`control plane session request failed (${response.status})`);
+    throw new ControlPlaneError(`control plane session request failed (${response.status})`, response.status);
   }
   return parseControlPlaneUser(await response.json());
 }
@@ -283,7 +288,7 @@ export async function revokeControlPlaneSession(
   if (response.ok) {
     return;
   }
-  throw new ControlPlaneError(`control plane session logout failed (${response.status})`);
+  throw new ControlPlaneError(`control plane session logout failed (${response.status})`, response.status);
 }
 
 const DEPLOYMENT_PAGE_CAP = 20;
@@ -311,7 +316,7 @@ export async function listControlPlaneDeployments(
       },
     );
     if (!response.ok) {
-      throw new ControlPlaneError(`control plane deployments request failed (${response.status})`);
+      throw new ControlPlaneError(`control plane deployments request failed (${response.status})`, response.status);
     }
     const parsed = parseDeploymentPage(await response.json());
     items.push(...parsed.items);
@@ -343,10 +348,10 @@ export async function createControlPlaneDeployment(
     cache: "no-store",
   });
   if (response.status === 422) {
-    throw new ControlPlaneError("control plane deployment rejected (422)");
+    throw new ControlPlaneError("control plane deployment rejected (422)", 422);
   }
   if (!response.ok) {
-    throw new ControlPlaneError(`control plane deployment request failed (${response.status})`);
+    throw new ControlPlaneError(`control plane deployment request failed (${response.status})`, response.status);
   }
   return parseDeployment(await response.json());
 }
@@ -373,10 +378,10 @@ export async function getControlPlaneDeployment(
     },
   );
   if (response.status === 404) {
-    throw new ControlPlaneError("control plane deployment was not found (404)");
+    throw new ControlPlaneError("control plane deployment was not found (404)", 404);
   }
   if (!response.ok) {
-    throw new ControlPlaneError(`control plane deployment request failed (${response.status})`);
+    throw new ControlPlaneError(`control plane deployment request failed (${response.status})`, response.status);
   }
   return parseDeployment(await response.json());
 }
@@ -404,6 +409,7 @@ async function listProjectSandboxes(
     if (!response.ok) {
       throw new ControlPlaneError(
         `control plane sandboxes request failed (${response.status})`,
+        response.status,
       );
     }
     const parsed = parseSandboxPage(await response.json());
@@ -466,6 +472,7 @@ async function accessTokenFor(
   if (!response.ok) {
     throw new ControlPlaneError(
       `control plane token request failed (${response.status})`,
+      response.status,
     );
   }
 
@@ -592,7 +599,7 @@ async function postControlPlaneUser(
   const response = await authorizedPost(config, path, body, options);
   await reject(response);
   if (!response.ok) {
-    throw new ControlPlaneError(`${failure} (${response.status})`);
+    throw new ControlPlaneError(`${failure} (${response.status})`, response.status);
   }
   return parseControlPlaneUser(await response.json());
 }
