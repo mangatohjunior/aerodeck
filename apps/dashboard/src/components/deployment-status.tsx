@@ -81,7 +81,7 @@ export function DeploymentStatusView({ deployment, logSource }: DeploymentStatus
     }
     const mark = outcome === "succeeded" ? markDeploymentSucceeded : markDeploymentFailed;
     void mark(deployment.id)
-      .then(() => setStatus(outcome))
+      .then((stored) => setStatus(stored.status))
       .catch((cause: unknown) => {
         setError(cause instanceof Error ? cause.message : "Could not record the deployment status.");
       });

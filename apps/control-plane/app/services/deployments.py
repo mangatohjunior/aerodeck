@@ -44,7 +44,7 @@ class DeploymentService:
 
     async def mark_succeeded(self, deployment_id: uuid.UUID) -> Deployment:
         deployment = await self.get(deployment_id)
-        if deployment.status is DeploymentStatus.failed:
+        if deployment.status == DeploymentStatus.failed:
             logger.info("deployment %s already failed; leave unchanged", deployment_id)
             return deployment
         deployment.status = DeploymentStatus.succeeded
@@ -54,10 +54,10 @@ class DeploymentService:
 
     async def mark_failed(self, deployment_id: uuid.UUID) -> Deployment:
         deployment = await self.get(deployment_id)
-        if deployment.status is DeploymentStatus.succeeded:
+        if deployment.status == DeploymentStatus.succeeded:
             logger.info("deployment %s already succeeded; leave unchanged", deployment_id)
             return deployment
-        if deployment.status is DeploymentStatus.failed:
+        if deployment.status == DeploymentStatus.failed:
             logger.info("deployment %s already failed; leave unchanged", deployment_id)
             return deployment
         deployment.status = DeploymentStatus.failed
