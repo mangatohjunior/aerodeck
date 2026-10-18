@@ -471,7 +471,8 @@ export async function createControlPlaneDeploymentAndProvision(
       options,
     );
   } catch (cause) {
-    // Deployment exists; attach its id so the console can open /deployments/{id}.
+    // Deployment exists; attach its id for the console error payload (do not navigate —
+    // opening logs before a seed line would hit stub Done).
     if (cause instanceof ControlPlaneError) {
       throw new ControlPlaneError(cause.message, cause.status, deployment.id);
     }

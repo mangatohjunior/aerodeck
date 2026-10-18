@@ -1,23 +1,33 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { ProvisionEnqueueFailed, shouldOpenDeploymentAfterCreate } from "./api";
+import { errorFromFailedCreate, ProvisionEnqueueFailed } from "./api";
 
-describe("shouldOpenDeploymentAfterCreate", () => {
-  it("opens the deployment page after a successful create", () => {
-    assert.equal(
-      shouldOpenDeploymentAfterCreate({
-        id: "33333333-3333-4333-8333-333333333333",
-      }),
-      true,
+describe("errorFromFailedCreate", () => {
+  it("throws ProvisionEnqueueFailed for provision_enqueue_failed", () => {
+    const error = errorFromFailedCreate(
+      {
+        detail: "Deployment was created but provision could not be queued.",
+        code: "provision_enqueue_failed",
+        deployment_id: "33333333-3333-4333-8333-333333333333",
+      },
+      503,
     );
+    assert.ok(error instanceof ProvisionEnqueueFailed);
+    assert.equal(error.deploymentId, "33333333-3333-4333-8333-333333333333");
+    assert.match(error.message, /could not be queued/);
   });
 
-  it("does not open the deployment page when provision enqueue failed", () => {
-    const failure = new ProvisionEnqueueFailed(
-      "Deployment was created but provision could not be queued.",
-      "33333333-3333-4333-8333-333333333333",
+  it("does not treat a random error with deployment_id as enqueue failure", () => {
+    const error = errorFromFailedCreate(
+      {
+        detail: "Control plane request failed.",
+        code: "control_plane_unavailable",
+        deployment_id: "33333333-3333-4333-8333-333333333333",
+      },
+      502,
     );
-    assert.equal(shouldOpenDeploymentAfterCreate(failure), false);
+    assert.equal(error instanceof ProvisionEnqueueFailed, false);
+    assert.equal(error.message, "Control plane request failed.");
   });
 });

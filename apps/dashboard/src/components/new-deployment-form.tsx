@@ -15,11 +15,7 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  createDeployment,
-  ProvisionEnqueueFailed,
-  shouldOpenDeploymentAfterCreate,
-} from "@/lib/api";
+import { createDeployment, ProvisionEnqueueFailed } from "@/lib/api";
 import { parseGithubRepo } from "@/lib/github";
 import { useDeployEnvironments } from "@/lib/use-deploy-environments";
 import { cn } from "@/lib/utils";
@@ -62,15 +58,11 @@ export function NewDeploymentForm({ controlPlane = false }: { controlPlane?: boo
     setSubmitting(true);
     try {
       const deployment = await createDeployment(repoUrl, controlPlane, target);
-      if (shouldOpenDeploymentAfterCreate(deployment)) {
-        router.push(`/deployments/${deployment.id}`);
-      }
+      router.push(`/deployments/${deployment.id}`);
     } catch (cause) {
       if (cause instanceof ProvisionEnqueueFailed) {
         // Do not open the terminal: empty logs would stub Done and mark succeeded.
-        setError(
-          `${cause.message} Deployment ${cause.deploymentId} was stored, but provision was not queued.`,
-        );
+        setError(`${cause.message} (${cause.deploymentId})`);
         return;
       }
       setError(cause instanceof Error ? cause.message : "Deploy failed.");

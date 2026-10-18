@@ -27,38 +27,27 @@ export class ProvisionEnqueueFailed extends Error {
   }
 }
 
-/** True only for a successful create that should open `/deployments/{id}`. */
-export function shouldOpenDeploymentAfterCreate(result: unknown): result is { id: string } {
-  return (
-    !!result &&
-    typeof result === "object" &&
-    "id" in result &&
-    typeof (result as { id: unknown }).id === "string" &&
-    !(result instanceof ProvisionEnqueueFailed)
-  );
+/** Map a failed Deploy create response; used by createDeployment and tests. */
+export function errorFromFailedCreate(body: ApiError, status: number): Error {
+  if (
+    body.code === "provision_enqueue_failed" &&
+    typeof body.deployment_id === "string" &&
+    body.deployment_id.length > 0
+  ) {
+    return new ProvisionEnqueueFailed(
+      body.detail ?? `Request failed (${status})`,
+      body.deployment_id,
+    );
+  }
+  return new Error(body.detail ?? `Request failed (${status})`);
 }
 
 async function readJson<T>(response: Response): Promise<T> {
   const body = (await response.json()) as T | ApiError;
   if (!response.ok) {
-    const error = body as ApiError;
-    if (
-      error.code === "provision_enqueue_failed" &&
-      typeof error.deployment_id === "string" &&
-      error.deployment_id.length > 0
-    ) {
-      throw new ProvisionEnqueueFailed(
-        error.detail ?? `Request failed (${response.status})`,
-        error.deployment_id,
-      );
-    }
-    throw new Error(error.detail ?? `Request failed (${response.status})`);
+    throw errorFromFailedCreate(body as ApiError, response.status);
   }
   return body as T;
-}
-
-async function readCreateDeploymentResponse(response: Response): Promise<Deployment> {
-  return readJson<Deployment>(response);
 }
 
 export async function fetchHealth(): Promise<{ status: string; mode: string }> {
@@ -122,7 +111,7 @@ export async function createDeployment(
     credentials: "same-origin",
     body: JSON.stringify(body),
   });
-  return readCreateDeploymentResponse(response);
+  return readJson<Deployment>(response);
 }
 
 export async function fetchLogSource(): Promise<ProjectSource> {
