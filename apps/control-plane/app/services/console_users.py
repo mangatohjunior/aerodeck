@@ -35,6 +35,12 @@ class ConsoleUserService:
         return user
 
     async def link_google(self, data: ConsoleUserGoogleLink) -> ConsoleUser:
+        try:
+            return await self._link_google(data)
+        except IntegrityError:
+            return await self._finish_google_race(data)
+
+    async def _link_google(self, data: ConsoleUserGoogleLink) -> ConsoleUser:
         by_subject = await self._users.get_by_subject(data.subject)
         by_email = await self._users.get_by_email(data.email)
         if by_subject is not None and (by_email is None or by_subject.id != by_email.id):
@@ -44,18 +50,31 @@ class ConsoleUserService:
                 raise ConflictError("Google account is already linked")
             if by_email.google_subject == data.subject:
                 return by_email
-            by_email.google_subject = data.subject
-            try:
-                stored = await self._users.save(by_email)
-            except IntegrityError as exc:
-                raise ConflictError("Google account is already linked") from exc
-            logger.info("linked google subject for console user %s", stored.id)
-            return stored
-        try:
-            stored = await self._users.add(
-                ConsoleUser(email=data.email, password_hash=None, google_subject=data.subject)
-            )
-        except IntegrityError as exc:
-            raise ConflictError("Google account is already linked") from exc
+            return await self._attach_subject(by_email, data.subject)
+        stored = await self._users.add(
+            ConsoleUser(email=data.email, password_hash=None, google_subject=data.subject)
+        )
         logger.info("registered console user %s", stored.id)
         return stored
+
+    async def _attach_subject(self, user: ConsoleUser, subject: str) -> ConsoleUser:
+        user.google_subject = subject
+        try:
+            stored = await self._users.add(user)
+        except IntegrityError as exc:
+            raise ConflictError("Google account is already linked") from exc
+        logger.info("linked google subject for console user %s", stored.id)
+        return stored
+
+    async def _finish_google_race(self, data: ConsoleUserGoogleLink) -> ConsoleUser:
+        by_subject = await self._users.get_by_subject(data.subject)
+        by_email = await self._users.get_by_email(data.email)
+        if by_subject is not None and (by_email is None or by_subject.id != by_email.id):
+            raise ConflictError("Google account is already linked")
+        if by_email is None:
+            raise ConflictError("Google account is already linked")
+        if by_email.google_subject == data.subject:
+            return by_email
+        if by_email.google_subject is None:
+            return await self._attach_subject(by_email, data.subject)
+        raise ConflictError("Email is already registered")

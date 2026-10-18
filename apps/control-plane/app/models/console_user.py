@@ -5,7 +5,11 @@ from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
 
 
 class ConsoleUser(UUIDPrimaryKeyMixin, TimestampMixin, Base):
-    """An operator account. The password is stored only as a hash."""
+    """An operator account.
+
+    A password account stores only the hash. A Google-only account leaves
+    ``password_hash`` empty and stores the Google subject instead.
+    """
 
     __tablename__ = "console_users"
 

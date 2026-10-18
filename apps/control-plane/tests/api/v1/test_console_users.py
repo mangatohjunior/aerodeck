@@ -84,6 +84,16 @@ async def test_wrong_password_matches_unknown_email(client: AsyncClient, auth: d
     assert "another-pass" not in missing.text
 
 
+async def test_google_link_requires_a_token(client: AsyncClient) -> None:
+    response = await client.post(
+        f"{USERS}/google",
+        json={"email": "ada@example.com", "subject": "google-subject-1"},
+    )
+
+    assert response.status_code == 401
+    assert "google-subject-1" not in response.text
+
+
 async def test_google_link_creates_an_account_without_a_password(client: AsyncClient, auth: dict[str, str]) -> None:
     response = await client.post(
         f"{USERS}/google",

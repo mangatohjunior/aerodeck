@@ -1,4 +1,5 @@
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.console_user import ConsoleUser
@@ -10,7 +11,13 @@ class ConsoleUserRepository:
 
     async def add(self, user: ConsoleUser) -> ConsoleUser:
         self._session.add(user)
-        await self._session.flush()
+        try:
+            async with self._session.begin_nested():
+                await self._session.flush()
+        except IntegrityError:
+            self._session.expunge(user)
+            raise
+        await self._session.refresh(user)
         return user
 
     async def get_by_email(self, email: str) -> ConsoleUser | None:
@@ -20,9 +27,3 @@ class ConsoleUserRepository:
     async def get_by_subject(self, subject: str) -> ConsoleUser | None:
         result = await self._session.execute(select(ConsoleUser).where(ConsoleUser.google_subject == subject))
         return result.scalar_one_or_none()
-
-    async def save(self, user: ConsoleUser) -> ConsoleUser:
-        self._session.add(user)
-        await self._session.flush()
-        await self._session.refresh(user)
-        return user
