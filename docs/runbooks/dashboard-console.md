@@ -14,8 +14,18 @@ follow the same split. The terminal reads
 `GET /api/v1/deployments/{id}/logs` through
 `GET /api/console/deployments/{id}/logs` when the console client is set, and
 stays on `/api/mock/v1/deployments/{id}/logs` when it is not. An unknown
-deployment id does not stream. When the stub emits `Done`, the dashboard
-server records `succeeded` with `POST /api/v1/deployments/{id}/succeeded`.
+deployment id does not stream. When Redis is set and `aerodeck:deployment-logs:{id}` already has lines, the
+control-plane stream follows until `Done`, or until
+`AERODECK_DEPLOYMENT_LOG_FOLLOW_IDLE_SECONDS` (default 1800) elapses with no
+new line (it does not invent `Done`). Publishes do not left-trim the list (SSE
+cursor stays stable; TTL expires the key) and refuse past `MAX_LINES`. If the
+list is empty at open, it polls for up to
+`AERODECK_DEPLOYMENT_LOG_FIRST_PUBLISH_GRACE_SECONDS` (default 2) for the first
+line, then emits the three-line stub so the Terminal still reaches `Done`.
+Without Redis, the in-memory store is a snapshot of lines present at open, or
+the stub when empty. When the stream emits `Done`, the dashboard server records
+`succeeded` with `POST /api/v1/deployments/{id}/succeeded`. A down Redis broker
+returns `503` before the SSE body starts.
 The mock log route still marks its own row succeeded. Sign-in still
 posts to `/api/mock/v1/auth/login`. When the console client is set, that
 route checks `POST /api/v1/console-users/login` and sets `aerodeck_session`

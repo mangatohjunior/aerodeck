@@ -10,6 +10,7 @@ from httpx import ASGITransport, AsyncClient
 from app.core.config import Settings, get_settings
 from app.core.security import hash_client_secret
 from app.models import Base
+from app.services.deployment_logs import clear_memory_log_lines
 from main import create_app
 
 CLIENT_ID = "ci-deployer"
@@ -60,6 +61,7 @@ def app_factory() -> Callable[[Settings], FastAPI]:
 
 @pytest.fixture
 async def app(settings: Settings, app_factory: Callable[[Settings], FastAPI]) -> AsyncIterator[FastAPI]:
+    clear_memory_log_lines()
     application = app_factory(settings)
     async with LifespanManager(application):
         engine = application.state.engine
@@ -69,6 +71,7 @@ async def app(settings: Settings, app_factory: Callable[[Settings], FastAPI]) ->
         try:
             yield application
         finally:
+            clear_memory_log_lines()
             # A shared PostgreSQL database must be left empty for the next test.
             async with engine.begin() as connection:
                 await connection.run_sync(Base.metadata.drop_all)
