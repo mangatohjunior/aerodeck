@@ -7,7 +7,7 @@ import pytest
 from celery import Celery
 
 from app.core.queue import create_celery_app
-from app.services.deployment_logs import DONE_LINE, clear_memory_log_lines, published_lines
+from app.services.deployment_logs import DONE_LINE, clear_memory_log_lines, memory_log_lines, published_lines
 from app.services.provisioning import (
     JobKind,
     JobOutcome,
@@ -195,8 +195,6 @@ async def test_provision_failure_publishes_safe_line_then_done(
 async def test_transient_retry_does_not_publish_done_until_success(
     worker_app: Celery, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from app.services import deployment_logs as deployment_logs_mod
-
     monkeypatch.setattr(tasks, "get_settings", lambda: make_settings(database_url=None, redis_url=None))
     deployment_id = uuid4()
     mid_retry_lines: list[str] = []
@@ -209,7 +207,7 @@ async def test_transient_retry_does_not_publish_done_until_success(
             self.calls += 1
             if self.calls == 1:
                 raise TransientJobError("Error acquiring the state lock")
-            mid_retry_lines.extend(deployment_logs_mod._memory.get(str(deployment_id), []))
+            mid_retry_lines.extend(memory_log_lines(deployment_id))
             return JobOutcome(JobKind.provision, project_id, environment_id, changed=True, detail="done")
 
         def reconcile(self, *, project_id: str, environment_id: str, **_: str) -> JobOutcome:

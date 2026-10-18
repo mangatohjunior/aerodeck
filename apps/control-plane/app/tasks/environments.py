@@ -44,7 +44,7 @@ def _deployment_id_from_meta(meta: dict[str, str]) -> uuid.UUID | None:
     try:
         return uuid.UUID(raw)
     except ValueError:
-        logger.warning("event=deployment_id_invalid value=%r", raw)
+        logger.warning("event=deployment_id_invalid error_type=ValueError")
         return None
 
 

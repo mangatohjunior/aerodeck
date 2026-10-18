@@ -64,6 +64,11 @@ def clear_memory_log_lines() -> None:
     _memory.clear()
 
 
+def memory_log_lines(deployment_id: uuid.UUID) -> list[str]:
+    """Test seam: sync snapshot of in-memory lines (empty list when none)."""
+    return list(_memory.get(str(deployment_id), []))
+
+
 def _key(deployment_id: uuid.UUID) -> str:
     return f"{_KEY_PREFIX}{deployment_id}"
 
