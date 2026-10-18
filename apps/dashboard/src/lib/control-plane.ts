@@ -174,9 +174,10 @@ export async function openControlPlaneDeploymentLogs(
   return response.body;
 }
 
-export async function succeedControlPlaneDeployment(
+async function postDeploymentStatus(
   config: ControlPlaneConfig,
   deploymentId: string,
+  outcome: "succeeded" | "failed",
   options: ListOptions = {},
 ): Promise<Deployment> {
   if (!isControlPlaneUuid(deploymentId)) {
@@ -186,7 +187,7 @@ export async function succeedControlPlaneDeployment(
   const now = options.now ?? Date.now;
   const accessToken = await accessTokenFor(config, fetchImpl, now);
   const response = await fetchImpl(
-    `${config.baseUrl}/api/v1/deployments/${encodeURIComponent(deploymentId)}/succeeded`,
+    `${config.baseUrl}/api/v1/deployments/${encodeURIComponent(deploymentId)}/${outcome}`,
     {
       method: "POST",
       headers: {
@@ -203,6 +204,22 @@ export async function succeedControlPlaneDeployment(
     throw new ControlPlaneError(`control plane deployment request failed (${response.status})`, response.status);
   }
   return parseDeployment(await response.json());
+}
+
+export function succeedControlPlaneDeployment(
+  config: ControlPlaneConfig,
+  deploymentId: string,
+  options: ListOptions = {},
+): Promise<Deployment> {
+  return postDeploymentStatus(config, deploymentId, "succeeded", options);
+}
+
+export function failControlPlaneDeployment(
+  config: ControlPlaneConfig,
+  deploymentId: string,
+  options: ListOptions = {},
+): Promise<Deployment> {
+  return postDeploymentStatus(config, deploymentId, "failed", options);
 }
 
 export type ControlPlaneUser = {
@@ -317,7 +334,7 @@ export async function revokeControlPlaneSession(
   throw new ControlPlaneError(`control plane session logout failed (${response.status})`, response.status);
 }
 
-const DEPLOYMENT_STATUSES = new Set<DeploymentStatus>(["queued", "running", "succeeded"]);
+const DEPLOYMENT_STATUSES = new Set<DeploymentStatus>(["queued", "running", "succeeded", "failed"]);
 
 export async function listControlPlaneDeployments(
   config: ControlPlaneConfig,

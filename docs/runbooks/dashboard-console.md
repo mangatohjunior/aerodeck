@@ -14,13 +14,13 @@ lists environments via `GET /api/console/environments` and, on submit, queues
 `POST .../environments/{id}/provision` with the new `deployment_id` so the
 terminal can follow worker lines. If provision cannot be queued after create,
 the form stays put, disables Deploy, and shows a generic message so a retry
-does not create another orphan row. The JSON body still returns
-`deployment_id` for typed client handling and server logs, but the UI must not
-navigate to the terminal (opening empty logs would stub `Done`). Without the
-client, Deploy does not call provision. The list and the deployment page follow
-the same mock/control-plane split. Blocking stub-success for never-seeded rows
-is a follow-up (#127). Deploy uses a native `<select>` for environments until
-the dashboard UI kit gains a shadcn `Select`. The terminal reads
+does not create another orphan row; enqueue also marks that row `failed`. The
+JSON body still returns `deployment_id` for typed client handling and server
+logs, but the UI must not navigate to the terminal (opening empty logs would
+stub `Done`). Without the client, Deploy does not call provision. The list and
+the deployment page follow the same mock/control-plane split. Deploy uses a
+native `<select>` for environments until the dashboard UI kit gains a shadcn
+`Select`. The terminal reads
 `GET /api/v1/deployments/{id}/logs` through
 `GET /api/console/deployments/{id}/logs` when the console client is set, and
 stays on `/api/mock/v1/deployments/{id}/logs` when it is not. An unknown
@@ -37,9 +37,12 @@ the stub when empty. A provision job may publish those lines when queued with
 `{"deployment_id":"..."}` ([provision-environments.md](provision-environments.md)).
 Enqueue seeds a queued line first so the stub cannot emit `Done` before the
 worker. Success ends with `Done`; final provision failure publishes a failure
-line without `Done`. When the stream emits `Done`, the dashboard server records
-`succeeded` with `POST /api/v1/deployments/{id}/succeeded`. A down Redis broker
-returns `503` before the SSE body starts.
+line without `Done` and sets status `failed`. When the stream emits `Done`, the
+dashboard server records `succeeded` with `POST /api/v1/deployments/{id}/succeeded`.
+A failure line (`Provision queue failed` or `Provision failed:…`, matching the
+control-plane constants) triggers `POST /api/v1/deployments/{id}/failed`
+(idempotent if the worker already wrote it). A down Redis broker returns `503`
+before the SSE body starts.
 The mock log route still marks its own row succeeded. Sign-in still
 posts to `/api/mock/v1/auth/login`. When the console client is set, that
 route checks `POST /api/v1/console-users/login` and sets `aerodeck_session`

@@ -2,12 +2,14 @@
 
 import { useEffect, useRef, useState } from "react";
 
+import { isProvisionFailureLogLine } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 type TerminalProps = {
   streamUrl: string;
   className?: string;
   onComplete?: () => void;
+  onFailed?: () => void;
 };
 
 function stamp(text: string) {
@@ -15,12 +17,14 @@ function stamp(text: string) {
   return `${time}  ${text}`;
 }
 
-export function Terminal({ streamUrl, className, onComplete }: TerminalProps) {
+export function Terminal({ streamUrl, className, onComplete, onFailed }: TerminalProps) {
   const [lines, setLines] = useState<string[]>([]);
   const [streaming, setStreaming] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const onCompleteRef = useRef(onComplete);
+  const onFailedRef = useRef(onFailed);
   onCompleteRef.current = onComplete;
+  onFailedRef.current = onFailed;
 
   useEffect(() => {
     setLines([]);
@@ -34,6 +38,13 @@ export function Terminal({ streamUrl, className, onComplete }: TerminalProps) {
         setStreaming(false);
         source.close();
         onCompleteRef.current?.();
+        return;
+      }
+      if (isProvisionFailureLogLine(event.data)) {
+        setStreaming(false);
+        source.close();
+        onFailedRef.current?.();
+        return;
       }
     };
 

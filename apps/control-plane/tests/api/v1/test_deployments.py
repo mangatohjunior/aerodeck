@@ -44,6 +44,41 @@ async def test_deployment_logs_stream_mock_sse_lines(
     assert fetched.json()["status"] == "succeeded"
 
 
+async def test_deployment_mark_failed(client: AsyncClient, auth: dict[str, str]) -> None:
+    created = await client.post(DEPLOYMENTS, json={"repo_url": REPO}, headers=auth)
+    assert created.status_code == 201, created.text
+    deployment_id = created.json()["id"]
+
+    failed = await client.post(f"{DEPLOYMENTS}/{deployment_id}/failed", headers=auth)
+    assert failed.status_code == 200, failed.text
+    assert failed.json()["status"] == "failed"
+
+    again = await client.post(f"{DEPLOYMENTS}/{deployment_id}/failed", headers=auth)
+    assert again.status_code == 200, again.text
+    assert again.json()["status"] == "failed"
+
+    # Failed is sticky: succeeded must not clobber it.
+    succeeded = await client.post(f"{DEPLOYMENTS}/{deployment_id}/succeeded", headers=auth)
+    assert succeeded.status_code == 200, succeeded.text
+    assert succeeded.json()["status"] == "failed"
+
+
+async def test_deployment_mark_failed_does_not_clobber_succeeded(
+    client: AsyncClient, auth: dict[str, str]
+) -> None:
+    created = await client.post(DEPLOYMENTS, json={"repo_url": REPO}, headers=auth)
+    assert created.status_code == 201, created.text
+    deployment_id = created.json()["id"]
+
+    finished = await client.post(f"{DEPLOYMENTS}/{deployment_id}/succeeded", headers=auth)
+    assert finished.status_code == 200, finished.text
+    assert finished.json()["status"] == "succeeded"
+
+    failed = await client.post(f"{DEPLOYMENTS}/{deployment_id}/failed", headers=auth)
+    assert failed.status_code == 200, failed.text
+    assert failed.json()["status"] == "succeeded"
+
+
 async def test_deployment_logs_prefer_published_lines(
     client: AsyncClient, auth: dict[str, str]
 ) -> None:
@@ -155,6 +190,10 @@ async def test_unknown_deployment_does_not_stream(client: AsyncClient, auth: dic
     assert finished.status_code == 404
     assert finished.json()["code"] == "not_found"
 
+    failed = await client.post(f"{DEPLOYMENTS}/{missing}/failed", headers=auth)
+    assert failed.status_code == 404
+    assert failed.json()["code"] == "not_found"
+
 
 async def test_create_stores_a_github_repository(client: AsyncClient, auth: dict[str, str]) -> None:
     response = await client.post(
@@ -202,7 +241,9 @@ async def test_deployment_routes_require_a_token(client: AsyncClient) -> None:
     created = await client.post(DEPLOYMENTS, json={"repo_url": REPO})
     listed = await client.get(DEPLOYMENTS)
     succeeded = await client.post(f"{DEPLOYMENTS}/{uuid4()}/succeeded")
+    failed = await client.post(f"{DEPLOYMENTS}/{uuid4()}/failed")
 
     assert created.status_code == 401
     assert listed.status_code == 401
     assert succeeded.status_code == 401
+    assert failed.status_code == 401

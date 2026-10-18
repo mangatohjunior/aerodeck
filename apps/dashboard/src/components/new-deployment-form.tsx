@@ -75,11 +75,9 @@ export function NewDeploymentForm({ controlPlane = false }: { controlPlane?: boo
       router.push(`/deployments/${deployment.id}`);
     } catch (cause) {
       if (cause instanceof ProvisionEnqueueFailed) {
-        // Do not open the terminal or create another row; orphan cleanup is #127.
+        // Do not open the terminal or create another row; enqueue marks that row failed.
         setEnqueueBlocked(true);
-        setError(
-          `${cause.message} Do not Deploy again until that running row is cleaned up.`,
-        );
+        setError(`${cause.message} Do not Deploy again; that row may already be marked failed.`);
         return;
       }
       setError(cause instanceof Error ? cause.message : "Deploy failed.");

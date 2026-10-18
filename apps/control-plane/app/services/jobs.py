@@ -5,6 +5,7 @@ swap in an in-process implementation.
 """
 
 import uuid
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -22,6 +23,8 @@ from app.services.environments import EnvironmentService
 from app.services.provisioning import JobKind
 
 logger = get_logger("services.jobs")
+
+MarkDeploymentFailed = Callable[[uuid.UUID], Awaitable[None]]
 
 
 class JobDispatcher(Protocol):
@@ -46,11 +49,13 @@ class JobService:
         deployments: DeploymentService,
         *,
         redis_url: str | None,
+        mark_deployment_failed: MarkDeploymentFailed,
     ) -> None:
         self._dispatcher = dispatcher
         self._environments = environments
         self._deployments = deployments
         self._redis_url = redis_url
+        self._mark_deployment_failed = mark_deployment_failed
 
     async def enqueue(
         self,
@@ -95,6 +100,8 @@ class JobService:
                         linked_deployment,
                         type(publish_exc).__name__,
                     )
+                # Own session+commit: the request that raised will roll back.
+                await self._mark_deployment_failed(linked_deployment)
             raise
         logger.info("queued %s job %s for environment %s", kind.value, job_id, environment.id)
         return JobTicket(job_id=job_id, kind=kind, project_id=environment.project_id, environment_id=environment.id)
