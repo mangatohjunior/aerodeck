@@ -42,6 +42,17 @@ class DnsRecordPublisher(Protocol):
     def delete(self, hostname: str, provider_record_id: str | None) -> None: ...
 
 
+def provider_record_data(record_type: str, data: str) -> str:
+    """Return the value DigitalOcean will accept for this record type.
+
+    A CNAME target must be a fully qualified name ending in `.`. Address
+    records are left unchanged.
+    """
+    if record_type == "CNAME" and data and not data.endswith("."):
+        return f"{data}."
+    return data
+
+
 class MemoryDnsRecords:
     """In-process address records for tests and laptops without DigitalOcean."""
 
@@ -79,14 +90,17 @@ class DigitalOceanDnsRecords:
 
     def upsert(self, hostname: str, record_type: str, data: str, ttl: int) -> PublishedRecord:
         zone, name = address_record_name(hostname)
+        data = provider_record_data(record_type, data)
         response = self._client.post(
             f"/v2/domains/{zone}/records",
             headers=self._headers(),
             json={"type": record_type, "name": name, "data": data, "ttl": ttl},
         )
         if response.status_code >= 400:
+            message = _provider_message(response)
+            detail = f": {message}" if message else ""
             raise DnsRecordError(
-                f"DigitalOcean refused to publish {hostname}: HTTP {response.status_code}"
+                f"DigitalOcean refused to publish {hostname}: HTTP {response.status_code}{detail}"
             )
         record_id = response.json().get("domain_record", {}).get("id")
         if not isinstance(record_id, int):
@@ -108,6 +122,14 @@ class DigitalOceanDnsRecords:
 
     def _headers(self) -> dict[str, str]:
         return {"Authorization": f"Bearer {self._token}", "Content-Type": "application/json"}
+
+
+def _provider_message(response: httpx.Response) -> str:
+    try:
+        message = response.json().get("message")
+    except ValueError:
+        return ""
+    return message.strip() if isinstance(message, str) else ""
 
 
 class DnsRecordService:
