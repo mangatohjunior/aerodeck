@@ -12,6 +12,7 @@ chat history.
 | [Edge routing](edge-routing.md) | Declare hostnames; Traefik snapshot, DNS records, DNS-01 certs. |
 | [Sandboxes](sandboxes.md) | Boot a Firecracker microVM; reap on TTL; enroll hypervisor hosts. |
 | [Terraform remote state](terraform-state.md) | Bootstrap the Spaces bucket, initialise a stack, recover a locked state file. |
+| [Database backup](database-backup.md) | Dump the control-plane database to Spaces and restore a chosen Alembic revision. |
 | [Platform network](platform-network.md) | Project and private VPC per environment; how later stacks attach. |
 | [SSH to dev](ssh-dev.md) | Inject an SSH key and open port 22 to your IP so you can log in to the control-plane Droplet. |
 | [Startup control plane](startup-control-plane.md) | Pull the image on the Droplet, migrate Postgres, start API and worker. |
