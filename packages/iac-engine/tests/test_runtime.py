@@ -42,6 +42,12 @@ def main() -> None:
     _must(MODULE, "digitalocean_database_cluster.postgres.urn", "modules/runtime/main.tf")
     _must(MODULE, "digitalocean_database_cluster.redis[0].urn", "modules/runtime/main.tf")
     _must(MODULE, "managed_cache_enabled", "modules/runtime/main.tf")
+    _must(MODULE, 'port_range       = "3000"', "modules/runtime/main.tf")
+    console_rule = MODULE[MODULE.index('port_range       = "3000"') :][:180]
+    if "0.0.0.0/0" in console_rule or "::/0" in console_rule:
+        raise SystemExit("console :3000 must stay VPC-only")
+    if "var.vpc_ip_range" not in console_rule:
+        raise SystemExit("console :3000 must allow the VPC range")
 
     if MODULE.count("prevent_destroy = true") < 2:
         raise SystemExit("postgres and redis clusters must set lifecycle prevent_destroy")

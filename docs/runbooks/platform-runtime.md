@@ -14,7 +14,7 @@ or start the container ([control-plane-image.md](control-plane-image.md)).
 | Resource | Name | Notes |
 | -------- | ---- | ----- |
 | Droplet | `aerodeck-<env>-control` | Ubuntu in `aerodeck-<env>-<region>-vpc` (`vpc_uuid`). Docker plus `/etc/aerodeck/control-plane-image`. |
-| Droplet firewall | `aerodeck-<env>-control-fw` | SSH from the VPC (or `ssh_allow_cidrs`). Port 8000 from the VPC only. |
+| Droplet firewall | `aerodeck-<env>-control-fw` | SSH from the VPC (or `ssh_allow_cidrs`). Ports 8000 and 3000 from the VPC only. |
 | Edge Droplet | `aerodeck-<env>-edge` | Traefik v3, public 80/443, polls control `:8000` over the VPC. |
 | Edge firewall | `aerodeck-<env>-edge-fw` | SSH like control. 80/443 from the internet. |
 | DNS | `edge.aero-deck.app` | A record to the edge public IPv4. |

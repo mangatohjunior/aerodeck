@@ -1,5 +1,5 @@
 import { MOCK_API_PREFIX } from "@/lib/catalog";
-import type { ApiError, Deployment, Project, PublicUser, Sandbox } from "@/lib/types";
+import type { ApiError, Deployment, ProjectPage, PublicUser, Sandbox } from "@/lib/types";
 
 async function readJson<T>(response: Response): Promise<T> {
   const body = (await response.json()) as T | ApiError;
@@ -15,8 +15,11 @@ export async function fetchHealth(): Promise<{ status: string; mode: string }> {
   return readJson(response);
 }
 
-export async function fetchProjects(): Promise<Project[]> {
-  const response = await fetch(`${MOCK_API_PREFIX}/projects`);
+export async function fetchProjectPage(): Promise<ProjectPage> {
+  const response = await fetch("/api/console/projects", {
+    credentials: "same-origin",
+    cache: "no-store",
+  });
   return readJson(response);
 }
 

@@ -52,6 +52,14 @@ resource "digitalocean_firewall" "control" {
     source_addresses = [var.vpc_ip_range]
   }
 
+  # Operator console on this Droplet. Traefik on the edge reaches it over the VPC.
+  # Do not open 3000 to the public internet.
+  inbound_rule {
+    protocol         = "tcp"
+    port_range       = "3000"
+    source_addresses = [var.vpc_ip_range]
+  }
+
   inbound_rule {
     protocol         = "icmp"
     source_addresses = [var.vpc_ip_range]

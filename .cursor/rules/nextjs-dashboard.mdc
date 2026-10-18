@@ -1,5 +1,5 @@
 ---
-description: Next.js operator dashboard guardrails. Enforces App Router, Tailwind, shadcn/ui, and mock-first UI (simulate deploy state and SSE logs before wiring FastAPI).
+description: Next.js operator dashboard guardrails. Enforces App Router, Tailwind, shadcn/ui, session cookies in the browser, and server-side control-plane calls for projects.
 globs: apps/dashboard/**/*.{ts,tsx,css,json}
 alwaysApply: false
 ---
@@ -35,16 +35,17 @@ apps/dashboard/src/
 - Interactive deploy state lives in Client Components. Do not mark the root layout `"use client"` just to hold form state.
 - Responsive: console sidebar is a fixed column on `md+`; hamburger + overlay on smaller viewports. Public nav uses the same split (inline links on `md+`, hamburger on smaller viewports).
 
-## 3. Mock-first development (hard constraint)
+## 3. Control-plane calls
 
-The dashboard **simulates** control-plane behaviour until a Story says to wire FastAPI.
+The browser never calls FastAPI. The session cookie stays on this origin. Control-plane bearers and client secrets stay on the server.
 
-- **Forbidden until that Story ships:** `fetch` / `axios` / `ky` to the FastAPI origin, EventSource against control-plane `/api/v1`, embedding `AERODECK_*` API URLs or JWTs in the browser.
-- **Allowed mock HTTP:** same-origin `fetch` / `EventSource` to `/api/mock/v1/*` (Next.js route handlers). That prefix is the stand-in control plane. A later Story changes only the client base URL.
+- `GET /api/console/projects` requires `aerodeck_session`. The route handler then calls `GET /api/v1/projects` with an enrolled client (`CONTROL_PLANE_URL`, `CONTROL_PLANE_CLIENT_ID`, `CONTROL_PLANE_CLIENT_SECRET`). Those names must not be `NEXT_PUBLIC_*`.
+- When those variables are unset, that route returns the in-memory seed and `source: "mock"`.
+- Sandboxes, deployments, register, login, logout, and the terminal stay on `/api/mock/v1`.
+- **Forbidden in client components:** `fetch` to the FastAPI origin, `EventSource` against control-plane `/api/v1`, and JWTs in `localStorage` or query strings.
 - Clicking **Deploy** POSTs `/api/mock/v1/deployments` and navigates to `/deployments/{id}`.
 - Register POSTs `{ email, password }` to `/api/mock/v1/auth/register`. Passwords are hashed in the mock store and never returned.
 - The **Terminal** consumes `text/event-stream` from `/api/mock/v1/deployments/{id}/logs`. Same `data:` lines as the FastAPI stub (`Initializing Terraform...`, `Provisioning K3s...`, `Done`).
-- When FastAPI is wired, replace only `src/lib/api.ts`. The Terminal still renders `data:` lines.
 
 ## 4. UI conventions
 

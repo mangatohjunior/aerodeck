@@ -1,9 +1,12 @@
 # AeroDeck dashboard
 
-Next.js App Router operator console. Talks to a same-origin mock control
-plane at `/api/mock/v1`. It does not call FastAPI.
+Next.js App Router operator console. The browser keeps the session cookie.
+Projects are loaded by the server from the control plane when
+`CONTROL_PLANE_URL` is set; otherwise Overview shows the local seed.
+Sandboxes, deployments, and sign-in stay on `/api/mock/v1`.
 
-Procedure: [docs/runbooks/dashboard-mock.md](../../docs/runbooks/dashboard-mock.md).
+Procedures: [docs/runbooks/dashboard-mock.md](../../docs/runbooks/dashboard-mock.md)
+and [docs/runbooks/dashboard-console.md](../../docs/runbooks/dashboard-console.md).
 
 ## Local
 

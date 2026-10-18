@@ -14,24 +14,24 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { fetchDeployments, fetchProjects, fetchSandboxes } from "@/lib/api";
-import type { Deployment, Project, Sandbox } from "@/lib/types";
+import { fetchDeployments, fetchProjectPage, fetchSandboxes } from "@/lib/api";
+import type { Deployment, ProjectPage, Sandbox } from "@/lib/types";
 
 export default function OverviewPage() {
-  const [projects, setProjects] = useState<Project[]>([]);
+  const [projects, setProjects] = useState<ProjectPage | null>(null);
   const [sandboxes, setSandboxes] = useState<Sandbox[]>([]);
   const [deployments, setDeployments] = useState<Deployment[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    Promise.all([fetchProjects(), fetchSandboxes(), fetchDeployments()])
+    Promise.all([fetchProjectPage(), fetchSandboxes(), fetchDeployments()])
       .then(([nextProjects, nextSandboxes, nextDeployments]) => {
         setProjects(nextProjects);
         setSandboxes(nextSandboxes);
         setDeployments(nextDeployments);
       })
       .catch((cause: unknown) => {
-        setError(cause instanceof Error ? cause.message : "Failed to load mock API.");
+        setError(cause instanceof Error ? cause.message : "Failed to load the console.");
       });
   }, []);
 
@@ -42,7 +42,7 @@ export default function OverviewPage() {
       <PageHeader
         eyebrow="Overview"
         title="AeroDeck console"
-        description="Local mock control plane. Cards and tables are served from /api/mock/v1 — FastAPI is not required."
+        description="Projects are read by this server from the control plane. Sandboxes and deployments on this page stay local."
         actions={
           <LinkButton href="/deploy">
             <Rocket data-icon="inline-start" />
@@ -61,8 +61,8 @@ export default function OverviewPage() {
             <StatCard
               icon={FolderGit2}
               label="Projects"
-              value={projects.length}
-              hint="Seeded mock tenants"
+              value={projects?.total ?? 0}
+              hint={projects?.source === "control-plane" ? "Live control plane" : "Local seed"}
             />
             <StatCard
               icon={Box}

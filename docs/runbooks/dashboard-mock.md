@@ -5,7 +5,8 @@ DigitalOcean. The Next.js app serves a same-origin stand-in at
 `/api/mock/v1`. State is in process memory and resets when `next dev` restarts.
 
 Do not point the browser at `http://127.0.0.1:8000`. That is the real control
-plane and is out of scope for this runbook.
+plane. Live projects are [dashboard-console.md](dashboard-console.md). Without
+`CONTROL_PLANE_URL`, Overview still shows the local seed.
 
 ## Start the console
 

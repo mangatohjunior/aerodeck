@@ -93,16 +93,29 @@ Procedure: [edge-routing.md](edge-routing.md). Defaults are in-memory.
 
 - [x] DigitalOcean Domain **`aero-deck.app`** exists (NS at Namecheap already
       point at DigitalOcean). Records stay in DigitalOcean.
-- [ ] **IaC plan and apply** on `main` so `aerodeck-dev-edge` exists (second
+- [x] **IaC plan and apply** on `main` so `aerodeck-dev-edge` exists (second
       Droplet, public 80/443). Do not apply from a laptop.
-- [ ] `terraform output -raw traefik_provider_token` copied to
+- [x] `terraform output -raw traefik_provider_token` copied to
       `AERODECK_TRAEFIK_PROVIDER_TOKEN` on the control plane.
-- [ ] `AERODECK_DIGITALOCEAN_TOKEN` on the control plane (same or scoped token).
-- [ ] `AERODECK_DNS_RECORDS_PROVIDER=digitalocean`.
-- [ ] `AERODECK_DNS_RECORD_TARGET=edge.aero-deck.app`.
-- [ ] `AERODECK_DNS01_PROVIDER=digitalocean`.
-- [ ] `AERODECK_ACME_ISSUER=letsencrypt` plus account email and RSA PEM
+- [x] `AERODECK_DIGITALOCEAN_TOKEN` on the control plane (same or scoped token).
+- [x] `AERODECK_DNS_RECORDS_PROVIDER=digitalocean`.
+- [x] `AERODECK_DNS_RECORD_TARGET=edge.aero-deck.app`.
+- [x] `AERODECK_DNS01_PROVIDER=digitalocean`.
+- [x] `AERODECK_ACME_ISSUER=letsencrypt` plus account email and RSA PEM
       (`AERODECK_ACME_ACCOUNT_KEY`). Staging directory is the default.
+
+### 6b. Operator console
+
+Procedure: [dashboard-console.md](dashboard-console.md). The browser keeps the
+session cookie. The Next.js server calls the control plane.
+
+- [ ] Enroll a console client (`AERODECK_AUTH_CLIENTS` digest only).
+- [ ] **IaC plan and apply** on `main` so control-plane port **3000** is open
+      to the VPC. Do not apply from a laptop.
+- [ ] Dashboard container on the control Droplet (`CONTROL_PLANE_URL`,
+      client id, client secret).
+- [ ] Route `app.aero-deck.app` to the control private IPv4 port 3000, then
+      issue its certificate.
 
 ### 7. Sandboxes (optional, separate from DigitalOcean)
 

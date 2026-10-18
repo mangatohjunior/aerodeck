@@ -9,6 +9,16 @@ export type Project = {
   updated_at: string;
 };
 
+export type ProjectSource = "control-plane" | "mock";
+
+export type ProjectPage = {
+  items: Project[];
+  total: number;
+  limit: number;
+  offset: number;
+  source: ProjectSource;
+};
+
 export type Sandbox = {
   id: string;
   project_id: string;
