@@ -77,8 +77,10 @@ export function deploymentLogsUrl(id: string, source: ProjectSource): string {
 export async function registerAccount(
   email: string,
   password: string,
+  controlPlane = false,
 ): Promise<PublicUser> {
-  const response = await fetch(`${MOCK_API_PREFIX}/auth/register`, {
+  const path = controlPlane ? "/api/console/register" : `${MOCK_API_PREFIX}/auth/register`;
+  const response = await fetch(path, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email, password }),

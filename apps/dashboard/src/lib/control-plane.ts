@@ -140,6 +140,40 @@ export async function openControlPlaneDeploymentLogs(
   return response.body;
 }
 
+export type ControlPlaneUser = {
+  id: string;
+  email: string;
+  created_at: string;
+};
+
+export async function registerControlPlaneUser(
+  config: ControlPlaneConfig,
+  email: string,
+  password: string,
+  options: ListOptions = {},
+): Promise<ControlPlaneUser> {
+  const fetchImpl = options.fetch ?? fetch;
+  const now = options.now ?? Date.now;
+  const accessToken = await accessTokenFor(config, fetchImpl, now);
+  const response = await fetchImpl(`${config.baseUrl}/api/v1/console-users`, {
+    method: "POST",
+    headers: {
+      accept: "application/json",
+      authorization: `Bearer ${accessToken}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ email, password }),
+    cache: "no-store",
+  });
+  if (response.status === 409) {
+    throw new ControlPlaneError("control plane register conflict (409)");
+  }
+  if (!response.ok) {
+    throw new ControlPlaneError(`control plane register request failed (${response.status})`);
+  }
+  return parseControlPlaneUser(await response.json());
+}
+
 async function listProjectSandboxes(
   config: ControlPlaneConfig,
   projectId: string,
@@ -317,6 +351,17 @@ function parseSandboxPage(body: unknown): { items: Sandbox[]; total: number } {
     items,
     total: typeof record.total === "number" ? record.total : items.length,
   };
+}
+
+function parseControlPlaneUser(body: unknown): ControlPlaneUser {
+  if (!body || typeof body !== "object") {
+    throw new ControlPlaneError("control plane register response was not a user");
+  }
+  const row = body as Record<string, unknown>;
+  if (typeof row.id !== "string" || typeof row.email !== "string" || typeof row.created_at !== "string") {
+    throw new ControlPlaneError("control plane register response was not a user");
+  }
+  return { id: row.id, email: row.email, created_at: row.created_at };
 }
 
 function parseSandbox(value: unknown): Sandbox {

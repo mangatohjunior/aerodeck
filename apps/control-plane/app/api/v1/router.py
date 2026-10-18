@@ -13,6 +13,7 @@ from fastapi import APIRouter
 from app.api.deps import AUTH_GUARD
 from app.api.v1.routers import (
     auth,
+    console_users,
     deployments,
     edge,
     environments,
@@ -25,6 +26,7 @@ from app.api.v1.routers import (
 
 api_v1_router = APIRouter(prefix="/api/v1")
 api_v1_router.include_router(auth.router)
+api_v1_router.include_router(console_users.router, dependencies=AUTH_GUARD)
 api_v1_router.include_router(projects.router, dependencies=AUTH_GUARD)
 api_v1_router.include_router(environments.router, dependencies=AUTH_GUARD)
 api_v1_router.include_router(routes.router, dependencies=AUTH_GUARD)

@@ -28,7 +28,7 @@ apps/dashboard/src/
 
 - Operator routes live under `app/(console)`. Shell (sidebar + main) wraps only that group. Navigation is explicit: Overview, Deploy, Deployments, Projects, Sandboxes.
 - Public routes live under `app/(public)` (`/about`, `/policy`, `/register`, `/login`). They use a header + footer shell — never the operator sidebar. Register and Login legal copy must link to `/policy`.
-- Register POSTs `/api/mock/v1/auth/register` then redirects to `/login?registered=1`. No token in `localStorage`.
+- Register POSTs `/api/console/register` when the console client is set, otherwise `/api/mock/v1/auth/register`, then redirects to `/login?registered=1`. No token in `localStorage`.
 - Login POSTs `/api/mock/v1/auth/login` and receives an httpOnly `aerodeck_session` cookie. Logout POSTs `/api/mock/v1/auth/logout`. `GET /api/mock/v1/auth/me` returns the current user or 401. Do not put JWTs in query strings or `localStorage`.
 - Continue with Google hits `GET /api/mock/v1/auth/google/start` then the callback. No Google API key. Real Google OAuth (PKCE) runs only when both `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` are set in the dashboard env — never put the secret in client code. `enroll-console-client.sh` keeps those two lines. Mock Google links to an existing email/password user with the same email when either value is unset.
 - Console routes (`/`, `/deploy`, `/deployments`, `/projects`, `/sandboxes`) require a valid session. Signed-out visits redirect to `/login`. Signed-in visits to `/login` or `/register` redirect to Overview. Public `/about` and `/policy` stay open. A 401 from `/auth/me` is signed out, not a crash. Do not `await connection()` in the public layout.
@@ -45,7 +45,7 @@ The browser never calls FastAPI. The session cookie stays on this origin. Contro
 - Creating a deployment, register, login, and logout stay on `/api/mock/v1`.
 - **Forbidden in client components:** `fetch` to the FastAPI origin, `EventSource` against control-plane `/api/v1`, and JWTs in `localStorage` or query strings.
 - Clicking **Deploy** POSTs `/api/mock/v1/deployments` and navigates to `/deployments/{id}`.
-- Register POSTs `{ email, password }` to `/api/mock/v1/auth/register`. Passwords are hashed in the mock store and never returned.
+- Register POSTs `{ email, password }` to `/api/console/register` when the console client is set. That route calls `POST /api/v1/console-users` with the enrolled bearer. The response has no password and no hash. Without the client, register stays on `/api/mock/v1/auth/register`.
 - The **Terminal** consumes `text/event-stream`. With the console client set, that is same-origin `GET /api/console/deployments/{id}/logs`, which attaches the enrolled bearer to `GET /api/v1/deployments/{id}/logs`. Without the client, it stays on `/api/mock/v1/deployments/{id}/logs`. The control-plane stub lines are `Initializing Terraform...`, `Provisioning K3s...`, and `Done`. The browser must not open an `EventSource` against the FastAPI origin.
 
 ## 4. UI conventions

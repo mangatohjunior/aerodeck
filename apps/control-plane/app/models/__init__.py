@@ -2,6 +2,7 @@
 
 from app.models.base import Base
 from app.models.certificate import Certificate, CertificateStatus
+from app.models.console_user import ConsoleUser
 from app.models.dns_record import DnsRecord, DnsRecordStatus, DnsRecordType
 from app.models.project import Environment, EnvironmentKind, Project
 from app.models.route import Route
@@ -12,6 +13,7 @@ __all__ = [
     "Base",
     "Certificate",
     "CertificateStatus",
+    "ConsoleUser",
     "DnsRecord",
     "DnsRecordStatus",
     "DnsRecordType",

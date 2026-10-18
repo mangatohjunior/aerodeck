@@ -10,10 +10,12 @@ Creating a deployment stays on the mock API
 ([dashboard-mock.md](dashboard-mock.md)). The terminal reads
 `GET /api/v1/deployments/{id}/logs` through
 `GET /api/console/deployments/{id}/logs` when the console client is set, and
-stays on `/api/mock/v1/deployments/{id}/logs` when it is not. Sign-in stays on
-the mock API until console users live in the control plane. When
-`CONTROL_PLANE_URL` is unset, projects and sandboxes fall back to the local
-seed.
+stays on `/api/mock/v1/deployments/{id}/logs` when it is not. Sign-in stays
+on the mock API until console users can sign in against the control plane.
+Registration uses `POST /api/v1/console-users` through
+`POST /api/console/register` when the console client is set, and stays on
+`/api/mock/v1/auth/register` when it is not. When `CONTROL_PLANE_URL` is
+unset, projects and sandboxes fall back to the local seed.
 
 Do not `terraform apply` from a laptop. Port 3000 stays VPC-only.
 

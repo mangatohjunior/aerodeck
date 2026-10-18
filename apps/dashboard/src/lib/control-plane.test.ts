@@ -8,6 +8,7 @@ import {
   listControlPlaneSandboxes,
   openControlPlaneDeploymentLogs,
   readControlPlaneConfig,
+  registerControlPlaneUser,
   type ControlPlaneConfig,
 } from "./control-plane";
 
@@ -308,6 +309,60 @@ describe("openControlPlaneDeploymentLogs", () => {
         assert.ok(cause instanceof ControlPlaneError);
         assert.equal(cause.message.includes("super-secret"), false);
         assert.match(cause.message, /deployment logs request failed \(502\)/);
+        return true;
+      },
+    );
+  });
+});
+
+describe("registerControlPlaneUser", () => {
+  it("posts the account with the bearer and returns no secret", async () => {
+    clearControlPlaneTokenCache();
+    const password = "correct-horse";
+    let authorization = "";
+    let posted = "";
+    const fetchImpl: typeof fetch = async (input, init) => {
+      const url = String(input);
+      if (url.endsWith("/api/v1/auth/token")) {
+        return jsonResponse({ access_token: "issued-bearer", expires_in: 900 });
+      }
+      authorization = new Headers(init?.headers).get("authorization") ?? "";
+      posted = typeof init?.body === "string" ? init.body : "";
+      return jsonResponse({
+        id: "55555555-5555-4555-8555-555555555555",
+        email: "ada@example.com",
+        created_at: "2026-10-18T00:00:00.000Z",
+        updated_at: "2026-10-18T00:00:00.000Z",
+        password_hash: "scrypt$hidden",
+      });
+    };
+
+    const user = await registerControlPlaneUser(config, "Ada@Example.com", password, {
+      fetch: fetchImpl,
+    });
+    assert.equal(authorization, "Bearer issued-bearer");
+    assert.equal(posted.includes(password), true);
+    assert.equal(user.email, "ada@example.com");
+    assert.equal(JSON.stringify(user).includes(password), false);
+    assert.equal(JSON.stringify(user).includes("password_hash"), false);
+    assert.equal(JSON.stringify(user).includes("super-secret"), false);
+  });
+
+  it("does not include the upstream body when registration fails", async () => {
+    clearControlPlaneTokenCache();
+    const fetchImpl: typeof fetch = async (input) => {
+      const url = String(input);
+      if (url.endsWith("/api/v1/auth/token")) {
+        return jsonResponse({ access_token: "issued-bearer", expires_in: 900 });
+      }
+      return jsonResponse({ detail: "nope", password: "correct-horse" }, 409);
+    };
+    await assert.rejects(
+      () => registerControlPlaneUser(config, "ada@example.com", "correct-horse", { fetch: fetchImpl }),
+      (cause: unknown) => {
+        assert.ok(cause instanceof ControlPlaneError);
+        assert.equal(cause.message.includes("correct-horse"), false);
+        assert.match(cause.message, /conflict \(409\)/);
         return true;
       },
     );

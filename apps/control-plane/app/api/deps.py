@@ -15,6 +15,7 @@ from app.core.errors import InvalidTokenError, QueueUnavailableError
 from app.core.queue import create_celery_app
 from app.models.dns_record import DnsRecordType
 from app.repositories.certificates import CertificateRepository
+from app.repositories.console_users import ConsoleUserRepository
 from app.repositories.clients import ClientRepository, SettingsClientRepository
 from app.repositories.dns_records import DnsRecordRepository
 from app.repositories.environments import EnvironmentRepository
@@ -27,6 +28,7 @@ from app.services.acme import AcmeIssuer, AcmeUnavailableError, FakeAcmeIssuer
 from app.services.auth import AuthenticatedClient, AuthService
 from app.services.certificate_keys import FileCertificateKeyStore
 from app.services.certificates import CertificateService
+from app.services.console_users import ConsoleUserService
 from app.services.dns01 import DigitalOceanDns01, Dns01Provider, Dns01UnavailableError, MemoryDns01
 from app.services.dns_records import (
     DigitalOceanDnsRecords,
@@ -69,6 +71,13 @@ def get_project_service(session: SessionDep) -> ProjectService:
 
 
 ProjectServiceDep = Annotated[ProjectService, Depends(get_project_service)]
+
+
+def get_console_user_service(session: SessionDep) -> ConsoleUserService:
+    return ConsoleUserService(ConsoleUserRepository(session))
+
+
+ConsoleUserServiceDep = Annotated[ConsoleUserService, Depends(get_console_user_service)]
 
 
 def get_hypervisor(settings: SettingsDep) -> Hypervisor:

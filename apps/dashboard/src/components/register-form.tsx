@@ -22,7 +22,7 @@ import { registerAccount } from "@/lib/api";
 import { isStrongPassword, isValidEmail, MIN_PASSWORD_LENGTH } from "@/lib/auth";
 import { POLICY_HREF } from "@/lib/public-nav";
 
-export function RegisterForm() {
+export function RegisterForm({ controlPlane = false }: { controlPlane?: boolean }) {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -71,7 +71,7 @@ export function RegisterForm() {
     setError(null);
     setSubmitting(true);
     try {
-      await registerAccount(email, password);
+      await registerAccount(email, password, controlPlane);
       router.push("/login?registered=1");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Registration failed.");
@@ -86,10 +86,9 @@ export function RegisterForm() {
       <CardHeader className="border-b">
         <CardTitle>Create an account</CardTitle>
         <CardDescription>
-          Email and password against{" "}
-          <span className="font-mono">/api/mock/v1/auth/register</span>, or
-          Continue with Google. A 201 still sends you to Login. Google signs you
-          in immediately.
+          {controlPlane
+            ? "Email and password are stored by the control plane. A 201 still sends you to Login."
+            : "Email and password against /api/mock/v1/auth/register, or Continue with Google. A 201 still sends you to Login."}
         </CardDescription>
       </CardHeader>
       <form onSubmit={handleSubmit}>
