@@ -27,7 +27,6 @@ class CertificateRepository:
             .where(
                 Certificate.status == CertificateStatus.issued,
                 Certificate.certificate_pem.is_not(None),
-                Certificate.private_key_pem.is_not(None),
             )
             .order_by(Certificate.hostname)
         )

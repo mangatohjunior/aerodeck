@@ -1,11 +1,16 @@
+import os
 import uuid
 from datetime import timedelta
+from pathlib import Path
 
 import pytest
 from fastapi import FastAPI
 from httpx import AsyncClient
+from sqlalchemy import inspect as sa_inspect
 
 from app.api.deps import get_acme_issuer
+from app.core.config import Settings
+from app.core.db import SessionLocal
 from app.services.acme import FakeAcmeIssuer
 from app.services.dns01 import MemoryDns01
 
@@ -116,3 +121,54 @@ async def test_renew_due_rotates_short_lived_certs(
     assert due.status_code == 200, due.text
     assert len(due.json()) == 1
     assert due.json()[0]["fingerprint_sha256"] != first
+
+
+async def test_private_key_is_a_file_not_a_database_column(
+    client: AsyncClient, auth: dict[str, str], route: dict, settings: Settings
+) -> None:
+    issued = await client.post(cert_url(route, "issue"), headers=auth)
+    assert issued.status_code == 200, issued.text
+    assert SECRET_FIELDS.isdisjoint(issued.json())
+
+    async with SessionLocal() as session:
+        columns = await session.run_sync(lambda sync: sa_inspect(sync.get_bind()).get_columns("certificates"))
+    assert "private_key_pem" not in {column["name"] for column in columns}
+
+    key_path = Path(settings.certificate_key_dir) / f"{issued.json()['id']}.key"
+    stored = key_path.read_text(encoding="utf-8")
+    assert stored.startswith("-----BEGIN")
+    if os.name == "posix":
+        assert key_path.stat().st_mode & 0o777 == 0o600
+
+    snapshot = await client.get(EDGE, headers=auth)
+    assert snapshot.json()["tls"]["certificates"][0]["keyFile"] == stored
+
+    key_path.unlink()
+    omitted = await client.get(EDGE, headers=auth)
+    assert "tls" not in omitted.json()
+
+
+async def test_renew_replaces_the_key_file(
+    client: AsyncClient, auth: dict[str, str], route: dict, settings: Settings
+) -> None:
+    issued = await client.post(cert_url(route, "issue"), headers=auth)
+    key_path = Path(settings.certificate_key_dir) / f"{issued.json()['id']}.key"
+    first = key_path.read_text(encoding="utf-8")
+
+    renewed = await client.post(cert_url(route, "renew"), headers=auth)
+    assert renewed.status_code == 200, renewed.text
+    assert key_path.read_text(encoding="utf-8") != first
+
+
+async def test_deleting_a_route_removes_the_key_file(
+    client: AsyncClient, auth: dict[str, str], route: dict, settings: Settings
+) -> None:
+    issued = await client.post(cert_url(route, "issue"), headers=auth)
+    key_path = Path(settings.certificate_key_dir) / f"{issued.json()['id']}.key"
+    assert key_path.is_file()
+
+    deleted = await client.delete(
+        f"{PROJECTS}/{route['_project_id']}/routes/{route['id']}", headers=auth
+    )
+    assert deleted.status_code == 204
+    assert not key_path.exists()

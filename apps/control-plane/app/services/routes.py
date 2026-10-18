@@ -11,6 +11,7 @@ from app.models.route import Route
 from app.repositories.certificates import CertificateRepository
 from app.repositories.routes import RouteRepository
 from app.schemas.route import RouteCreate, RouteUpdate, TraefikConfiguration
+from app.services.certificate_keys import FileCertificateKeyStore
 from app.services.dns_records import DnsRecordService
 from app.services.environments import EnvironmentService
 from app.services.projects import ProjectService
@@ -27,12 +28,14 @@ class RouteService:
         environments: EnvironmentService,
         certificates: CertificateRepository,
         dns_records: DnsRecordService,
+        keys: FileCertificateKeyStore,
     ) -> None:
         self._routes = routes
         self._projects = projects
         self._environments = environments
         self._certificates = certificates
         self._dns = dns_records
+        self._keys = keys
 
     async def create(self, project_id: uuid.UUID, data: RouteCreate) -> Route:
         await self._projects.get(project_id)
@@ -94,11 +97,14 @@ class RouteService:
         certificate.not_after = None
         certificate.fingerprint_sha256 = None
         certificate.certificate_pem = None
-        certificate.private_key_pem = None
         certificate.last_error = None
+        self._keys.delete(certificate.id)
 
     async def delete(self, project_id: uuid.UUID, route_id: uuid.UUID) -> None:
         route = await self.get(project_id, route_id)
+        certificate = await self._certificates.get_for_route(route.id)
+        if certificate is not None:
+            self._keys.delete(certificate.id)
         await self._dns.unpublish(route)
         await self._routes.delete(route)
         logger.info("deleted route %s (%s)", route.hostname, route.id)
@@ -109,9 +115,15 @@ class RouteService:
 
     async def traefik_configuration(self) -> TraefikConfiguration:
         routes = await self._routes.list_enabled()
-        materials = [
-            TlsMaterial(hostname=row.hostname, certificate_pem=row.certificate_pem, private_key_pem=row.private_key_pem)
-            for row in await self._certificates.list_issued()
-            if row.certificate_pem and row.private_key_pem
-        ]
+        materials: list[TlsMaterial] = []
+        for row in await self._certificates.list_issued():
+            if not row.certificate_pem:
+                continue
+            private_key = self._keys.get(row.id)
+            if private_key is None:
+                logger.warning("issued certificate %s has no key file; omitted from Traefik", row.id)
+                continue
+            materials.append(
+                TlsMaterial(hostname=row.hostname, certificate_pem=row.certificate_pem, private_key_pem=private_key)
+            )
         return render_traefik_http(routes, materials)

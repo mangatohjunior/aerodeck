@@ -15,3 +15,5 @@ def test_writes_bash_quoted_env_and_passes_dash_e_not_env_file() -> None:
     assert "worker --beat --queues aerodeck" in TEXT
     assert "waiting up to 30s for the API on :8000" in TEXT
     assert "curl -fsS --max-time 2 -o /dev/null http://127.0.0.1:8000/healthz 2>/dev/null" in TEXT
+    assert 'CERT_KEY_DIR=/var/lib/aerodeck/certs' in TEXT
+    assert '-v "${CERT_KEY_DIR}:${CERT_KEY_DIR}"' in TEXT

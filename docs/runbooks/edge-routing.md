@@ -113,8 +113,18 @@ curl -s -X POST \
 ```
 
 The issuer presents a TXT record at `_acme-challenge.<hostname>` through the
-DNS-01 provider, then stores the cert. `GET` on that certificate never returns
-PEM or the private key. Traefik receives them only on `GET /api/v1/edge/traefik`.
+DNS-01 provider, then stores the cert. The public PEM stays on the certificate
+row. The private key is a file under `AERODECK_CERTIFICATE_KEY_DIR`
+(default `/var/lib/aerodeck/certs`, mode `0600`), not `certificates.private_key_pem`.
+`GET` on that certificate never returns PEM or the private key. Traefik still
+receives both on `GET /api/v1/edge/traefik`, read from that directory.
+
+On the Droplet the start script bind-mounts `/var/lib/aerodeck/certs` into
+the API container and `chown`s it to uid `10001`. `docker rm` does not delete
+the keys. Alembic `0008` drops `private_key_pem`. Keys already in Postgres are
+discarded; issue the certificate again after the migration. Do not log the
+file contents. Rotation is `POST .../certificate/renew`, which replaces the
+same `{certificate-id}.key`.
 
 | Setting | What happens |
 | ------- | ------------ |
@@ -165,3 +175,4 @@ Put the token on the control plane as `AERODECK_TRAEFIK_PROVIDER_TOKEN`
 - #11 — TLS from DNS-01.
 - #12 — public DNS records (this section).
 - #35 — Traefik Droplet and Let's Encrypt issuer.
+- #38 — private keys on disk, not in Postgres (this section).

@@ -25,6 +25,7 @@ from app.repositories.sandbox_hosts import SandboxHostRepository
 from app.repositories.sandboxes import SandboxRepository
 from app.services.acme import AcmeIssuer, AcmeUnavailableError, FakeAcmeIssuer
 from app.services.auth import AuthenticatedClient, AuthService
+from app.services.certificate_keys import FileCertificateKeyStore
 from app.services.certificates import CertificateService
 from app.services.dns01 import DigitalOceanDns01, Dns01Provider, Dns01UnavailableError, MemoryDns01
 from app.services.dns_records import (
@@ -142,14 +143,22 @@ def get_dns_record_service(
 DnsRecordServiceDep = Annotated[DnsRecordService, Depends(get_dns_record_service)]
 
 
+def get_certificate_key_store(settings: SettingsDep) -> FileCertificateKeyStore:
+    return FileCertificateKeyStore(settings.certificate_key_dir)
+
+
+CertificateKeyStoreDep = Annotated[FileCertificateKeyStore, Depends(get_certificate_key_store)]
+
+
 def get_route_service(
     session: SessionDep,
     projects: ProjectServiceDep,
     environments: EnvironmentServiceDep,
     dns_records: DnsRecordServiceDep,
+    keys: CertificateKeyStoreDep,
 ) -> RouteService:
     return RouteService(
-        RouteRepository(session), projects, environments, CertificateRepository(session), dns_records
+        RouteRepository(session), projects, environments, CertificateRepository(session), dns_records, keys
     )
 
 
@@ -187,12 +196,17 @@ AcmeIssuerDep = Annotated[AcmeIssuer, Depends(get_acme_issuer)]
 
 
 def get_certificate_service(
-    session: SessionDep, routes: RouteServiceDep, issuer: AcmeIssuerDep, settings: SettingsDep
+    session: SessionDep,
+    routes: RouteServiceDep,
+    issuer: AcmeIssuerDep,
+    keys: CertificateKeyStoreDep,
+    settings: SettingsDep,
 ) -> CertificateService:
     return CertificateService(
         CertificateRepository(session),
         routes,
         issuer,
+        keys,
         renew_before=timedelta(days=settings.certificate_renew_before_days),
     )
 
