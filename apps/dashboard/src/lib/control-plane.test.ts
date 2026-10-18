@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
+import { jsonControlPlaneError } from "./mock-http";
 import {
   clearControlPlaneTokenCache,
   ControlPlaneError,
@@ -33,6 +34,27 @@ function jsonResponse(body: unknown, status = 200): Response {
     headers: { "content-type": "application/json" },
   });
 }
+
+describe("jsonControlPlaneError", () => {
+  it("maps a missing deployment to 404 and other failures to 502", async () => {
+    const missing = jsonControlPlaneError(
+      new ControlPlaneError("control plane deployment was not found (404)"),
+      "console_deployment_read_failed",
+    );
+    assert.equal(missing.status, 404);
+    assert.deepEqual(await missing.json(), { detail: "Deployment not found.", code: "not_found" });
+
+    const failed = jsonControlPlaneError(
+      new ControlPlaneError("control plane deployment request failed (503)"),
+      "console_deployment_read_failed",
+    );
+    assert.equal(failed.status, 502);
+    assert.deepEqual(await failed.json(), {
+      detail: "Control plane request failed.",
+      code: "control_plane_unavailable",
+    });
+  });
+});
 
 describe("readControlPlaneConfig", () => {
   it("requires an origin and both client credentials", () => {

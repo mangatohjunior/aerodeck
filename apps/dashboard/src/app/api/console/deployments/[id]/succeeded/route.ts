@@ -1,13 +1,12 @@
 import { connection, NextResponse } from "next/server";
 
 import {
-  ControlPlaneError,
   isDeploymentLogId,
   readControlPlaneConfig,
   succeedControlPlaneDeployment,
 } from "@/lib/control-plane";
-import { jsonError } from "@/lib/mock-http";
-import { getSessionUser } from "@/lib/session";
+import { jsonControlPlaneError, jsonError } from "@/lib/mock-http";
+import { requireSessionUser } from "@/lib/session";
 
 export async function POST(
   _request: Request,
@@ -15,9 +14,9 @@ export async function POST(
 ) {
   await connection();
 
-  const user = await getSessionUser();
-  if (!user) {
-    return jsonError(401, "Not signed in.", "unauthenticated");
+  const user = await requireSessionUser();
+  if (user instanceof NextResponse) {
+    return user;
   }
 
   const config = readControlPlaneConfig();
@@ -34,11 +33,6 @@ export async function POST(
     const deployment = await succeedControlPlaneDeployment(config, id);
     return NextResponse.json(deployment);
   } catch (cause) {
-    if (cause instanceof ControlPlaneError && cause.message.includes("not found (404)")) {
-      return jsonError(404, "Deployment not found.", "not_found");
-    }
-    const detail = cause instanceof ControlPlaneError ? cause.message : "request failed";
-    console.error("event=console_deployment_succeeded_failed detail=%s", detail);
-    return jsonError(502, "Control plane request failed.", "control_plane_unavailable");
+    return jsonControlPlaneError(cause, "console_deployment_succeeded_failed");
   }
 }

@@ -14,7 +14,7 @@ from uuid import UUID
 from fastapi import APIRouter, status
 from fastapi.responses import StreamingResponse
 
-from app.api.deps import ClientDep, DeploymentServiceDep, PaginationDep
+from app.api.deps import DeploymentServiceDep, PaginationDep
 from app.schemas.auth import ErrorResponse
 from app.schemas.common import Page
 from app.schemas.deployment import DeploymentCreate, DeploymentRead
@@ -60,6 +60,7 @@ async def get_deployment(deployment_id: uuid.UUID, deployments: DeploymentServic
 @router.post(
     "/{deployment_id}/succeeded",
     response_model=DeploymentRead,
+    status_code=status.HTTP_200_OK,
     summary="Record that a deployment stub finished",
     responses=_NOT_FOUND | _UNAUTHENTICATED,
 )
@@ -86,15 +87,14 @@ async def _mock_log_stream() -> AsyncIterator[bytes]:
     "/{deployment_id}/logs",
     summary="Stream deployment logs (SSE stub)",
     response_class=StreamingResponse,
+    responses=_NOT_FOUND | _UNAUTHENTICATED,
 )
 async def stream_deployment_logs(
     deployment_id: UUID,
     deployments: DeploymentServiceDep,
-    client: ClientDep,
 ) -> StreamingResponse:
     """Stub SSE stream for a stored deployment. An unknown id does not stream."""
     await deployments.get(deployment_id)
-    _ = client
     return StreamingResponse(
         _mock_log_stream(),
         media_type="text/event-stream",
