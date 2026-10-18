@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "tsx --test src/lib/control-plane.test.ts src/lib/session-lookup.test.ts src/lib/deploy-create.test.ts"
+    "test": "tsx --test src/lib/control-plane.test.ts src/lib/session-lookup.test.ts src/lib/deploy-create.test.ts src/lib/environment-option.test.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",

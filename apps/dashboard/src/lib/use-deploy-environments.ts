@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 
 import { fetchEnvironments } from "@/lib/api";
+import { environmentOptionKey } from "@/lib/environment-option";
 import type { EnvironmentOption } from "@/lib/types";
 
 export function useDeployEnvironments(enabled: boolean) {
@@ -30,7 +31,7 @@ export function useDeployEnvironments(enabled: boolean) {
         }
         setEnvironments(page.items);
         if (page.items.length === 1) {
-          setEnvironmentKey(`${page.items[0].project_id}:${page.items[0].id}`);
+          setEnvironmentKey(environmentOptionKey(page.items[0]));
         }
       })
       .catch((cause) => {

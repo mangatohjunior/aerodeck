@@ -435,6 +435,7 @@ export async function getControlPlaneEnvironment(
       response.status,
     );
   }
+  await response.body?.cancel();
 }
 
 export async function provisionControlPlaneEnvironment(

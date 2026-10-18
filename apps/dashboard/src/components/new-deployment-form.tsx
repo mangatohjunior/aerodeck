@@ -4,6 +4,7 @@ import { Loader2, Rocket } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 
+import { EnvironmentSelect } from "@/components/environment-select";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -16,9 +17,9 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { createDeployment, ProvisionEnqueueFailed } from "@/lib/api";
+import { environmentOptionKey } from "@/lib/environment-option";
 import { parseGithubRepo } from "@/lib/github";
 import { useDeployEnvironments } from "@/lib/use-deploy-environments";
-import { cn } from "@/lib/utils";
 
 export function NewDeploymentForm({ controlPlane = false }: { controlPlane?: boolean }) {
   const router = useRouter();
@@ -54,7 +55,9 @@ export function NewDeploymentForm({ controlPlane = false }: { controlPlane?: boo
 
     let target: { projectId: string; environmentId: string } | undefined;
     if (controlPlane) {
-      const selected = environments.find((row) => `${row.project_id}:${row.id}` === environmentKey);
+      const selected = environments.find(
+        (row) => environmentOptionKey(row) === environmentKey,
+      );
       if (!selected) {
         setEnvironmentRequired(true);
         setError("Select an environment to provision.");
@@ -90,8 +93,6 @@ export function NewDeploymentForm({ controlPlane = false }: { controlPlane?: boo
     !enqueueBlocked &&
     repoUrl.trim().length > 0 &&
     (!controlPlane || (environmentKey.length > 0 && !loadingEnvironments));
-
-  const environmentInvalid = !!environmentsError || environmentRequired;
 
   return (
     <Card className="overflow-hidden ring-primary/15">
@@ -131,69 +132,24 @@ export function NewDeploymentForm({ controlPlane = false }: { controlPlane?: boo
             <p className="text-xs text-muted-foreground">Example: https://github.com/org/app.git</p>
           </div>
           {controlPlane ? (
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="environment">Environment</Label>
-              {/* Native select: dashboard UI kit has no Select yet; keep styles aligned with Input. */}
-              <select
-                id="environment"
-                className={cn(
-                  "h-10 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none",
-                  "focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50",
-                  "disabled:cursor-not-allowed disabled:opacity-50",
-                  "aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20",
-                )}
-                value={environmentKey}
-                aria-invalid={environmentInvalid ? true : undefined}
-                disabled={
-                  submitting ||
-                  enqueueBlocked ||
-                  loadingEnvironments ||
-                  environments.length === 0
+            <EnvironmentSelect
+              environments={environments}
+              environmentKey={environmentKey}
+              onEnvironmentKeyChange={(key) => {
+                setEnvironmentKey(key);
+                if (environmentRequired) {
+                  setEnvironmentRequired(false);
                 }
-                onChange={(event) => {
-                  setEnvironmentKey(event.target.value);
-                  if (environmentRequired) {
-                    setEnvironmentRequired(false);
-                  }
-                  if (error && !enqueueBlocked) {
-                    setError(null);
-                  }
-                }}
-              >
-                <option value="">
-                  {loadingEnvironments
-                    ? "Loading environments…"
-                    : environments.length === 0
-                      ? "No environments available"
-                      : "Select an environment"}
-                </option>
-                {environments.map((row) => (
-                  <option key={`${row.project_id}:${row.id}`} value={`${row.project_id}:${row.id}`}>
-                    {row.project_slug}/{row.slug} ({row.kind}, {row.region})
-                  </option>
-                ))}
-              </select>
-              {environmentsError ? (
-                <div className="flex flex-wrap items-center gap-2">
-                  <p className="text-sm text-destructive" role="alert">
-                    {environmentsError}
-                  </p>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    disabled={loadingEnvironments || enqueueBlocked}
-                    onClick={() => reload()}
-                  >
-                    Retry
-                  </Button>
-                </div>
-              ) : (
-                <p className="text-xs text-muted-foreground">
-                  Provision runs on the control-plane worker for the selected environment.
-                </p>
-              )}
-            </div>
+                if (error && !enqueueBlocked) {
+                  setError(null);
+                }
+              }}
+              environmentsError={environmentsError}
+              loadingEnvironments={loadingEnvironments}
+              invalid={!!environmentsError || environmentRequired}
+              disabled={submitting || enqueueBlocked}
+              onRetry={reload}
+            />
           ) : null}
           {error ? (
             <p className="text-sm text-destructive" role="alert">
