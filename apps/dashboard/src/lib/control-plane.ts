@@ -146,88 +146,64 @@ export type ControlPlaneUser = {
   created_at: string;
 };
 
-export async function registerControlPlaneUser(
+export function registerControlPlaneUser(
   config: ControlPlaneConfig,
   email: string,
   password: string,
   options: ListOptions = {},
 ): Promise<ControlPlaneUser> {
-  const fetchImpl = options.fetch ?? fetch;
-  const now = options.now ?? Date.now;
-  const accessToken = await accessTokenFor(config, fetchImpl, now);
-  const response = await fetchImpl(`${config.baseUrl}/api/v1/console-users`, {
-    method: "POST",
-    headers: {
-      accept: "application/json",
-      authorization: `Bearer ${accessToken}`,
-      "content-type": "application/json",
+  return postControlPlaneUser(
+    config,
+    "/api/v1/console-users",
+    { email, password },
+    "control plane register request failed",
+    options,
+    (response) => {
+      if (response.status === 409) {
+        throw new ControlPlaneError("control plane register conflict (409)");
+      }
     },
-    body: JSON.stringify({ email, password }),
-    cache: "no-store",
-  });
-  if (response.status === 409) {
-    throw new ControlPlaneError("control plane register conflict (409)");
-  }
-  if (!response.ok) {
-    throw new ControlPlaneError(`control plane register request failed (${response.status})`);
-  }
-  return parseControlPlaneUser(await response.json());
+  );
 }
 
-export async function authenticateControlPlaneUser(
+export function authenticateControlPlaneUser(
   config: ControlPlaneConfig,
   email: string,
   password: string,
   options: ListOptions = {},
 ): Promise<ControlPlaneUser> {
-  const fetchImpl = options.fetch ?? fetch;
-  const now = options.now ?? Date.now;
-  const accessToken = await accessTokenFor(config, fetchImpl, now);
-  const response = await fetchImpl(`${config.baseUrl}/api/v1/console-users/login`, {
-    method: "POST",
-    headers: {
-      accept: "application/json",
-      authorization: `Bearer ${accessToken}`,
-      "content-type": "application/json",
+  return postControlPlaneUser(
+    config,
+    "/api/v1/console-users/login",
+    { email, password },
+    "control plane login request failed",
+    options,
+    async (response) => {
+      if (response.status === 401 && (await errorCode(response)) === "invalid_credentials") {
+        throw new ControlPlaneError("control plane login rejected (401)");
+      }
     },
-    body: JSON.stringify({ email, password }),
-    cache: "no-store",
-  });
-  if (response.status === 401 && (await errorCode(response)) === "invalid_credentials") {
-    throw new ControlPlaneError("control plane login rejected (401)");
-  }
-  if (!response.ok) {
-    throw new ControlPlaneError(`control plane login request failed (${response.status})`);
-  }
-  return parseControlPlaneUser(await response.json());
+  );
 }
 
-export async function linkControlPlaneGoogleUser(
+export function linkControlPlaneGoogleUser(
   config: ControlPlaneConfig,
   email: string,
   subject: string,
   options: ListOptions = {},
 ): Promise<ControlPlaneUser> {
-  const fetchImpl = options.fetch ?? fetch;
-  const now = options.now ?? Date.now;
-  const accessToken = await accessTokenFor(config, fetchImpl, now);
-  const response = await fetchImpl(`${config.baseUrl}/api/v1/console-users/google`, {
-    method: "POST",
-    headers: {
-      accept: "application/json",
-      authorization: `Bearer ${accessToken}`,
-      "content-type": "application/json",
+  return postControlPlaneUser(
+    config,
+    "/api/v1/console-users/google",
+    { email, subject },
+    "control plane google link request failed",
+    options,
+    (response) => {
+      if (response.status === 409) {
+        throw new ControlPlaneError("control plane google link conflict (409)");
+      }
     },
-    body: JSON.stringify({ email, subject }),
-    cache: "no-store",
-  });
-  if (response.status === 409) {
-    throw new ControlPlaneError("control plane google link conflict (409)");
-  }
-  if (!response.ok) {
-    throw new ControlPlaneError(`control plane google link request failed (${response.status})`);
-  }
-  return parseControlPlaneUser(await response.json());
+  );
 }
 
 const DEPLOYMENT_PAGE_CAP = 20;
@@ -502,6 +478,34 @@ function parseSandboxPage(body: unknown): { items: Sandbox[]; total: number } {
     items,
     total: typeof record.total === "number" ? record.total : items.length,
   };
+}
+
+async function postControlPlaneUser(
+  config: ControlPlaneConfig,
+  path: string,
+  body: Record<string, string>,
+  failure: string,
+  options: ListOptions,
+  reject: (response: Response) => void | Promise<void>,
+): Promise<ControlPlaneUser> {
+  const fetchImpl = options.fetch ?? fetch;
+  const now = options.now ?? Date.now;
+  const accessToken = await accessTokenFor(config, fetchImpl, now);
+  const response = await fetchImpl(`${config.baseUrl}${path}`, {
+    method: "POST",
+    headers: {
+      accept: "application/json",
+      authorization: `Bearer ${accessToken}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify(body),
+    cache: "no-store",
+  });
+  await reject(response);
+  if (!response.ok) {
+    throw new ControlPlaneError(`${failure} (${response.status})`);
+  }
+  return parseControlPlaneUser(await response.json());
 }
 
 async function errorCode(response: Response): Promise<string> {
