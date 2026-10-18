@@ -140,8 +140,15 @@ async def test_mutations_succeed_with_a_valid_token(client: AsyncClient, token: 
     assert delete.status_code == 204
 
 
-async def test_reads_do_not_require_a_token(client: AsyncClient) -> None:
+async def test_reads_require_a_token(client: AsyncClient) -> None:
     response = await client.get("/api/v1/projects")
+
+    assert response.status_code == 401
+    assert response.json() == {"detail": "Missing bearer token", "code": "invalid_token"}
+
+
+async def test_reads_succeed_with_a_valid_token(client: AsyncClient, token: str) -> None:
+    response = await client.get("/api/v1/projects", headers=bearer(token))
 
     assert response.status_code == 200
     assert response.json()["items"] == []

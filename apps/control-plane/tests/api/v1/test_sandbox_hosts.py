@@ -36,7 +36,7 @@ async def test_enroll_and_read_a_host(client: AsyncClient, auth: dict[str, str])
     assert created["status"] == "enrolled"
     uuid.UUID(created["id"])
 
-    fetched = await client.get(f"{HOSTS}/{created['id']}")
+    fetched = await client.get(f"{HOSTS}/{created['id']}", headers=auth)
     assert fetched.status_code == 200
     assert fetched.json()["name"] == "kvm-1"
 
@@ -102,7 +102,7 @@ async def test_delete_removes_an_idle_host(client: AsyncClient, auth: dict[str, 
     host = await enroll(client, auth)
     deleted = await client.delete(f"{HOSTS}/{host['id']}", headers=auth)
     assert deleted.status_code == 204
-    assert (await client.get(f"{HOSTS}/{host['id']}")).status_code == 404
+    assert (await client.get(f"{HOSTS}/{host['id']}", headers=auth)).status_code == 404
 
 
 async def test_firecracker_without_a_host_is_unavailable(

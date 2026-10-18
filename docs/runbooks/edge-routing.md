@@ -26,8 +26,8 @@ curl -s -X POST http://127.0.0.1:8000/api/v1/projects/<project-id>/routes \
 ```
 
 Hostnames are unique platform-wide. `enabled: false` keeps the row but drops it
-from Traefik and withdraws the public DNS record. Mutations need a token;
-`GET /api/v1/projects/{id}/routes` does not.
+from Traefik and withdraws the public DNS record. Every route call, including
+`GET /api/v1/projects/{id}/routes`, needs a token.
 
 ## Traefik HTTP provider
 

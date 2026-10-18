@@ -149,7 +149,7 @@ async def test_list_is_paginated(client: AsyncClient, auth: dict[str, str], proj
         created = await client.post(routes_url(project), json=route_body(environment, hostname=host), headers=auth)
         assert created.status_code == 201, created.text
 
-    page = await client.get(routes_url(project), params={"limit": 2, "offset": 1})
+    page = await client.get(routes_url(project), params={"limit": 2, "offset": 1}, headers=auth)
     assert page.status_code == 200
     body = page.json()
     assert body["total"] == 3

@@ -148,7 +148,8 @@ shows the bind line `Uvicorn running on http://0.0.0.0:8000`.
 
 ## 9. Optional: API clients
 
-`/healthz` and `/readyz` need no auth. For `/api/v1` later, set
+`/healthz` and `/readyz` need no auth. Every `/api/v1` resource, including
+reads, needs a bearer from `POST /api/v1/auth/token`. Set
 `AERODECK_AUTH_CLIENTS` to SHA-256 hex digests of client secrets (never the
 secrets). Procedure: [control-plane.md](control-plane.md).
 

@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from datetime import timedelta
 from typing import Annotated
 
-from fastapi import Depends, Query, Request
+from fastapi import Depends, Query
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -215,8 +215,6 @@ def get_job_service(dispatcher: JobDispatcherDep, environments: EnvironmentServi
 
 JobServiceDep = Annotated[JobService, Depends(get_job_service)]
 
-MUTATING_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
-
 # auto_error=False so a missing header becomes our {"detail", "code"} 401, not FastAPI's 403.
 _bearer = HTTPBearer(auto_error=False, description="Access token from POST /api/v1/auth/token")
 BearerDep = Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer)]
@@ -245,16 +243,16 @@ async def get_current_client(credentials: BearerDep, auth: AuthServiceDep) -> Au
 ClientDep = Annotated[AuthenticatedClient, Depends(get_current_client)]
 
 
-async def require_client_for_mutations(request: Request, credentials: BearerDep, auth: AuthServiceDep) -> None:
-    """Router-level guard: POST/PUT/PATCH/DELETE need a valid token, reads pass through."""
-    if request.method not in MUTATING_METHODS:
-        return
+async def require_client(credentials: BearerDep, auth: AuthServiceDep) -> None:
+    """Router-level guard: every method needs a valid enrolled-client token."""
     if credentials is None:
         raise InvalidTokenError("Missing bearer token")
     await auth.authenticate(credentials.credentials)
 
 
-MUTATION_GUARD = [Depends(require_client_for_mutations)]
+AUTH_GUARD = [Depends(require_client)]
+# Kept so existing routers that imported MUTATION_GUARD stay equivalent (#36).
+MUTATION_GUARD = AUTH_GUARD
 
 
 def _bearer_matches(provided: str, expected: str) -> bool:

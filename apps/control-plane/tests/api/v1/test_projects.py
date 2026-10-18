@@ -24,7 +24,7 @@ async def test_create_and_read_project(client: AsyncClient, auth: dict[str, str]
     assert created["description"] is None
     uuid.UUID(created["id"])
 
-    fetched = await client.get(f"{PROJECTS}/{created['id']}")
+    fetched = await client.get(f"{PROJECTS}/{created['id']}", headers=auth)
 
     assert fetched.status_code == 200
     assert fetched.json() == created
@@ -45,8 +45,8 @@ async def test_slug_must_be_a_dns_label(client: AsyncClient, auth: dict[str, str
     assert response.status_code == 422
 
 
-async def test_unknown_project_is_not_found(client: AsyncClient) -> None:
-    response = await client.get(f"{PROJECTS}/{uuid.uuid4()}")
+async def test_unknown_project_is_not_found(client: AsyncClient, auth: dict[str, str]) -> None:
+    response = await client.get(f"{PROJECTS}/{uuid.uuid4()}", headers=auth)
 
     assert response.status_code == 404
     assert response.json()["code"] == "not_found"
@@ -85,15 +85,15 @@ async def test_delete_removes_project_and_its_environments(client: AsyncClient, 
     deleted = await client.delete(f"{PROJECTS}/{project['id']}", headers=auth)
 
     assert deleted.status_code == 204
-    assert (await client.get(f"{PROJECTS}/{project['id']}")).status_code == 404
-    assert (await client.get(f"{PROJECTS}/{project['id']}/environments")).status_code == 404
+    assert (await client.get(f"{PROJECTS}/{project['id']}", headers=auth)).status_code == 404
+    assert (await client.get(f"{PROJECTS}/{project['id']}/environments", headers=auth)).status_code == 404
 
 
 async def test_list_is_paginated_in_creation_order(client: AsyncClient, auth: dict[str, str]) -> None:
     for slug in ("alpha", "bravo", "charlie"):
         await create_project(client, auth, slug)
 
-    page = await client.get(PROJECTS, params={"limit": 2, "offset": 1})
+    page = await client.get(PROJECTS, params={"limit": 2, "offset": 1}, headers=auth)
 
     assert page.status_code == 200
     body = page.json()
@@ -103,10 +103,10 @@ async def test_list_is_paginated_in_creation_order(client: AsyncClient, auth: di
     assert [p["slug"] for p in body["items"]] == ["bravo", "charlie"]
 
 
-async def test_pagination_bounds_are_enforced(client: AsyncClient) -> None:
-    assert (await client.get(PROJECTS, params={"limit": 0})).status_code == 422
-    assert (await client.get(PROJECTS, params={"limit": 201})).status_code == 422
-    assert (await client.get(PROJECTS, params={"offset": -1})).status_code == 422
+async def test_pagination_bounds_are_enforced(client: AsyncClient, auth: dict[str, str]) -> None:
+    assert (await client.get(PROJECTS, params={"limit": 0}, headers=auth)).status_code == 422
+    assert (await client.get(PROJECTS, params={"limit": 201}, headers=auth)).status_code == 422
+    assert (await client.get(PROJECTS, params={"offset": -1}, headers=auth)).status_code == 422
 
 
 async def test_state_survives_an_application_restart(
@@ -121,7 +121,7 @@ async def test_state_survives_an_application_restart(
     restarted = app_factory(settings)
     async with LifespanManager(restarted):
         async with AsyncClient(transport=ASGITransport(app=restarted), base_url="http://test") as fresh:
-            response = await fresh.get(f"{PROJECTS}/{created['id']}")
+            response = await fresh.get(f"{PROJECTS}/{created['id']}", headers=auth)
 
     assert response.status_code == 200
     assert response.json()["slug"] == "durable"

@@ -30,7 +30,7 @@ async def test_creating_a_route_publishes_dns(
     created = await client.post(routes_url(project), json=route_body(environment), headers=auth)
     assert created.status_code == 201, created.text
 
-    response = await client.get(dns_url(project, created.json()["id"]))
+    response = await client.get(dns_url(project, created.json()["id"]), headers=auth)
     assert response.status_code == 200, response.text
     body = response.json()
     assert body["hostname"] == "payments.example.com"
@@ -48,7 +48,7 @@ async def test_disabled_route_has_no_public_dns(
         routes_url(project), json=route_body(environment, enabled=False), headers=auth
     )
     assert created.status_code == 201
-    response = await client.get(dns_url(project, created.json()["id"]))
+    response = await client.get(dns_url(project, created.json()["id"]), headers=auth)
     assert response.status_code == 404
     assert response.json()["code"] == "not_found"
 
@@ -58,17 +58,17 @@ async def test_disabling_a_route_withdraws_dns(
 ) -> None:
     created = await client.post(routes_url(project), json=route_body(environment), headers=auth)
     route_id = created.json()["id"]
-    assert (await client.get(dns_url(project, route_id))).status_code == 200
+    assert (await client.get(dns_url(project, route_id), headers=auth)).status_code == 200
 
     updated = await client.patch(f"{routes_url(project)}/{route_id}", json={"enabled": False}, headers=auth)
     assert updated.status_code == 200
-    withdrawn = await client.get(dns_url(project, route_id))
+    withdrawn = await client.get(dns_url(project, route_id), headers=auth)
     assert withdrawn.status_code == 404
     assert withdrawn.json()["code"] == "not_found"
 
     enabled = await client.patch(f"{routes_url(project)}/{route_id}", json={"enabled": True}, headers=auth)
     assert enabled.status_code == 200
-    body = (await client.get(dns_url(project, route_id))).json()
+    body = (await client.get(dns_url(project, route_id), headers=auth)).json()
     assert body["status"] == "published"
 
 
@@ -82,7 +82,7 @@ async def test_hostname_change_moves_the_dns_record(
         f"{routes_url(project)}/{route_id}", json={"hostname": "api.example.com"}, headers=auth
     )
     assert updated.status_code == 200
-    body = (await client.get(dns_url(project, route_id))).json()
+    body = (await client.get(dns_url(project, route_id), headers=auth)).json()
     assert body["hostname"] == "api.example.com"
     assert body["status"] == "published"
 
@@ -94,4 +94,4 @@ async def test_deleting_a_route_withdraws_dns(
     route_id = created.json()["id"]
     deleted = await client.delete(f"{routes_url(project)}/{route_id}", headers=auth)
     assert deleted.status_code == 204
-    assert (await client.get(dns_url(project, route_id))).status_code == 404
+    assert (await client.get(dns_url(project, route_id), headers=auth)).status_code == 404
