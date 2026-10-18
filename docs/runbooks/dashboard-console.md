@@ -13,7 +13,10 @@ Creating a deployment uses `POST /api/v1/deployments` through
 follow the same split. The terminal reads
 `GET /api/v1/deployments/{id}/logs` through
 `GET /api/console/deployments/{id}/logs` when the console client is set, and
-stays on `/api/mock/v1/deployments/{id}/logs` when it is not. Sign-in still
+stays on `/api/mock/v1/deployments/{id}/logs` when it is not. An unknown
+deployment id does not stream. When the stub emits `Done`, the dashboard
+server records `succeeded` with `POST /api/v1/deployments/{id}/succeeded`.
+The mock log route still marks its own row succeeded. Sign-in still
 posts to `/api/mock/v1/auth/login`. When the console client is set, that
 route checks `POST /api/v1/console-users/login` and sets `aerodeck_session`
 from the stored user and opens `POST /api/v1/console-sessions`. The cookie
