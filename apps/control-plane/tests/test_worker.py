@@ -158,31 +158,80 @@ async def test_provision_with_deployment_id_publishes_progress(
 
 @pytest.mark.asyncio
 async def test_provision_failure_publishes_safe_line_then_done(
-    worker_app: Celery, provisioner: FlakyProvisioner, monkeypatch: pytest.MonkeyPatch
+    worker_app: Celery, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(tasks, "get_settings", lambda: make_settings(database_url=None, redis_url=None))
-    provisioner.failures = 99
-    provisioner.error = PermanentJobError
-    deployment_id = uuid4()
+    # Mimic TerraformProvisioner wrapping stdout/stderr that may contain secrets.
+    secret_blob = "Error: dop_v1_live_SECRETTOKEN spaces_key=AKIAEXAMPLE"
 
-    result = worker_app.tasks[tasks.PROVISION_TASK].apply(
-        kwargs={
-            "project_id": "p",
-            "environment_id": "e",
-            "deployment_id": str(deployment_id),
-            # Must not appear in published failure text.
-            "region": "ams3",
-        }
-    )
+    class LeakyProvisioner:
+        def provision(self, *, project_id: str, environment_id: str, **_: str) -> JobOutcome:
+            raise PermanentJobError(secret_blob)
+
+        def reconcile(self, *, project_id: str, environment_id: str, **_: str) -> JobOutcome:
+            raise PermanentJobError(secret_blob)
+
+    tasks.use_provisioner(LeakyProvisioner())
+    deployment_id = uuid4()
+    try:
+        result = worker_app.tasks[tasks.PROVISION_TASK].apply(
+            kwargs={"project_id": "p", "environment_id": "e", "deployment_id": str(deployment_id)}
+        )
+    finally:
+        tasks.use_provisioner(NoopProvisioner())
 
     assert result.failed()
     lines = await published_lines(None, deployment_id)
     assert lines is not None
     assert lines[0] == "Starting environment provision..."
     assert lines[-1] == DONE_LINE
-    assert lines[-2].startswith("Provision failed: PermanentJobError:")
-    assert "dop_v1" not in lines[-2]
-    assert "SECRET" not in lines[-2]
+    assert lines[-2] == "Provision failed: PermanentJobError"
+    assert secret_blob not in "".join(lines)
+    assert "dop_v1" not in "".join(lines)
+    assert "SECRETTOKEN" not in "".join(lines)
+
+
+@pytest.mark.asyncio
+async def test_transient_retry_does_not_publish_done_until_success(
+    worker_app: Celery, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from app.services import deployment_logs as deployment_logs_mod
+
+    monkeypatch.setattr(tasks, "get_settings", lambda: make_settings(database_url=None, redis_url=None))
+    deployment_id = uuid4()
+    mid_retry_lines: list[str] = []
+
+    class OnceTransient:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def provision(self, *, project_id: str, environment_id: str, **_: str) -> JobOutcome:
+            self.calls += 1
+            if self.calls == 1:
+                raise TransientJobError("Error acquiring the state lock")
+            mid_retry_lines.extend(deployment_logs_mod._memory.get(str(deployment_id), []))
+            return JobOutcome(JobKind.provision, project_id, environment_id, changed=True, detail="done")
+
+        def reconcile(self, *, project_id: str, environment_id: str, **_: str) -> JobOutcome:
+            raise PermanentJobError("unused")
+
+    provisioner = OnceTransient()
+    tasks.use_provisioner(provisioner)
+    try:
+        result = worker_app.tasks[tasks.PROVISION_TASK].apply(
+            kwargs={"project_id": "p", "environment_id": "e", "deployment_id": str(deployment_id)}
+        )
+    finally:
+        tasks.use_provisioner(NoopProvisioner())
+
+    assert result.successful()
+    assert provisioner.calls == 2
+    assert DONE_LINE not in mid_retry_lines
+    assert "Starting environment provision..." in mid_retry_lines
+    lines = await published_lines(None, deployment_id)
+    assert lines is not None
+    assert lines[-1] == DONE_LINE
+    assert lines.count(DONE_LINE) == 1
 
 
 @pytest.mark.asyncio

@@ -13,10 +13,13 @@ from app.services.deployment_logs import (
     clear_memory_log_lines,
     ensure_log_store_ready,
     iter_deployment_log_lines,
+    provision_failure_line,
     publish_line,
     publish_line_sync,
+    publish_provision_lines_sync,
     published_lines,
 )
+from app.services.provisioning import PermanentJobError
 
 
 @pytest.fixture(autouse=True)
@@ -381,3 +384,34 @@ async def test_mid_stream_redis_failure_ends_cleanly(monkeypatch: pytest.MonkeyP
     lines = await _collect(iter_deployment_log_lines("redis://example/0", uuid4()))
     assert lines == ["partial"]
     client.aclose.assert_awaited_once()
+
+
+def test_provision_failure_line_is_class_name_only() -> None:
+    exc = PermanentJobError("terraform stderr with dop_v1_live_SECRET and spaces keys")
+    assert provision_failure_line(exc) == "Provision failed: PermanentJobError"
+    assert "dop_v1" not in provision_failure_line(exc)
+    assert "SECRET" not in provision_failure_line(exc)
+
+
+@pytest.mark.asyncio
+async def test_publish_provision_lines_sync_writes_all_lines() -> None:
+    deployment_id = uuid4()
+    publish_provision_lines_sync(None, deployment_id, "one", "two", DONE_LINE)
+    assert await published_lines(None, deployment_id) == ["one", "two", DONE_LINE]
+
+
+@pytest.mark.asyncio
+async def test_publish_provision_lines_sync_keeps_trying_after_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    deployment_id = uuid4()
+    calls: list[str] = []
+
+    def flaky(_redis_url: str | None, _deployment_id: object, line: str) -> None:
+        calls.append(line)
+        if line == "boom":
+            raise QueueUnavailableError("Deployment log store is unavailable")
+
+    monkeypatch.setattr(deployment_logs_mod, "publish_line_sync", flaky)
+    publish_provision_lines_sync(None, deployment_id, "ok", "boom", DONE_LINE)
+    assert calls == ["ok", "boom", DONE_LINE]

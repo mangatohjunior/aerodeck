@@ -151,15 +151,9 @@ def publish_line_sync(redis_url: str | None, deployment_id: uuid.UUID, line: str
         raise _map_redis_error(exc) from exc
 
 
-_FAILURE_LINE_MAX = 500
-
-
 def provision_failure_line(exc: BaseException) -> str:
-    """Short, single-line failure text for the terminal. No secret scrubbing beyond truncation."""
-    compact = " ".join(f"Provision failed: {type(exc).__name__}: {exc}".split())
-    if len(compact) > _FAILURE_LINE_MAX:
-        compact = compact[: _FAILURE_LINE_MAX - 3] + "..."
-    return compact
+    """Terminal failure line: exception class only — never ``str(exc)`` (may hold TF stderr)."""
+    return f"Provision failed: {type(exc).__name__}"
 
 
 def publish_provision_lines_sync(
@@ -167,7 +161,10 @@ def publish_provision_lines_sync(
     deployment_id: uuid.UUID,
     *lines: str,
 ) -> None:
-    """Publish worker progress. Log-store failures must not fail the provision job."""
+    """Publish worker progress. Log-store failures must not fail the provision job.
+
+    Each line is attempted independently so a failed write still tries ``Done``.
+    """
     for line in lines:
         try:
             publish_line_sync(redis_url, deployment_id, line)
@@ -177,7 +174,6 @@ def publish_provision_lines_sync(
                 deployment_id,
                 type(exc).__name__,
             )
-            return
 
 
 async def publish_line(redis_url: str | None, deployment_id: uuid.UUID, line: str) -> None:

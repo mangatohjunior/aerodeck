@@ -11,7 +11,7 @@ JobStatusValue = Literal["queued", "running", "retrying", "succeeded", "failed"]
 class ProvisionJobCreate(BaseModel):
     """Optional body for ``POST .../provision``. Links the job to a console deployment."""
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
     deployment_id: uuid.UUID | None = Field(
         default=None,

@@ -62,9 +62,10 @@ curl -s -X POST \
 ```
 
 The worker then publishes lines onto
-`GET /api/v1/deployments/<deployment-id>/logs` (start, outcome detail or a short
-failure line, then `Done`). Secrets stay out of those lines. Mapping the Deploy
-form onto this call is a separate story.
+`GET /api/v1/deployments/<deployment-id>/logs` (start, outcome detail or
+`Provision failed: <ExceptionClass>`, then `Done`). Failure lines never include
+exception message text (Terraform stdout/stderr can hold secrets). Mapping the
+Deploy form onto this call is a separate story.
 
 Dry-run detail contains `terraform plan only`. Apply detail contains
 `applied stored plan`. Locks retry (`TransientJobError`). Policy or bad
