@@ -5,13 +5,15 @@ import { ControlPlaneError, readControlPlaneConfig, revokeControlPlaneSession } 
 import { jsonError } from "@/lib/mock-http";
 import { destroySession, getUserBySessionToken } from "@/lib/mock-store";
 import { SESSION_COOKIE, clearSessionCookie } from "@/lib/session-cookie";
+import { shouldRevokeControlPlaneSession } from "@/lib/session-lookup";
 
 export async function POST() {
   await connection();
 
   const token = (await cookies()).get(SESSION_COOKIE)?.value;
   const config = readControlPlaneConfig();
-  if (token && config && !getUserBySessionToken(token)) {
+  const mockUser = getUserBySessionToken(token);
+  if (token && config && shouldRevokeControlPlaneSession(token, config, mockUser)) {
     try {
       await revokeControlPlaneSession(config, token);
     } catch (cause) {

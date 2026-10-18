@@ -17,6 +17,15 @@ export function isMissingControlPlaneSession(cause: ControlPlaneError): boolean 
   return cause.message.includes("not found (404)");
 }
 
+/** Revoke only a control-plane cookie. A mock-store token stays local. */
+export function shouldRevokeControlPlaneSession(
+  token: string | undefined,
+  config: ControlPlaneConfig | null,
+  mockUser: PublicUser | undefined,
+): boolean {
+  return Boolean(token && config && !mockUser);
+}
+
 export async function lookupSession(lookup: SessionLookup): Promise<SessionRead> {
   if (!lookup.token) {
     return { status: "anonymous" };

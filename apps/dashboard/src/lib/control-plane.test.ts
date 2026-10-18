@@ -2,7 +2,11 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import { ControlPlaneError } from "./control-plane";
-import { isMissingControlPlaneSession, lookupSession } from "./session-lookup";
+import {
+  isMissingControlPlaneSession,
+  lookupSession,
+  shouldRevokeControlPlaneSession,
+} from "./session-lookup";
 import {
   clearControlPlaneTokenCache,
   listControlPlaneProjects,
@@ -97,6 +101,13 @@ describe("lookupSession", () => {
       isMissingControlPlaneSession(new ControlPlaneError("control plane session request failed (502)")),
       false,
     );
+  });
+
+  it("revokes only a control-plane cookie when the console client is set", () => {
+    assert.equal(shouldRevokeControlPlaneSession("mock-google-token", config, mockUser), false);
+    assert.equal(shouldRevokeControlPlaneSession("control-plane-token", config, undefined), true);
+    assert.equal(shouldRevokeControlPlaneSession("mock-google-token", null, mockUser), false);
+    assert.equal(shouldRevokeControlPlaneSession(undefined, config, undefined), false);
   });
 });
 
