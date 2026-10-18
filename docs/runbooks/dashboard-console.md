@@ -6,9 +6,11 @@ browser never sees that client secret or the control-plane bearer.
 
 Overview and Projects read `GET /api/v1/projects`. Sandboxes read
 `GET /api/v1/projects/{id}/sandboxes` through `GET /api/console/sandboxes`.
-Creating a deployment stays on the mock API
-([dashboard-mock.md](dashboard-mock.md)). The control plane stores a row at
-`POST /api/v1/deployments`, but the console does not call that yet. The terminal reads
+Creating a deployment uses `POST /api/v1/deployments` through
+`POST /api/console/deployments` when the console client is set, and stays on
+`/api/mock/v1/deployments` when it is not
+([dashboard-mock.md](dashboard-mock.md)). The list and the deployment page
+follow the same split. The terminal reads
 `GET /api/v1/deployments/{id}/logs` through
 `GET /api/console/deployments/{id}/logs` when the console client is set, and
 stays on `/api/mock/v1/deployments/{id}/logs` when it is not. Sign-in still

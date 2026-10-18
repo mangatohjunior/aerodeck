@@ -27,9 +27,10 @@ const NAV = [
 type AppSidebarProps = {
   mobileOpen: boolean;
   onCloseMobile: () => void;
+  controlPlane?: boolean;
 };
 
-export function AppSidebar({ mobileOpen, onCloseMobile }: AppSidebarProps) {
+export function AppSidebar({ mobileOpen, onCloseMobile, controlPlane = false }: AppSidebarProps) {
   const pathname = usePathname();
 
   return (
@@ -103,8 +104,9 @@ export function AppSidebar({ mobileOpen, onCloseMobile }: AppSidebarProps) {
 
         <div className="border-t border-sidebar-border p-4">
           <p className="text-[11px] text-muted-foreground">
-            Projects and sandboxes load on the server. Deploys stay on{" "}
-            <span className="font-mono text-primary/80">/api/mock/v1</span>
+            {controlPlane
+              ? "Projects, sandboxes, and deployments load on the server."
+              : "Projects and sandboxes load on the server. Deploys stay on /api/mock/v1"}
           </p>
         </div>
       </aside>

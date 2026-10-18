@@ -18,7 +18,7 @@ import { Label } from "@/components/ui/label";
 import { createDeployment } from "@/lib/api";
 import { parseGithubRepo } from "@/lib/github";
 
-export function NewDeploymentForm() {
+export function NewDeploymentForm({ controlPlane = false }: { controlPlane?: boolean }) {
   const router = useRouter();
   const [repoUrl, setRepoUrl] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -35,7 +35,7 @@ export function NewDeploymentForm() {
 
     setSubmitting(true);
     try {
-      const deployment = await createDeployment(repoUrl);
+      const deployment = await createDeployment(repoUrl, controlPlane);
       router.push(`/deployments/${deployment.id}`);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Deploy failed.");
@@ -50,8 +50,9 @@ export function NewDeploymentForm() {
       <CardHeader className="border-b">
         <CardTitle>Repository</CardTitle>
         <CardDescription>
-          HTTPS GitHub URL. Validated in the browser, then POSTed to the local
-          mock control plane at <span className="font-mono">/api/mock/v1/deployments</span>.
+          {controlPlane
+            ? "HTTPS GitHub URL. The dashboard server stores the deployment in the control plane."
+            : "HTTPS GitHub URL. Validated in the browser, then POSTed to /api/mock/v1/deployments."}
         </CardDescription>
       </CardHeader>
       <form onSubmit={handleSubmit}>

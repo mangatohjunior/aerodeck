@@ -14,9 +14,11 @@ import { cn } from "@/lib/utils";
 export function AppShell({
   children,
   user,
+  controlPlane = false,
 }: {
   children: React.ReactNode;
   user: PublicUser;
+  controlPlane?: boolean;
 }) {
   const router = useRouter();
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -62,6 +64,7 @@ export function AppShell({
       <AppSidebar
         mobileOpen={mobileOpen}
         onCloseMobile={() => setMobileOpen(false)}
+        controlPlane={controlPlane}
       />
 
       <div className="flex min-w-0 flex-1 flex-col">
