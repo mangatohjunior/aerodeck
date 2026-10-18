@@ -2,13 +2,18 @@ import { cookies } from "next/headers";
 import { connection, NextResponse } from "next/server";
 
 import {
+  ControlPlaneError,
+  linkControlPlaneGoogleUser,
+  readControlPlaneConfig,
+} from "@/lib/control-plane";
+import {
   MOCK_GOOGLE_EMAIL,
   MOCK_GOOGLE_SUBJECT,
   exchangeGoogleCode,
   isRealGoogleConfigured,
   statesMatch,
 } from "@/lib/google-oauth";
-import { loginGoogleUser } from "@/lib/mock-store";
+import { loginGoogleUser, openControlPlaneSession } from "@/lib/mock-store";
 import {
   OAUTH_STATE_COOKIE,
   OAUTH_VERIFIER_COOKIE,
@@ -42,13 +47,23 @@ export async function GET(request: Request) {
   }
 
   try {
+    const code = incoming.searchParams.get("code");
     const profile = await resolveGoogleProfile(incoming, jar.get(OAUTH_VERIFIER_COOKIE)?.value);
-    const { token } = loginGoogleUser(profile.email, profile.subject);
+    const config = readControlPlaneConfig();
+    const token =
+      config && code && isRealGoogleConfigured()
+        ? openControlPlaneSession(
+            await linkControlPlaneGoogleUser(config, profile.email, profile.subject),
+          )
+        : loginGoogleUser(profile.email, profile.subject).token;
     const response = NextResponse.redirect(new URL("/", origin));
     persistSessionCookie(response, token);
     clearOauthCookies(response);
     return response;
-  } catch {
+  } catch (cause) {
+    if (cause instanceof ControlPlaneError) {
+      console.error("event=console_google_link_failed detail=%s", cause.message);
+    }
     return loginError(origin);
   }
 }

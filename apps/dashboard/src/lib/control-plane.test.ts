@@ -11,6 +11,7 @@ import {
   authenticateControlPlaneUser,
   createControlPlaneDeployment,
   getControlPlaneDeployment,
+  linkControlPlaneGoogleUser,
   listControlPlaneDeployments,
   registerControlPlaneUser,
   type ControlPlaneConfig,
@@ -512,6 +513,59 @@ describe("control plane deployments", () => {
         assert.ok(cause instanceof ControlPlaneError);
         assert.equal(cause.message.includes("super-secret"), false);
         assert.match(cause.message, /not found \(404\)/);
+        return true;
+      },
+    );
+  });
+});
+
+describe("linkControlPlaneGoogleUser", () => {
+  it("posts the subject with the bearer and does not return it", async () => {
+    clearControlPlaneTokenCache();
+    const subject = "google-subject-1";
+    let authorization = "";
+    let posted = "";
+    const fetchImpl: typeof fetch = async (input, init) => {
+      const url = String(input);
+      if (url.endsWith("/api/v1/auth/token")) {
+        return jsonResponse({ access_token: "issued-bearer", expires_in: 900 });
+      }
+      authorization = new Headers(init?.headers).get("authorization") ?? "";
+      posted = typeof init?.body === "string" ? init.body : "";
+      return jsonResponse({
+        id: "55555555-5555-4555-8555-555555555555",
+        email: "ada@example.com",
+        created_at: "2026-10-18T00:00:00.000Z",
+        google_subject: subject,
+        password_hash: null,
+      });
+    };
+
+    const user = await linkControlPlaneGoogleUser(config, "Ada@Example.com", subject, {
+      fetch: fetchImpl,
+    });
+    assert.equal(authorization, "Bearer issued-bearer");
+    assert.match(posted, /google-subject-1/);
+    assert.equal(JSON.stringify(user).includes(subject), false);
+    assert.equal(JSON.stringify(user).includes("password_hash"), false);
+    assert.equal(JSON.stringify(user).includes("super-secret"), false);
+  });
+
+  it("does not include the upstream body when the link conflicts", async () => {
+    clearControlPlaneTokenCache();
+    const fetchImpl: typeof fetch = async (input) => {
+      const url = String(input);
+      if (url.endsWith("/api/v1/auth/token")) {
+        return jsonResponse({ access_token: "issued-bearer", expires_in: 900 });
+      }
+      return jsonResponse({ detail: "taken", subject: "google-subject-1" }, 409);
+    };
+    await assert.rejects(
+      () => linkControlPlaneGoogleUser(config, "ada@example.com", "google-subject-1", { fetch: fetchImpl }),
+      (cause: unknown) => {
+        assert.ok(cause instanceof ControlPlaneError);
+        assert.equal(cause.message.includes("google-subject-1"), false);
+        assert.match(cause.message, /conflict \(409\)/);
         return true;
       },
     );

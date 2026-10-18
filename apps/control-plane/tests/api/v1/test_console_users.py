@@ -82,3 +82,74 @@ async def test_wrong_password_matches_unknown_email(client: AsyncClient, auth: d
     assert "missing@example.com" not in missing.text
     assert "another-pass" not in wrong.text
     assert "another-pass" not in missing.text
+
+
+async def test_google_link_requires_a_token(client: AsyncClient) -> None:
+    response = await client.post(
+        f"{USERS}/google",
+        json={"email": "ada@example.com", "subject": "google-subject-1"},
+    )
+
+    assert response.status_code == 401
+    assert "google-subject-1" not in response.text
+
+
+async def test_google_link_creates_an_account_without_a_password(client: AsyncClient, auth: dict[str, str]) -> None:
+    response = await client.post(
+        f"{USERS}/google",
+        json={"email": "Ada@Example.com", "subject": "google-subject-1"},
+        headers=auth,
+    )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["email"] == "ada@example.com"
+    assert "password" not in body
+    assert "password_hash" not in body
+    assert "google-subject-1" not in response.text
+    assert "subject" not in body
+
+    password = await client.post(
+        f"{USERS}/login",
+        json={"email": "ada@example.com", "password": PASSWORD},
+        headers=auth,
+    )
+    missing = await client.post(
+        f"{USERS}/login",
+        json={"email": "missing@example.com", "password": PASSWORD},
+        headers=auth,
+    )
+    assert password.status_code == 401
+    assert password.json() == missing.json()
+    assert PASSWORD not in password.text
+
+
+async def test_google_link_attaches_to_the_password_account(client: AsyncClient, auth: dict[str, str]) -> None:
+    created = await client.post(USERS, json={"email": "ada@example.com", "password": PASSWORD}, headers=auth)
+    assert created.status_code == 201, created.text
+
+    linked = await client.post(
+        f"{USERS}/google",
+        json={"email": "ADA@example.com", "subject": "google-subject-1"},
+        headers=auth,
+    )
+
+    assert linked.status_code == 200, linked.text
+    assert linked.json()["id"] == created.json()["id"]
+    assert "google-subject-1" not in linked.text
+
+    again = await client.post(
+        f"{USERS}/google",
+        json={"email": "ada@example.com", "subject": "google-subject-2"},
+        headers=auth,
+    )
+    stolen = await client.post(
+        f"{USERS}/google",
+        json={"email": "other@example.com", "subject": "google-subject-1"},
+        headers=auth,
+    )
+    assert again.status_code == 409
+    assert stolen.status_code == 409
+    assert again.json()["detail"] == stolen.json()["detail"]
+    assert "google-subject-2" not in again.text
+    assert "ada@example.com" not in again.text

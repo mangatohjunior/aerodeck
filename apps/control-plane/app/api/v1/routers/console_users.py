@@ -2,7 +2,7 @@ from fastapi import APIRouter, status
 
 from app.api.deps import ConsoleUserServiceDep
 from app.schemas.auth import ErrorResponse
-from app.schemas.console_user import ConsoleUserCreate, ConsoleUserRead
+from app.schemas.console_user import ConsoleUserCreate, ConsoleUserGoogleLink, ConsoleUserRead
 
 router = APIRouter(prefix="/console-users", tags=["console-users"])
 
@@ -29,3 +29,13 @@ async def register_console_user(body: ConsoleUserCreate, users: ConsoleUserServi
 )
 async def login_console_user(body: ConsoleUserCreate, users: ConsoleUserServiceDep) -> ConsoleUserRead:
     return ConsoleUserRead.model_validate(await users.authenticate(body))
+
+
+@router.post(
+    "/google",
+    response_model=ConsoleUserRead,
+    summary="Link a verified Google subject to a console user",
+    responses=_UNAUTHENTICATED | _CONFLICT,
+)
+async def link_google_console_user(body: ConsoleUserGoogleLink, users: ConsoleUserServiceDep) -> ConsoleUserRead:
+    return ConsoleUserRead.model_validate(await users.link_google(body))
