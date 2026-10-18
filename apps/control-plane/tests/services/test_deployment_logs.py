@@ -5,10 +5,12 @@ import pytest
 from redis.exceptions import RedisError
 
 from app.core.errors import QueueUnavailableError
+from app.services import deployment_logs as deployment_logs_mod
 from app.services.deployment_logs import (
     DONE_LINE,
-    _MAX_LINES,
+    MAX_LINES,
     clear_memory_log_lines,
+    ensure_log_store_ready,
     iter_deployment_log_sse,
     publish_line,
     publish_line_sync,
@@ -54,15 +56,16 @@ async def test_multiline_payload_is_rejected() -> None:
 
 
 @pytest.mark.asyncio
-async def test_stream_appends_done_when_publisher_omits_it() -> None:
+async def test_memory_stream_does_not_invent_done() -> None:
     deployment_id = uuid4()
     await publish_line(None, deployment_id, "Plan: 1 to add")
     body = b"".join([chunk async for chunk in iter_deployment_log_sse(None, deployment_id)])
-    assert body == b"data: Plan: 1 to add\n\ndata: Done\n\n"
+    assert body == b"data: Plan: 1 to add\n\n"
+    assert b"data: Done" not in body
 
 
 @pytest.mark.asyncio
-async def test_stream_does_not_duplicate_trailing_done() -> None:
+async def test_memory_stream_includes_publisher_done() -> None:
     deployment_id = uuid4()
     await publish_line(None, deployment_id, "Apply complete")
     await publish_line(None, deployment_id, DONE_LINE)
@@ -73,13 +76,13 @@ async def test_stream_does_not_duplicate_trailing_done() -> None:
 @pytest.mark.asyncio
 async def test_memory_list_is_capped() -> None:
     deployment_id = uuid4()
-    for index in range(_MAX_LINES + 25):
+    for index in range(MAX_LINES + 25):
         await publish_line(None, deployment_id, f"line-{index}")
     lines = await published_lines(None, deployment_id)
     assert lines is not None
-    assert len(lines) == _MAX_LINES
+    assert len(lines) == MAX_LINES
     assert lines[0] == "line-25"
-    assert lines[-1] == f"line-{_MAX_LINES + 24}"
+    assert lines[-1] == f"line-{MAX_LINES + 24}"
 
 
 @pytest.mark.asyncio
@@ -139,10 +142,10 @@ async def test_published_lines_reads_redis_in_batches(monkeypatch: pytest.Monkey
 
 
 @pytest.mark.asyncio
-async def test_redis_stream_uses_batched_lrange(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_redis_stream_stops_on_publisher_done(monkeypatch: pytest.MonkeyPatch) -> None:
     client = AsyncMock()
-    client.llen = AsyncMock(side_effect=[2, 2])
-    client.lrange = AsyncMock(return_value=[b"alpha", b"beta"])
+    client.llen = AsyncMock(return_value=2)
+    client.lrange = AsyncMock(return_value=[b"alpha", b"Done"])
     monkeypatch.setattr(
         "app.services.deployment_logs.aioredis.from_url",
         lambda *_args, **_kwargs: client,
@@ -150,10 +153,43 @@ async def test_redis_stream_uses_batched_lrange(monkeypatch: pytest.MonkeyPatch)
     body = b"".join(
         [chunk async for chunk in iter_deployment_log_sse("redis://example/0", uuid4())]
     )
-    assert b"data: alpha\n\n" in body
-    assert b"data: beta\n\n" in body
-    assert body.endswith(b"data: Done\n\n")
-    client.lrange.assert_awaited()
+    assert body == b"data: alpha\n\ndata: Done\n\n"
+    client.aclose.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_redis_stream_does_not_invent_done_after_idle(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(deployment_logs_mod, "_FOLLOW_IDLE_ROUNDS", 2)
+    monkeypatch.setattr(deployment_logs_mod, "_FOLLOW_POLL_SECONDS", 0)
+    monkeypatch.setattr(deployment_logs_mod, "_SSE_PACE_SECONDS", 0)
+    client = AsyncMock()
+    client.llen = AsyncMock(return_value=1)
+    client.lrange = AsyncMock(return_value=[b"still-running"])
+    monkeypatch.setattr(
+        "app.services.deployment_logs.aioredis.from_url",
+        lambda *_args, **_kwargs: client,
+    )
+    body = b"".join(
+        [chunk async for chunk in iter_deployment_log_sse("redis://example/0", uuid4())]
+    )
+    assert body == b"data: still-running\n\n"
+    assert b"data: Done" not in body
+
+
+@pytest.mark.asyncio
+async def test_ensure_log_store_ready_maps_redis_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client = AsyncMock()
+    client.ping = AsyncMock(side_effect=RedisError("down"))
+    monkeypatch.setattr(
+        "app.services.deployment_logs.aioredis.from_url",
+        lambda *_args, **_kwargs: client,
+    )
+    with pytest.raises(QueueUnavailableError):
+        await ensure_log_store_ready("redis://example/0")
     client.aclose.assert_awaited_once()
 
 

@@ -1,8 +1,15 @@
+from pathlib import Path
+from unittest.mock import AsyncMock
 from uuid import UUID, uuid4
 
+import pytest
+from fastapi import FastAPI
 from httpx import AsyncClient
+from redis.exceptions import RedisError
 
-from app.services.deployment_logs import publish_line
+from app.core.config import get_settings
+from app.services.deployment_logs import DONE_LINE, publish_line
+from tests.conftest import make_settings
 
 DEPLOYMENTS = "/api/v1/deployments"
 REPO = "https://github.com/mangatohjunior/aerodeck"
@@ -46,6 +53,7 @@ async def test_deployment_logs_prefer_published_lines(
 
     await publish_line(None, deployment_id, "Plan: 1 to add")
     await publish_line(None, deployment_id, "Apply complete")
+    await publish_line(None, deployment_id, DONE_LINE)
 
     response = await client.get(f"{DEPLOYMENTS}/{deployment_id}/logs", headers=auth)
     assert response.status_code == 200
@@ -56,6 +64,49 @@ async def test_deployment_logs_prefer_published_lines(
     assert body.count("data: Done") == 1
     assert "Initializing Terraform" not in body
     assert "Provisioning K3s" not in body
+
+
+async def test_deployment_logs_without_done_do_not_auto_finish(
+    client: AsyncClient, auth: dict[str, str]
+) -> None:
+    created = await client.post(DEPLOYMENTS, json={"repo_url": REPO}, headers=auth)
+    assert created.status_code == 201, created.text
+    deployment_id = UUID(created.json()["id"])
+
+    await publish_line(None, deployment_id, "still-running")
+
+    response = await client.get(f"{DEPLOYMENTS}/{deployment_id}/logs", headers=auth)
+    assert response.status_code == 200
+    assert response.text == "data: still-running\n\n"
+
+
+async def test_deployment_logs_return_503_when_redis_is_down(
+    app: FastAPI,
+    client: AsyncClient,
+    auth: dict[str, str],
+    database_url: str,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    created = await client.post(DEPLOYMENTS, json={"repo_url": REPO}, headers=auth)
+    assert created.status_code == 201, created.text
+    deployment_id = created.json()["id"]
+
+    app.dependency_overrides[get_settings] = lambda: make_settings(
+        database_url,
+        certificate_key_dir=str(tmp_path / "cert-keys"),
+        redis_url="redis://example/0",
+    )
+    broken = AsyncMock()
+    broken.ping = AsyncMock(side_effect=RedisError("down"))
+    monkeypatch.setattr(
+        "app.services.deployment_logs.aioredis.from_url",
+        lambda *_args, **_kwargs: broken,
+    )
+
+    response = await client.get(f"{DEPLOYMENTS}/{deployment_id}/logs", headers=auth)
+    assert response.status_code == 503
+    assert response.json()["code"] == "queue_unavailable"
 
 
 async def test_unknown_deployment_does_not_stream(client: AsyncClient, auth: dict[str, str]) -> None:

@@ -16,7 +16,7 @@ from app.api.deps import DeploymentServiceDep, PaginationDep, SettingsDep
 from app.schemas.auth import ErrorResponse
 from app.schemas.common import Page
 from app.schemas.deployment import DeploymentCreate, DeploymentRead
-from app.services.deployment_logs import iter_deployment_log_sse
+from app.services.deployment_logs import ensure_log_store_ready, iter_deployment_log_sse
 
 router = APIRouter(prefix="/deployments", tags=["deployments"])
 
@@ -81,6 +81,7 @@ async def stream_deployment_logs(
 ) -> StreamingResponse:
     """Stream published lines when present; otherwise the stub for a stored deployment."""
     await deployments.get(deployment_id)
+    await ensure_log_store_ready(settings.redis_url)
     return StreamingResponse(
         iter_deployment_log_sse(settings.redis_url, deployment_id),
         media_type="text/event-stream",
