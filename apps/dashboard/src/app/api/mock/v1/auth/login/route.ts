@@ -1,8 +1,13 @@
 import { connection, NextResponse } from "next/server";
 
-import { isMockAuthError } from "@/lib/auth";
+import { INVALID_CREDENTIALS_DETAIL, isMockAuthError } from "@/lib/auth";
+import {
+  authenticateControlPlaneUser,
+  ControlPlaneError,
+  readControlPlaneConfig,
+} from "@/lib/control-plane";
 import { jsonError } from "@/lib/mock-http";
-import { loginUser } from "@/lib/mock-store";
+import { loginUser, openControlPlaneSession } from "@/lib/mock-store";
 import { persistSessionCookie } from "@/lib/session-cookie";
 
 export async function POST(request: Request) {
@@ -20,6 +25,26 @@ export async function POST(request: Request) {
   }
   if (typeof payload.password !== "string") {
     return jsonError(400, "password is required.", "missing_password");
+  }
+
+  const config = readControlPlaneConfig();
+  if (config) {
+    try {
+      const user = await authenticateControlPlaneUser(config, payload.email, payload.password);
+      const response = NextResponse.json(
+        { id: user.id, email: user.email, created_at: user.created_at },
+        { status: 200 },
+      );
+      persistSessionCookie(response, openControlPlaneSession(user));
+      return response;
+    } catch (cause) {
+      if (cause instanceof ControlPlaneError && cause.message.includes("login rejected (401)")) {
+        return jsonError(401, INVALID_CREDENTIALS_DETAIL, "invalid_credentials");
+      }
+      const detail = cause instanceof ControlPlaneError ? cause.message : "request failed";
+      console.error("event=console_login_failed detail=%s", detail);
+      return jsonError(502, "Control plane request failed.", "control_plane_unavailable");
+    }
   }
 
   try {

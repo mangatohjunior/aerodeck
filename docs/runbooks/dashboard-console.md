@@ -10,8 +10,11 @@ Creating a deployment stays on the mock API
 ([dashboard-mock.md](dashboard-mock.md)). The terminal reads
 `GET /api/v1/deployments/{id}/logs` through
 `GET /api/console/deployments/{id}/logs` when the console client is set, and
-stays on `/api/mock/v1/deployments/{id}/logs` when it is not. Sign-in stays
-on the mock API until console users can sign in against the control plane.
+stays on `/api/mock/v1/deployments/{id}/logs` when it is not. Sign-in still
+posts to `/api/mock/v1/auth/login`. When the console client is set, that
+route checks `POST /api/v1/console-users/login` and sets `aerodeck_session`
+from the stored user. A wrong password and an unknown email return the same
+error. Without the client, sign-in uses the mock store.
 Registration uses `POST /api/v1/console-users` through
 `POST /api/console/register` when the console client is set, and stays on
 `/api/mock/v1/auth/register` when it is not. When `CONTROL_PLANE_URL` is

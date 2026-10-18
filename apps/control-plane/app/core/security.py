@@ -39,6 +39,29 @@ def hash_password(password: str) -> str:
     return f"scrypt${salt.hex()}${digest.hex()}"
 
 
+_DUMMY_PASSWORD_HASH = hash_password("aerodeck-timing-pad")
+
+
+def dummy_password_hash() -> str:
+    """Hash used when the email is unknown so the check still runs scrypt."""
+    return _DUMMY_PASSWORD_HASH
+
+
+def verify_password(password: str, stored: str) -> bool:
+    parts = stored.split("$")
+    if len(parts) != 3 or parts[0] != "scrypt":
+        return False
+    try:
+        salt = bytes.fromhex(parts[1])
+        expected = bytes.fromhex(parts[2])
+    except ValueError:
+        return False
+    if len(salt) != 16 or len(expected) != 32:
+        return False
+    digest = hashlib.scrypt(password.encode("utf-8"), salt=salt, n=2**14, r=8, p=1, dklen=32)
+    return hmac.compare_digest(digest, expected)
+
+
 def verify_client_secret(secret: str, expected_hash: str) -> bool:
     """Constant-time comparison; safe to call with a dummy hash for unknown clients."""
     return hmac.compare_digest(hash_client_secret(secret), expected_hash.lower())

@@ -19,3 +19,13 @@ _UNAUTHENTICATED = {status.HTTP_401_UNAUTHORIZED: {"model": ErrorResponse}}
 )
 async def register_console_user(body: ConsoleUserCreate, users: ConsoleUserServiceDep) -> ConsoleUserRead:
     return ConsoleUserRead.model_validate(await users.register(body))
+
+
+@router.post(
+    "/login",
+    response_model=ConsoleUserRead,
+    summary="Sign in a console user",
+    responses=_UNAUTHENTICATED,
+)
+async def login_console_user(body: ConsoleUserCreate, users: ConsoleUserServiceDep) -> ConsoleUserRead:
+    return ConsoleUserRead.model_validate(await users.authenticate(body))

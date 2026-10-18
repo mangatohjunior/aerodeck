@@ -174,6 +174,34 @@ export async function registerControlPlaneUser(
   return parseControlPlaneUser(await response.json());
 }
 
+export async function authenticateControlPlaneUser(
+  config: ControlPlaneConfig,
+  email: string,
+  password: string,
+  options: ListOptions = {},
+): Promise<ControlPlaneUser> {
+  const fetchImpl = options.fetch ?? fetch;
+  const now = options.now ?? Date.now;
+  const accessToken = await accessTokenFor(config, fetchImpl, now);
+  const response = await fetchImpl(`${config.baseUrl}/api/v1/console-users/login`, {
+    method: "POST",
+    headers: {
+      accept: "application/json",
+      authorization: `Bearer ${accessToken}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ email, password }),
+    cache: "no-store",
+  });
+  if (response.status === 401 && (await errorCode(response)) === "invalid_credentials") {
+    throw new ControlPlaneError("control plane login rejected (401)");
+  }
+  if (!response.ok) {
+    throw new ControlPlaneError(`control plane login request failed (${response.status})`);
+  }
+  return parseControlPlaneUser(await response.json());
+}
+
 async function listProjectSandboxes(
   config: ControlPlaneConfig,
   projectId: string,
@@ -351,6 +379,15 @@ function parseSandboxPage(body: unknown): { items: Sandbox[]; total: number } {
     items,
     total: typeof record.total === "number" ? record.total : items.length,
   };
+}
+
+async function errorCode(response: Response): Promise<string> {
+  try {
+    const body = (await response.json()) as { code?: unknown };
+    return typeof body.code === "string" ? body.code : "";
+  } catch {
+    return "";
+  }
 }
 
 function parseControlPlaneUser(body: unknown): ControlPlaneUser {
