@@ -44,6 +44,7 @@ export function Terminal({ streamUrl, className, onComplete, onFailed }: Termina
         setStreaming(false);
         source.close();
         onFailedRef.current?.();
+        return;
       }
     };
 

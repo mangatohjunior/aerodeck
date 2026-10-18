@@ -1,8 +1,6 @@
-"""Isolated DB writes for deployment ``failed`` from workers and enqueue failure.
+"""Sync Celery bridge for deployment ``failed`` status.
 
-Celery and the enqueue path need a commit that survives the request/session
-rollback. Bridges live here (like ``tasks/sandboxes.py``) so ``DeploymentService``
-stays constructor-injected only.
+Async isolated writes live in ``app.services.deployment_status_write``.
 """
 
 import asyncio
@@ -11,22 +9,9 @@ import uuid
 from app.core.config import get_settings
 from app.core.db import SessionLocal, bind_engine, create_engine, unbind_engine
 from app.core.logging import get_logger
-from app.repositories.deployments import DeploymentRepository
-from app.services.deployments import DeploymentService
+from app.services.deployment_status_write import mark_deployment_failed_isolated
 
 logger = get_logger("tasks.deployment_status")
-
-
-async def mark_deployment_failed_isolated(deployment_id: uuid.UUID) -> None:
-    """Commit failed on its own session so a later request rollback cannot undo it."""
-    async with SessionLocal() as session:
-        try:
-            service = DeploymentService(DeploymentRepository(session))
-            await service.mark_failed(deployment_id)
-            await session.commit()
-        except Exception:
-            await session.rollback()
-            raise
 
 
 def mark_deployment_failed_sync(deployment_id: uuid.UUID) -> None:
@@ -51,3 +36,15 @@ def mark_deployment_failed_sync(deployment_id: uuid.UUID) -> None:
                 await engine.dispose()
 
     asyncio.run(_run())
+
+
+def try_mark_deployment_failed_sync(deployment_id: uuid.UUID) -> None:
+    """Best-effort sync mark; log and continue on failure."""
+    try:
+        mark_deployment_failed_sync(deployment_id)
+    except Exception as status_exc:
+        logger.warning(
+            "event=deployment_failed_status_skipped deployment=%s error_type=%s",
+            deployment_id,
+            type(status_exc).__name__,
+        )
