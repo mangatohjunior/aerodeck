@@ -27,7 +27,8 @@ and an unknown email return the same error. Without the client, sign-in and
 the session stay in the mock store. A real Google callback
 links that verified email with `POST /api/v1/console-users/google` when the
 console client is also set. The mock Google profile stays in the dashboard
-process. Registration uses `POST /api/v1/console-users` through
+process, including when the console client is set. That cookie is read from
+the mock store first so a restart of Next.js still drops it. Registration uses `POST /api/v1/console-users` through
 `POST /api/console/register` when the console client is set, and stays on
 `/api/mock/v1/auth/register` when it is not. When `CONTROL_PLANE_URL` is
 unset, projects and sandboxes fall back to the local seed.

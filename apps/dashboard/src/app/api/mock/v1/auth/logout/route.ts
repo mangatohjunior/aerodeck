@@ -3,7 +3,7 @@ import { connection, NextResponse } from "next/server";
 
 import { ControlPlaneError, readControlPlaneConfig, revokeControlPlaneSession } from "@/lib/control-plane";
 import { jsonError } from "@/lib/mock-http";
-import { destroySession } from "@/lib/mock-store";
+import { destroySession, getUserBySessionToken } from "@/lib/mock-store";
 import { SESSION_COOKIE, clearSessionCookie } from "@/lib/session-cookie";
 
 export async function POST() {
@@ -11,7 +11,7 @@ export async function POST() {
 
   const token = (await cookies()).get(SESSION_COOKIE)?.value;
   const config = readControlPlaneConfig();
-  if (token && config) {
+  if (token && config && !getUserBySessionToken(token)) {
     try {
       await revokeControlPlaneSession(config, token);
     } catch (cause) {

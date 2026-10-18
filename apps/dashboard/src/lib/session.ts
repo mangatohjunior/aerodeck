@@ -5,39 +5,26 @@ import { ControlPlaneError, readControlPlaneConfig, readControlPlaneSession } fr
 import { jsonError } from "@/lib/mock-http";
 import { getUserBySessionToken } from "@/lib/mock-store";
 import { SESSION_COOKIE } from "@/lib/session-cookie";
+import { lookupSession, type SessionRead } from "@/lib/session-lookup";
 import type { PublicUser } from "@/lib/types";
 
-export type SessionRead =
-  | { status: "user"; user: PublicUser }
-  | { status: "anonymous" }
-  | { status: "unavailable" };
-
-export function isMissingControlPlaneSession(cause: ControlPlaneError): boolean {
-  return cause.message.includes("not found (404)");
-}
+export type { SessionRead } from "@/lib/session-lookup";
+export { isMissingControlPlaneSession, lookupSession } from "@/lib/session-lookup";
 
 export async function readSession(): Promise<SessionRead> {
   const token = (await cookies()).get(SESSION_COOKIE)?.value;
-  if (!token) {
-    return { status: "anonymous" };
-  }
-  const config = readControlPlaneConfig();
-  if (!config) {
-    const user = getUserBySessionToken(token);
-    return user ? { status: "user", user } : { status: "anonymous" };
-  }
-  try {
-    return { status: "user", user: await readControlPlaneSession(config, token) };
-  } catch (cause) {
-    if (!(cause instanceof ControlPlaneError)) {
-      throw cause;
-    }
-    if (isMissingControlPlaneSession(cause)) {
-      return { status: "anonymous" };
-    }
-    console.error("event=console_session_failed detail=%s", cause.message);
-    return { status: "unavailable" };
-  }
+  return lookupSession({
+    token,
+    config: readControlPlaneConfig(),
+    mockUser: getUserBySessionToken(token),
+    resolve: (value) => {
+      const config = readControlPlaneConfig();
+      if (!config) {
+        return Promise.reject(new ControlPlaneError("control plane session request failed (503)"));
+      }
+      return readControlPlaneSession(config, value);
+    },
+  });
 }
 
 export async function requireSessionUser(): Promise<PublicUser | NextResponse> {
