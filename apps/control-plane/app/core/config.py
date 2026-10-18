@@ -21,6 +21,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 SHA256_HEX_LENGTH = 64
 # Shared with deployment log SSE follow (apps/control-plane/.../deployment_logs.py).
 DEPLOYMENT_LOG_FOLLOW_IDLE_SECONDS_DEFAULT = 1_800
+DEPLOYMENT_LOG_FIRST_PUBLISH_GRACE_SECONDS_DEFAULT = 2
 
 
 class Settings(BaseSettings):
@@ -69,6 +70,12 @@ class Settings(BaseSettings):
         default=DEPLOYMENT_LOG_FOLLOW_IDLE_SECONDS_DEFAULT,
         ge=1,
         le=86_400,
+    )
+    # Empty Redis list: wait this long for the first publish before emitting the stub.
+    deployment_log_first_publish_grace_seconds: int = Field(
+        default=DEPLOYMENT_LOG_FIRST_PUBLISH_GRACE_SECONDS_DEFAULT,
+        ge=0,
+        le=60,
     )
 
     # Optional static bearer Traefik sends when polling GET /api/v1/edge/traefik.

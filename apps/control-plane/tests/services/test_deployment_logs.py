@@ -12,7 +12,7 @@ from app.services.deployment_logs import (
     MAX_LINES,
     clear_memory_log_lines,
     ensure_log_store_ready,
-    iter_deployment_log_sse,
+    iter_deployment_log_lines,
     publish_line,
     publish_line_sync,
     published_lines,
@@ -24,6 +24,10 @@ def _clean_memory() -> None:
     clear_memory_log_lines()
     yield
     clear_memory_log_lines()
+
+
+async def _collect(lines) -> list[str]:
+    return [line async for line in lines]
 
 
 def _async_list_client(stored: list[bytes]) -> AsyncMock:
@@ -77,6 +81,7 @@ def _sync_list_client(stored: list[bytes]) -> MagicMock:
             return []
 
     client.pipeline = MagicMock(return_value=Pipe())
+    client.llen = MagicMock(side_effect=lambda _key: len(stored))
     return client
 
 
@@ -123,9 +128,7 @@ async def test_oversized_line_is_rejected() -> None:
 async def test_memory_stream_does_not_invent_done() -> None:
     deployment_id = uuid4()
     await publish_line(None, deployment_id, "Plan: 1 to add")
-    body = b"".join([chunk async for chunk in iter_deployment_log_sse(None, deployment_id)])
-    assert body == b"data: Plan: 1 to add\n\n"
-    assert b"data: Done" not in body
+    assert await _collect(iter_deployment_log_lines(None, deployment_id)) == ["Plan: 1 to add"]
 
 
 @pytest.mark.asyncio
@@ -133,20 +136,20 @@ async def test_memory_stream_includes_publisher_done() -> None:
     deployment_id = uuid4()
     await publish_line(None, deployment_id, "Apply complete")
     await publish_line(None, deployment_id, DONE_LINE)
-    body = b"".join([chunk async for chunk in iter_deployment_log_sse(None, deployment_id)])
-    assert body.count(b"data: Done\n\n") == 1
+    lines = await _collect(iter_deployment_log_lines(None, deployment_id))
+    assert lines.count(DONE_LINE) == 1
 
 
 @pytest.mark.asyncio
-async def test_memory_list_is_capped() -> None:
+async def test_memory_list_refuses_past_max_lines() -> None:
     deployment_id = uuid4()
-    for index in range(MAX_LINES + 25):
+    for index in range(MAX_LINES):
         await publish_line(None, deployment_id, f"line-{index}")
+    with pytest.raises(ValueError, match="at most"):
+        await publish_line(None, deployment_id, "one-more")
     lines = await published_lines(None, deployment_id)
     assert lines is not None
     assert len(lines) == MAX_LINES
-    assert lines[0] == "line-25"
-    assert lines[-1] == f"line-{MAX_LINES + 24}"
 
 
 @pytest.mark.asyncio
@@ -201,20 +204,55 @@ async def test_published_lines_reads_redis_in_batches(monkeypatch: pytest.Monkey
 
 
 @pytest.mark.asyncio
-async def test_redis_empty_list_uses_stub_immediately(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(deployment_logs_mod, "_SSE_PACE_SECONDS", 0)
+async def test_redis_empty_list_stubs_after_short_grace(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(deployment_logs_mod, "_LINE_PACE_SECONDS", 0)
+    monkeypatch.setattr(deployment_logs_mod, "_FOLLOW_POLL_SECONDS", 0)
     client = AsyncMock()
     client.llen = AsyncMock(return_value=0)
     monkeypatch.setattr(
         "app.services.deployment_logs.aioredis.from_url",
         lambda *_args, **_kwargs: client,
     )
-    body = b"".join(
-        [chunk async for chunk in iter_deployment_log_sse("redis://example/0", uuid4())]
+    lines = await _collect(
+        iter_deployment_log_lines(
+            "redis://example/0",
+            uuid4(),
+            first_publish_grace_seconds=0,
+        )
     )
-    assert b"data: Initializing Terraform...\n\n" in body
-    assert body.endswith(b"data: Done\n\n")
+    assert lines == ["Initializing Terraform...", "Provisioning K3s...", DONE_LINE]
     client.lrange.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_redis_empty_list_follows_first_publish_within_grace(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(deployment_logs_mod, "_LINE_PACE_SECONDS", 0)
+    monkeypatch.setattr(deployment_logs_mod, "_FOLLOW_POLL_SECONDS", 0)
+    stored: list[bytes] = []
+    client = _async_list_client(stored)
+    polls = {"n": 0}
+
+    async def llen(_key: str) -> int:
+        polls["n"] += 1
+        if polls["n"] >= 2 and not stored:
+            stored.extend([b"from-worker", b"Done"])
+        return len(stored)
+
+    client.llen = AsyncMock(side_effect=llen)
+    monkeypatch.setattr(
+        "app.services.deployment_logs.aioredis.from_url",
+        lambda *_args, **_kwargs: client,
+    )
+    lines = await _collect(
+        iter_deployment_log_lines(
+            "redis://example/0",
+            uuid4(),
+            first_publish_grace_seconds=1,
+        )
+    )
+    assert lines == ["from-worker", DONE_LINE]
 
 
 @pytest.mark.asyncio
@@ -234,7 +272,7 @@ async def test_redis_follow_cursor_survives_list_growth(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Regression: no left-trim, so paced readers keep a stable integer cursor."""
-    monkeypatch.setattr(deployment_logs_mod, "_SSE_PACE_SECONDS", 0)
+    monkeypatch.setattr(deployment_logs_mod, "_LINE_PACE_SECONDS", 0)
     monkeypatch.setattr(deployment_logs_mod, "_FOLLOW_POLL_SECONDS", 0)
     monkeypatch.setattr(deployment_logs_mod, "_READ_BATCH", 2)
     stored: list[bytes] = [b"a", b"b"]
@@ -244,7 +282,6 @@ async def test_redis_follow_cursor_survives_list_growth(
     async def lrange(_key: str, start: int, end: int) -> list[bytes]:
         reads["n"] += 1
         if reads["n"] == 1:
-            # Publisher appends far past MAX_LINES while the reader is mid-stream.
             stored.extend(f"x{i}".encode() for i in range(MAX_LINES))
             stored.append(b"Done")
         return stored[start : end + 1]
@@ -254,17 +291,16 @@ async def test_redis_follow_cursor_survives_list_growth(
         "app.services.deployment_logs.aioredis.from_url",
         lambda *_args, **_kwargs: client,
     )
-    body = b"".join(
-        [chunk async for chunk in iter_deployment_log_sse("redis://example/0", uuid4())]
-    )
-    assert body.startswith(b"data: a\n\ndata: b\n\n")
-    assert b"data: x0\n\n" in body
-    assert body.endswith(b"data: Done\n\n")
-    assert body.count(b"data: Done\n\n") == 1
+    lines = await _collect(iter_deployment_log_lines("redis://example/0", uuid4()))
+    assert lines[0:2] == ["a", "b"]
+    assert "x0" in lines
+    assert lines[-1] == DONE_LINE
+    assert lines.count(DONE_LINE) == 1
 
 
 @pytest.mark.asyncio
 async def test_redis_stream_stops_on_publisher_done(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(deployment_logs_mod, "_LINE_PACE_SECONDS", 0)
     client = AsyncMock()
     client.llen = AsyncMock(return_value=2)
     client.lrange = AsyncMock(return_value=[b"alpha", b"Done"])
@@ -272,10 +308,8 @@ async def test_redis_stream_stops_on_publisher_done(monkeypatch: pytest.MonkeyPa
         "app.services.deployment_logs.aioredis.from_url",
         lambda *_args, **_kwargs: client,
     )
-    body = b"".join(
-        [chunk async for chunk in iter_deployment_log_sse("redis://example/0", uuid4())]
-    )
-    assert body == b"data: alpha\n\ndata: Done\n\n"
+    lines = await _collect(iter_deployment_log_lines("redis://example/0", uuid4()))
+    assert lines == ["alpha", DONE_LINE]
     client.aclose.assert_awaited_once()
 
 
@@ -284,7 +318,7 @@ async def test_redis_stream_does_not_invent_done_after_idle(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(deployment_logs_mod, "_FOLLOW_POLL_SECONDS", 0)
-    monkeypatch.setattr(deployment_logs_mod, "_SSE_PACE_SECONDS", 0)
+    monkeypatch.setattr(deployment_logs_mod, "_LINE_PACE_SECONDS", 0)
     client = AsyncMock()
     client.llen = AsyncMock(return_value=1)
     client.lrange = AsyncMock(return_value=[b"still-running"])
@@ -292,18 +326,14 @@ async def test_redis_stream_does_not_invent_done_after_idle(
         "app.services.deployment_logs.aioredis.from_url",
         lambda *_args, **_kwargs: client,
     )
-    body = b"".join(
-        [
-            chunk
-            async for chunk in iter_deployment_log_sse(
-                "redis://example/0",
-                uuid4(),
-                follow_idle_seconds=1,
-            )
-        ]
+    lines = await _collect(
+        iter_deployment_log_lines(
+            "redis://example/0",
+            uuid4(),
+            follow_idle_seconds=1,
+        )
     )
-    assert body == b"data: still-running\n\n"
-    assert b"data: Done" not in body
+    assert lines == ["still-running"]
 
 
 @pytest.mark.asyncio
@@ -323,6 +353,7 @@ async def test_redis_publish_failure_maps_to_queue_unavailable(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     client = AsyncMock()
+    client.llen = AsyncMock(return_value=0)
     pipe = MagicMock()
     pipe.rpush = MagicMock(return_value=pipe)
     pipe.expire = MagicMock(return_value=pipe)
@@ -339,7 +370,7 @@ async def test_redis_publish_failure_maps_to_queue_unavailable(
 
 @pytest.mark.asyncio
 async def test_mid_stream_redis_failure_ends_cleanly(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(deployment_logs_mod, "_SSE_PACE_SECONDS", 0)
+    monkeypatch.setattr(deployment_logs_mod, "_LINE_PACE_SECONDS", 0)
     client = AsyncMock()
     client.llen = AsyncMock(side_effect=[1, 1, RedisError("down")])
     client.lrange = AsyncMock(return_value=[b"partial"])
@@ -347,9 +378,6 @@ async def test_mid_stream_redis_failure_ends_cleanly(monkeypatch: pytest.MonkeyP
         "app.services.deployment_logs.aioredis.from_url",
         lambda *_args, **_kwargs: client,
     )
-    body = b"".join(
-        [chunk async for chunk in iter_deployment_log_sse("redis://example/0", uuid4())]
-    )
-    assert body == b"data: partial\n\n"
-    assert b"data: Done" not in body
+    lines = await _collect(iter_deployment_log_lines("redis://example/0", uuid4()))
+    assert lines == ["partial"]
     client.aclose.assert_awaited_once()

@@ -7,6 +7,7 @@ records that the stream finished. Neither call touches DigitalOcean.
 """
 
 import uuid
+from collections.abc import AsyncIterator
 
 from fastapi import APIRouter, status
 from fastapi.responses import StreamingResponse
@@ -15,13 +16,22 @@ from app.api.deps import DeploymentServiceDep, PaginationDep, SettingsDep
 from app.schemas.auth import ErrorResponse
 from app.schemas.common import Page
 from app.schemas.deployment import DeploymentCreate, DeploymentRead
-from app.services.deployment_logs import ensure_log_store_ready, iter_deployment_log_sse
+from app.services.deployment_logs import ensure_log_store_ready, iter_deployment_log_lines
 
 router = APIRouter(prefix="/deployments", tags=["deployments"])
 
 _NOT_FOUND = {status.HTTP_404_NOT_FOUND: {"model": ErrorResponse}}
 _UNAUTHENTICATED = {status.HTTP_401_UNAUTHORIZED: {"model": ErrorResponse}}
 _UNAVAILABLE = {status.HTTP_503_SERVICE_UNAVAILABLE: {"model": ErrorResponse}}
+
+
+def _sse_frame(line: str) -> bytes:
+    return f"data: {line}\n\n".encode()
+
+
+async def _as_sse(lines: AsyncIterator[str]) -> AsyncIterator[bytes]:
+    async for line in lines:
+        yield _sse_frame(line)
 
 
 @router.get("", response_model=Page[DeploymentRead], summary="List deployments")
@@ -71,6 +81,7 @@ async def succeed_deployment(deployment_id: uuid.UUID, deployments: DeploymentSe
     "/{deployment_id}/logs",
     summary="Stream deployment logs (SSE)",
     response_class=StreamingResponse,
+    status_code=status.HTTP_200_OK,
     responses=_NOT_FOUND | _UNAUTHENTICATED | _UNAVAILABLE,
 )
 async def stream_deployment_logs(
@@ -82,10 +93,13 @@ async def stream_deployment_logs(
     await deployments.get(deployment_id)
     await ensure_log_store_ready(settings.redis_url)
     return StreamingResponse(
-        iter_deployment_log_sse(
-            settings.redis_url,
-            deployment_id,
-            follow_idle_seconds=settings.deployment_log_follow_idle_seconds,
+        _as_sse(
+            iter_deployment_log_lines(
+                settings.redis_url,
+                deployment_id,
+                follow_idle_seconds=settings.deployment_log_follow_idle_seconds,
+                first_publish_grace_seconds=settings.deployment_log_first_publish_grace_seconds,
+            )
         ),
         media_type="text/event-stream",
         headers={

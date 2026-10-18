@@ -108,7 +108,7 @@ async def test_deployment_logs_return_503_when_redis_is_down(
     assert response.json()["code"] == "queue_unavailable"
 
 
-async def test_deployment_logs_with_redis_empty_list_emit_stub_immediately(
+async def test_deployment_logs_with_redis_empty_list_emit_stub_after_grace(
     app: FastAPI,
     client: AsyncClient,
     auth: dict[str, str],
@@ -116,7 +116,7 @@ async def test_deployment_logs_with_redis_empty_list_emit_stub_immediately(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Redis-enabled envs without a publisher must not wait follow-idle for Done."""
+    """Empty Redis waits a short grace, not follow-idle, before stubbing Done."""
     created = await client.post(DEPLOYMENTS, json={"repo_url": REPO}, headers=auth)
     assert created.status_code == 201, created.text
     deployment_id = created.json()["id"]
@@ -126,6 +126,7 @@ async def test_deployment_logs_with_redis_empty_list_emit_stub_immediately(
         certificate_key_dir=str(tmp_path / "cert-keys"),
         redis_url="redis://example/0",
         deployment_log_follow_idle_seconds=1800,
+        deployment_log_first_publish_grace_seconds=0,
     )
     monkeypatch.setattr("app.services.deployment_logs.ping_broker", AsyncMock())
     redis_client = AsyncMock()
