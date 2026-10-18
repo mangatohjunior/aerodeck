@@ -116,6 +116,7 @@ async def test_provision_with_deployment_id_publishes_log_lines(
     lines = await published_lines(None, uuid.UUID(deployment_id))
     assert lines is not None
     assert lines[0] == "Starting environment provision..."
+    assert lines[-2] == "Environment provision finished."
     assert lines[-1] == DONE_LINE
     clear_memory_log_lines()
 

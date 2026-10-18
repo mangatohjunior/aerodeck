@@ -28,6 +28,7 @@ _RETRY_ON = (TransientJobError, ConnectionError, TimeoutError)
 _provisioner: Provisioner = NoopProvisioner()
 
 _START_LINE = "Starting environment provision..."
+_SUCCESS_LINE = "Environment provision finished."
 
 
 def use_provisioner(provisioner: Provisioner) -> None:
@@ -40,7 +41,11 @@ def _deployment_id_from_meta(meta: dict[str, str]) -> uuid.UUID | None:
     raw = meta.pop("deployment_id", None)
     if raw is None:
         return None
-    return uuid.UUID(raw)
+    try:
+        return uuid.UUID(raw)
+    except ValueError:
+        logger.warning("event=deployment_id_invalid value=%r", raw)
+        return None
 
 
 def _will_retry(task: Task, exc: BaseException) -> bool:
@@ -82,7 +87,8 @@ def _run(
             publish_provision_lines_sync(redis_url, deployment_id, provision_failure_line(exc), DONE_LINE)
         raise
     if deployment_id is not None:
-        publish_provision_lines_sync(redis_url, deployment_id, outcome.detail, DONE_LINE)
+        # Fixed success line only — never publish outcome.detail (may grow unsafe).
+        publish_provision_lines_sync(redis_url, deployment_id, _SUCCESS_LINE, DONE_LINE)
     logger.info("%s environment=%s changed=%s", kind.value, environment_id, outcome.changed)
     return outcome.as_dict()
 

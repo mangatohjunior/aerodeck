@@ -152,8 +152,8 @@ async def test_provision_with_deployment_id_publishes_progress(
     lines = await published_lines(None, deployment_id)
     assert lines is not None
     assert lines[0] == "Starting environment provision..."
+    assert lines[-2] == "Environment provision finished."
     assert lines[-1] == DONE_LINE
-    assert "done" in lines[-2]
 
 
 @pytest.mark.asyncio
@@ -232,6 +232,46 @@ async def test_transient_retry_does_not_publish_done_until_success(
     assert lines is not None
     assert lines[-1] == DONE_LINE
     assert lines.count(DONE_LINE) == 1
+
+
+@pytest.mark.asyncio
+async def test_exhausted_transient_publishes_failure_and_done(
+    worker_app: Celery, provisioner: FlakyProvisioner, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(tasks, "get_settings", lambda: make_settings(database_url=None, redis_url=None))
+    provisioner.failures = 99
+    provisioner.error = TransientJobError
+    deployment_id = uuid4()
+
+    result = worker_app.tasks[tasks.PROVISION_TASK].apply(
+        kwargs={"project_id": "p", "environment_id": "e", "deployment_id": str(deployment_id)}
+    )
+
+    assert result.failed()
+    assert isinstance(result.result, TransientJobError)
+    lines = await published_lines(None, deployment_id)
+    assert lines is not None
+    assert lines[0] == "Starting environment provision..."
+    assert lines[-2] == "Provision failed: TransientJobError"
+    assert lines[-1] == DONE_LINE
+    assert lines.count(DONE_LINE) == 1
+
+
+@pytest.mark.asyncio
+async def test_malformed_deployment_id_still_provisions(
+    worker_app: Celery, provisioner: FlakyProvisioner, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(tasks, "get_settings", lambda: make_settings(database_url=None, redis_url=None))
+    junk_id = "not-a-uuid"
+
+    result = worker_app.tasks[tasks.PROVISION_TASK].apply(
+        kwargs={"project_id": "p", "environment_id": "e", "deployment_id": junk_id}
+    )
+
+    assert result.successful()
+    assert result.result["changed"] is True
+    # No lines were published under the junk key (treated as unlinked).
+    assert await published_lines(None, uuid4()) is None
 
 
 @pytest.mark.asyncio
