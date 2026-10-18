@@ -403,6 +403,10 @@ export async function listControlPlaneEnvironments(
   return items;
 }
 
+async function discardResponseBody(response: Response): Promise<void> {
+  await response.body?.cancel();
+}
+
 /** Existence check before create+provision. UI listing uses listControlPlaneEnvironments. */
 export async function getControlPlaneEnvironment(
   config: ControlPlaneConfig,
@@ -427,15 +431,17 @@ export async function getControlPlaneEnvironment(
     },
   );
   if (response.status === 404) {
+    await discardResponseBody(response);
     throw new ControlPlaneError("control plane environment was not found (404)", 404);
   }
   if (!response.ok) {
+    await discardResponseBody(response);
     throw new ControlPlaneError(
       `control plane environment request failed (${response.status})`,
       response.status,
     );
   }
-  await response.body?.cancel();
+  await discardResponseBody(response);
 }
 
 export async function provisionControlPlaneEnvironment(
@@ -469,14 +475,18 @@ export async function provisionControlPlaneEnvironment(
     },
   );
   if (response.status === 404) {
+    await discardResponseBody(response);
     throw new ControlPlaneError("control plane provision target was not found (404)", 404);
   }
   if (response.status === 503) {
+    await discardResponseBody(response);
     throw new ControlPlaneError("control plane provision queue unavailable (503)", 503);
   }
   if (!response.ok) {
+    await discardResponseBody(response);
     throw new ControlPlaneError(`control plane provision request failed (${response.status})`, response.status);
   }
+  await discardResponseBody(response);
 }
 
 export async function createControlPlaneDeploymentAndProvision(

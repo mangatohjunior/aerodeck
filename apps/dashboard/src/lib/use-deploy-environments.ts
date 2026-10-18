@@ -32,7 +32,10 @@ export function useDeployEnvironments(enabled: boolean) {
         setEnvironments(page.items);
         if (page.items.length === 1) {
           setEnvironmentKey(environmentOptionKey(page.items[0]));
+          return;
         }
+        const keys = new Set(page.items.map(environmentOptionKey));
+        setEnvironmentKey((current) => (keys.has(current) ? current : ""));
       })
       .catch((cause) => {
         if (cancelled) {
