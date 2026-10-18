@@ -49,7 +49,7 @@ uvicorn main:app --reload --port 8000
 
 Probes (no auth): `GET /healthz`, `GET /readyz`.
 
-Issue a token, then mutate:
+Issue a token, then call the API:
 
 ```bash
 TOKEN=$(curl -s -X POST http://127.0.0.1:8000/api/v1/auth/token \
@@ -63,10 +63,11 @@ curl -s -X POST http://127.0.0.1:8000/api/v1/projects \
   -d '{"slug":"payments","name":"Payments"}'
 ```
 
-Reads (`GET /api/v1/projects`) do not require a token. `POST`/`PUT`/`PATCH`/`DELETE`
-do. `GET /api/v1/jobs/{id}` and `GET /api/v1/edge/traefik` require a token.
-Traefik routes: [edge-routing.md](edge-routing.md). Sandboxes:
-[sandboxes.md](sandboxes.md).
+Every `/api/v1` resource needs that bearer, including reads such as
+`GET /api/v1/projects`. Exceptions: `POST /api/v1/auth/token` (how you get
+one) and `GET /api/v1/edge/traefik` (API bearer or
+`AERODECK_TRAEFIK_PROVIDER_TOKEN`). Traefik routes:
+[edge-routing.md](edge-routing.md). Sandboxes: [sandboxes.md](sandboxes.md).
 
 ## Run the worker
 

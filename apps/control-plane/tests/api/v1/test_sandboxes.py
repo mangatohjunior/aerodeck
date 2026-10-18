@@ -43,7 +43,7 @@ async def test_create_sandbox_boots_a_running_microvm(
     assert "hypervisor_vm_id" not in body
     uuid.UUID(body["id"])
 
-    fetched = await client.get(f"{sandboxes_url(project)}/{body['id']}")
+    fetched = await client.get(f"{sandboxes_url(project)}/{body['id']}", headers=auth)
     assert fetched.status_code == 200
     assert fetched.json()["status"] == "running"
 
@@ -75,7 +75,7 @@ async def test_unknown_project_is_not_found(client: AsyncClient, auth: dict[str,
 
 
 async def test_unknown_sandbox_is_not_found(client: AsyncClient, auth: dict[str, str], project: dict) -> None:
-    response = await client.get(f"{sandboxes_url(project)}/{uuid.uuid4()}")
+    response = await client.get(f"{sandboxes_url(project)}/{uuid.uuid4()}", headers=auth)
     assert response.status_code == 404
     assert response.json()["code"] == "not_found"
 
@@ -91,7 +91,7 @@ async def test_list_is_paginated(client: AsyncClient, auth: dict[str, str], proj
         created = await client.post(sandboxes_url(project), json=sandbox_body(image=image), headers=auth)
         assert created.status_code == 201, created.text
 
-    page = await client.get(sandboxes_url(project), params={"limit": 2, "offset": 1})
+    page = await client.get(sandboxes_url(project), params={"limit": 2, "offset": 1}, headers=auth)
     assert page.status_code == 200
     body = page.json()
     assert body["total"] == 3
@@ -132,7 +132,7 @@ async def test_get_stops_an_expired_sandbox(
     sandbox_id = created.json()["id"]
     await _expire(sandbox_id)
 
-    fetched = await client.get(f"{sandboxes_url(project)}/{sandbox_id}")
+    fetched = await client.get(f"{sandboxes_url(project)}/{sandbox_id}", headers=auth)
     assert fetched.status_code == 200
     assert fetched.json()["status"] == "stopped"
 
@@ -150,8 +150,8 @@ async def test_reap_expired_stops_only_elapsed_sandboxes(
     assert [item["id"] for item in reaped.json()] == [stale.json()["id"]]
     assert reaped.json()[0]["status"] == "stopped"
 
-    assert (await client.get(f"{sandboxes_url(project)}/{live.json()['id']}")).json()["status"] == "running"
-    assert (await client.get(f"{sandboxes_url(project)}/{stale.json()['id']}")).json()["status"] == "stopped"
+    assert (await client.get(f"{sandboxes_url(project)}/{live.json()['id']}", headers=auth)).json()["status"] == "running"
+    assert (await client.get(f"{sandboxes_url(project)}/{stale.json()['id']}", headers=auth)).json()["status"] == "stopped"
 
     again = await client.post(REAP, headers=auth)
     assert again.status_code == 200

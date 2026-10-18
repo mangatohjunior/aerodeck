@@ -56,7 +56,7 @@ async def test_environment_is_scoped_to_its_project(client: AsyncClient, auth: d
         await client.post(envs_url(project), json={"slug": "dev", "name": "Dev", "kind": "dev"}, headers=auth)
     ).json()
 
-    via_other_project = await client.get(f"{envs_url(other)}/{env['id']}")
+    via_other_project = await client.get(f"{envs_url(other)}/{env['id']}", headers=auth)
 
     assert via_other_project.status_code == 404
 
@@ -64,7 +64,7 @@ async def test_environment_is_scoped_to_its_project(client: AsyncClient, auth: d
 async def test_environments_of_unknown_project_are_not_found(client: AsyncClient, auth: dict[str, str]) -> None:
     missing = f"{PROJECTS}/{uuid.uuid4()}/environments"
 
-    assert (await client.get(missing)).status_code == 404
+    assert (await client.get(missing, headers=auth)).status_code == 404
     created = await client.post(missing, json={"slug": "dev", "name": "Dev", "kind": "dev"}, headers=auth)
     assert created.status_code == 404
 
@@ -82,7 +82,7 @@ async def test_update_and_delete_environment(client: AsyncClient, auth: dict[str
     deleted = await client.delete(f"{envs_url(project)}/{env['id']}", headers=auth)
     assert deleted.status_code == 204
 
-    listing = await client.get(envs_url(project))
+    listing = await client.get(envs_url(project), headers=auth)
     assert listing.json()["total"] == 0
 
 
@@ -93,7 +93,7 @@ async def test_list_counts_only_this_project(client: AsyncClient, auth: dict[str
             kind = "prod" if slug == "prod" else "dev"
             await client.post(envs_url(target), json={"slug": slug, "name": slug, "kind": kind}, headers=auth)
 
-    listing = await client.get(envs_url(project))
+    listing = await client.get(envs_url(project), headers=auth)
 
     assert listing.json()["total"] == 2
     assert [e["slug"] for e in listing.json()["items"]] == ["dev", "prod"]
