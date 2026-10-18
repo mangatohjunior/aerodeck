@@ -132,12 +132,46 @@ export async function openControlPlaneDeploymentLogs(
       cache: "no-store",
     },
   );
+  if (response.status === 404) {
+    throw new ControlPlaneError("control plane deployment logs were not found (404)");
+  }
   if (!response.ok || !response.body) {
     throw new ControlPlaneError(
       `control plane deployment logs request failed (${response.status})`,
     );
   }
   return response.body;
+}
+
+export async function succeedControlPlaneDeployment(
+  config: ControlPlaneConfig,
+  deploymentId: string,
+  options: ListOptions = {},
+): Promise<Deployment> {
+  if (!isDeploymentLogId(deploymentId)) {
+    throw new ControlPlaneError("control plane deployment id was not a uuid");
+  }
+  const fetchImpl = options.fetch ?? fetch;
+  const now = options.now ?? Date.now;
+  const accessToken = await accessTokenFor(config, fetchImpl, now);
+  const response = await fetchImpl(
+    `${config.baseUrl}/api/v1/deployments/${encodeURIComponent(deploymentId)}/succeeded`,
+    {
+      method: "POST",
+      headers: {
+        accept: "application/json",
+        authorization: `Bearer ${accessToken}`,
+      },
+      cache: "no-store",
+    },
+  );
+  if (response.status === 404) {
+    throw new ControlPlaneError("control plane deployment was not found (404)");
+  }
+  if (!response.ok) {
+    throw new ControlPlaneError(`control plane deployment request failed (${response.status})`);
+  }
+  return parseDeployment(await response.json());
 }
 
 export type ControlPlaneUser = {

@@ -7,6 +7,7 @@ import {
   listControlPlaneProjects,
   listControlPlaneSandboxes,
   openControlPlaneDeploymentLogs,
+  succeedControlPlaneDeployment,
   readControlPlaneConfig,
   authenticateControlPlaneUser,
   createControlPlaneDeployment,
@@ -317,6 +318,78 @@ describe("openControlPlaneDeploymentLogs", () => {
         assert.ok(cause instanceof ControlPlaneError);
         assert.equal(cause.message.includes("super-secret"), false);
         assert.match(cause.message, /deployment logs request failed \(502\)/);
+        return true;
+      },
+    );
+  });
+
+  it("does not include the upstream body when the deployment is missing", async () => {
+    clearControlPlaneTokenCache();
+    const fetchImpl: typeof fetch = async (input) => {
+      const url = String(input);
+      if (url.endsWith("/api/v1/auth/token")) {
+        return jsonResponse({ access_token: "issued-bearer", expires_in: 900 });
+      }
+      return jsonResponse({ detail: "missing", secret: "super-secret" }, 404);
+    };
+    await assert.rejects(
+      () =>
+        openControlPlaneDeploymentLogs(
+          config,
+          "33333333-3333-4333-8333-333333333333",
+          { fetch: fetchImpl },
+        ),
+      (cause: unknown) => {
+        assert.ok(cause instanceof ControlPlaneError);
+        assert.equal(cause.message.includes("super-secret"), false);
+        assert.match(cause.message, /not found \(404\)/);
+        return true;
+      },
+    );
+  });
+});
+
+describe("succeedControlPlaneDeployment", () => {
+  it("records succeeded with the bearer and drops a missing body", async () => {
+    clearControlPlaneTokenCache();
+    const deploymentId = "66666666-6666-4666-8666-666666666666";
+    let method = "";
+    let authorization = "";
+    const fetchImpl: typeof fetch = async (input, init) => {
+      const url = String(input);
+      if (url.endsWith("/api/v1/auth/token")) {
+        return jsonResponse({ access_token: "issued-bearer", expires_in: 900 });
+      }
+      method = init?.method ?? "";
+      authorization = new Headers(init?.headers).get("authorization") ?? "";
+      if (url.endsWith(`/deployments/${deploymentId}/succeeded`)) {
+        return jsonResponse({
+          id: deploymentId,
+          repo_url: "https://github.com/mangatohjunior/aerodeck",
+          owner: "mangatohjunior",
+          repo: "aerodeck",
+          status: "succeeded",
+          started_at: "2026-10-18T00:00:00.000Z",
+        });
+      }
+      return jsonResponse({ detail: "missing", secret: "super-secret" }, 404);
+    };
+
+    const stored = await succeedControlPlaneDeployment(config, deploymentId, { fetch: fetchImpl });
+    assert.equal(method, "POST");
+    assert.equal(authorization, "Bearer issued-bearer");
+    assert.equal(stored.status, "succeeded");
+    assert.equal(JSON.stringify(stored).includes("super-secret"), false);
+
+    await assert.rejects(
+      () =>
+        succeedControlPlaneDeployment(config, "77777777-7777-4777-8777-777777777777", {
+          fetch: fetchImpl,
+        }),
+      (cause: unknown) => {
+        assert.ok(cause instanceof ControlPlaneError);
+        assert.equal(cause.message.includes("super-secret"), false);
+        assert.match(cause.message, /not found \(404\)/);
         return true;
       },
     );
