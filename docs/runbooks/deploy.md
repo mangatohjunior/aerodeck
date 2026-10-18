@@ -115,8 +115,9 @@ Procedure: [sandboxes.md](sandboxes.md). ADR:
 - [ ] `AERODECK_SANDBOX_HYPERVISOR=firecracker`.
 - [ ] Guest images under `{AERODECK_SANDBOX_IMAGE_ROOT}/{image}/` (`vmlinux`,
       `rootfs.ext4`).
-- [ ] A scheduler (cron or Celery beat) calling
-      `POST /api/v1/sandboxes/reap-expired` so TTL reclaim is not manual.
+- [x] Worker `--beat` reaps expired sandboxes on
+      `AERODECK_SANDBOX_REAP_INTERVAL_SECONDS` (manual
+      `POST /api/v1/sandboxes/reap-expired` remains).
 
 Do not add `hetznercloud/hcloud` (or any non-DigitalOcean provider) to the
 IaC engine.

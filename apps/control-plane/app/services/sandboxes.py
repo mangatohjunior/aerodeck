@@ -9,7 +9,7 @@ from app.core.logging import get_logger
 from app.models.sandbox import Sandbox, SandboxStatus
 from app.repositories.sandboxes import SandboxRepository
 from app.schemas.sandbox import SandboxCreate
-from app.services.hypervisor import Hypervisor, SandboxUnavailableError
+from app.services.hypervisor import Hypervisor, SandboxError, SandboxUnavailableError
 from app.services.projects import ProjectService
 from app.services.sandbox_hosts import SandboxHostService
 
@@ -88,7 +88,10 @@ class SandboxService:
         moment = now or datetime.now(UTC)
         reaped: list[Sandbox] = []
         for sandbox in await self._sandboxes.list_expired(moment):
-            reaped.append(await self._teardown(sandbox))
+            try:
+                reaped.append(await self._teardown(sandbox))
+            except SandboxError:
+                logger.exception("failed to reap sandbox %s; continuing", sandbox.id)
         return reaped
 
     async def _teardown_if_expired(self, sandbox: Sandbox, *, now: datetime | None = None) -> Sandbox:

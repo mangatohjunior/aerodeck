@@ -12,3 +12,4 @@ def test_writes_bash_quoted_env_and_passes_dash_e_not_env_file() -> None:
     assert 'DOCKER_ENV_FLAGS+=(-e "${key}")' in TEXT
     assert "AERODECK_ACME_ACCOUNT_KEY" in TEXT
     assert "source" in TEXT
+    assert "worker --beat --queues aerodeck" in TEXT
