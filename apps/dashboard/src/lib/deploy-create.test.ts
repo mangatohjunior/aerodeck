@@ -50,4 +50,41 @@ describe("createDeployment", () => {
       },
     );
   });
+
+  it("posts project_id and environment_id for control-plane create", async () => {
+    const projectId = "11111111-1111-4111-8111-111111111111";
+    const environmentId = "22222222-2222-4222-8222-222222222222";
+    const deploymentId = "33333333-3333-4333-8333-333333333333";
+    let posted: unknown;
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async (_input, init) => {
+      posted = JSON.parse(String(init?.body));
+      return new Response(
+        JSON.stringify({
+          id: deploymentId,
+          repo_url: "https://github.com/acme/payments",
+          owner: "acme",
+          repo: "payments",
+          status: "running",
+          started_at: "2026-10-18T00:00:00.000Z",
+        }),
+        { status: 201, headers: { "content-type": "application/json" } },
+      );
+    }) as typeof fetch;
+
+    try {
+      const deployment = await createDeployment("https://github.com/acme/payments", true, {
+        projectId,
+        environmentId,
+      });
+      assert.equal(deployment.id, deploymentId);
+      assert.deepEqual(posted, {
+        repo_url: "https://github.com/acme/payments",
+        project_id: projectId,
+        environment_id: environmentId,
+      });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
 });

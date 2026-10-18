@@ -76,7 +76,7 @@ export async function POST(request: Request) {
     );
   }
   if (!isControlPlaneUuid(projectId) || !isControlPlaneUuid(environmentId)) {
-    return jsonError(400, "project_id and environment_id must be UUIDs.", "invalid_environment_id");
+    return jsonError(400, "project_id and environment_id must be UUIDs.", "invalid_target_ids");
   }
 
   try {
@@ -89,6 +89,11 @@ export async function POST(request: Request) {
   } catch (cause) {
     if (cause instanceof ControlPlaneError && cause.deploymentId) {
       const status = cause.status === 503 ? 503 : 502;
+      console.error(
+        "event=console_provision_enqueue_failed deployment_id=%s detail=%s",
+        cause.deploymentId,
+        cause.message,
+      );
       return NextResponse.json(
         {
           detail: "Deployment was created but provision could not be queued.",

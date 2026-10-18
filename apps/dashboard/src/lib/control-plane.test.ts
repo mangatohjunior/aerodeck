@@ -637,6 +637,7 @@ describe("createControlPlaneDeploymentAndProvision", () => {
         assert.equal(cause.deploymentId, deploymentId);
         assert.equal(cause.message.includes("super-secret"), false);
         assert.match(cause.message, /queue unavailable \(503\)/);
+        assert.ok(cause.cause instanceof ControlPlaneError);
         return true;
       },
     );
@@ -696,6 +697,7 @@ describe("createControlPlaneDeploymentAndProvision", () => {
         assert.equal(cause.status, 502);
         assert.equal(cause.deploymentId, deploymentId);
         assert.match(cause.message, /network down/);
+        assert.ok(cause.cause instanceof TypeError);
         return true;
       },
     );

@@ -40,8 +40,13 @@ export class ControlPlaneError extends Error {
   /** Set when a deployment row was created but a later step (e.g. provision) failed. */
   readonly deploymentId?: string;
 
-  constructor(message: string, status?: number, deploymentId?: string) {
-    super(message);
+  constructor(
+    message: string,
+    status?: number,
+    deploymentId?: string,
+    options?: ErrorOptions,
+  ) {
+    super(message, options);
     this.name = "ControlPlaneError";
     this.status = status;
     this.deploymentId = deploymentId;
@@ -375,12 +380,13 @@ export async function listControlPlaneEnvironments(
   return items;
 }
 
+/** Existence check before create+provision. UI listing uses listControlPlaneEnvironments. */
 export async function getControlPlaneEnvironment(
   config: ControlPlaneConfig,
   projectId: string,
   environmentId: string,
   options: ListOptions = {},
-): Promise<EnvironmentOption> {
+): Promise<void> {
   if (!isControlPlaneUuid(projectId) || !isControlPlaneUuid(environmentId)) {
     throw new ControlPlaneError("control plane environment ids were not uuids");
   }
@@ -406,11 +412,6 @@ export async function getControlPlaneEnvironment(
       response.status,
     );
   }
-  return parseEnvironmentOption(await response.json(), {
-    id: projectId,
-    slug: "",
-    name: "",
-  });
 }
 
 export async function provisionControlPlaneEnvironment(
@@ -474,11 +475,11 @@ export async function createControlPlaneDeploymentAndProvision(
     // Deployment exists; attach its id for the console error payload (do not navigate —
     // opening logs before a seed line would hit stub Done).
     if (cause instanceof ControlPlaneError) {
-      throw new ControlPlaneError(cause.message, cause.status, deployment.id);
+      throw new ControlPlaneError(cause.message, cause.status, deployment.id, { cause });
     }
     const message =
       cause instanceof Error ? cause.message : "control plane provision request failed";
-    throw new ControlPlaneError(message, 502, deployment.id);
+    throw new ControlPlaneError(message, 502, deployment.id, { cause });
   }
   return deployment;
 }

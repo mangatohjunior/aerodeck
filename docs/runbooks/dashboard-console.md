@@ -13,10 +13,11 @@ Creating a deployment uses `POST /api/v1/deployments` through
 lists environments via `GET /api/console/environments` and, on submit, queues
 `POST .../environments/{id}/provision` with the new `deployment_id` so the
 terminal can follow worker lines. If provision cannot be queued after create,
-the form stays put and shows the deployment id (it does not open the terminal,
-which would stub `Done`). Without the client, Deploy does not call provision.
-The list and the deployment page follow the same mock/control-plane split.
-Blocking stub-success for never-seeded rows is a follow-up (#127). The terminal reads
+the form stays put with a generic message (the deployment id is server-logged
+only; opening the terminal would stub `Done`). Without the client, Deploy does
+not call provision. The list and the deployment page follow the same
+mock/control-plane split. Blocking stub-success for never-seeded rows is a
+follow-up (#127). The terminal reads
 `GET /api/v1/deployments/{id}/logs` through
 `GET /api/console/deployments/{id}/logs` when the console client is set, and
 stays on `/api/mock/v1/deployments/{id}/logs` when it is not. An unknown

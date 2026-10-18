@@ -64,8 +64,8 @@ export function NewDeploymentForm({ controlPlane = false }: { controlPlane?: boo
       router.push(`/deployments/${deployment.id}`);
     } catch (cause) {
       if (cause instanceof ProvisionEnqueueFailed) {
-        // Do not open the terminal: empty logs would stub Done and mark succeeded.
-        setError(`${cause.message} (${cause.deploymentId})`);
+        // Do not open the terminal or surface the id: empty logs would stub Done (#127).
+        setError(cause.message);
         return;
       }
       setError(cause instanceof Error ? cause.message : "Deploy failed.");
