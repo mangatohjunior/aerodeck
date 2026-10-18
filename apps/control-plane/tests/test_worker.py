@@ -13,6 +13,7 @@ from app.services.deployment_logs import (
     PROVISION_SUCCESS_LINE,
     clear_memory_log_lines,
     memory_log_lines,
+    memory_log_store_empty,
     published_lines,
 )
 from app.services.provisioning import (
@@ -274,8 +275,8 @@ async def test_malformed_deployment_id_still_provisions(
 
     assert result.successful()
     assert result.result["changed"] is True
-    # No lines were published under the junk key (treated as unlinked).
-    assert await published_lines(None, uuid4()) is None
+    # Junk id is treated as unlinked: nothing published to the in-memory store.
+    assert memory_log_store_empty()
 
 
 @pytest.mark.asyncio

@@ -73,6 +73,11 @@ def memory_log_lines(deployment_id: uuid.UUID) -> list[str]:
     return list(_memory.get(str(deployment_id), []))
 
 
+def memory_log_store_empty() -> bool:
+    """Test seam: True when no in-memory deployment log buckets exist."""
+    return not _memory
+
+
 def _key(deployment_id: uuid.UUID) -> str:
     return f"{_KEY_PREFIX}{deployment_id}"
 
