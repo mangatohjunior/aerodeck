@@ -3,7 +3,8 @@
 ``POST /api/v1/deployments`` stores a GitHub repository request. It does not
 call DigitalOcean. ``GET /api/v1/deployments/{deployment_id}/logs`` streams
 worker-published lines when present, otherwise the stub. ``POST .../succeeded``
-records that the stream finished. Neither call touches DigitalOcean.
+records that the stream finished with ``Done``. ``POST .../failed`` records a
+provision that ended without ``Done``. Neither call touches DigitalOcean.
 """
 
 import uuid
@@ -75,6 +76,17 @@ async def get_deployment(deployment_id: uuid.UUID, deployments: DeploymentServic
 )
 async def succeed_deployment(deployment_id: uuid.UUID, deployments: DeploymentServiceDep) -> DeploymentRead:
     return DeploymentRead.model_validate(await deployments.mark_succeeded(deployment_id))
+
+
+@router.post(
+    "/{deployment_id}/failed",
+    response_model=DeploymentRead,
+    status_code=status.HTTP_200_OK,
+    summary="Record that a deployment failed",
+    responses=_NOT_FOUND | _UNAUTHENTICATED,
+)
+async def fail_deployment(deployment_id: uuid.UUID, deployments: DeploymentServiceDep) -> DeploymentRead:
+    return DeploymentRead.model_validate(await deployments.mark_failed(deployment_id))
 
 
 @router.get(

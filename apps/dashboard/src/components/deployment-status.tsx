@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckCircle2, Loader2, Rocket } from "lucide-react";
+import { CheckCircle2, Loader2, Rocket, XCircle } from "lucide-react";
 import { useState } from "react";
 
 import { LinkButton } from "@/components/link-button";
@@ -14,7 +14,11 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { deploymentLogsUrl, markDeploymentSucceeded } from "@/lib/api";
+import {
+  deploymentLogsUrl,
+  markDeploymentFailed,
+  markDeploymentSucceeded,
+} from "@/lib/api";
 import type { Deployment, DeploymentStatus, ProjectSource } from "@/lib/types";
 
 type DeploymentStatusViewProps = {
@@ -35,14 +39,38 @@ function logSourceCopy(source: ProjectSource): { sseLabel: string; targetLabel: 
   };
 }
 
+function statusBadge(status: DeploymentStatus) {
+  if (status === "failed") {
+    return (
+      <Badge variant="destructive">
+        <XCircle />
+        Failed
+      </Badge>
+    );
+  }
+  if (status === "succeeded") {
+    return (
+      <Badge variant="default">
+        <CheckCircle2 />
+        Succeeded
+      </Badge>
+    );
+  }
+  return (
+    <Badge variant="secondary">
+      <Loader2 className="animate-spin" />
+      Running
+    </Badge>
+  );
+}
+
 export function DeploymentStatusView({ deployment, logSource }: DeploymentStatusViewProps) {
   const [status, setStatus] = useState<DeploymentStatus>(deployment.status);
   const [error, setError] = useState<string | null>(null);
-  const running = status === "running" || status === "queued";
   const copy = logSourceCopy(logSource);
 
   function handleComplete() {
-    if (status === "succeeded") {
+    if (status === "succeeded" || status === "failed") {
       return;
     }
     if (logSource !== "control-plane") {
@@ -51,6 +79,21 @@ export function DeploymentStatusView({ deployment, logSource }: DeploymentStatus
     }
     void markDeploymentSucceeded(deployment.id)
       .then(() => setStatus("succeeded"))
+      .catch((cause: unknown) => {
+        setError(cause instanceof Error ? cause.message : "Could not record the deployment status.");
+      });
+  }
+
+  function handleFailed() {
+    if (status === "succeeded" || status === "failed") {
+      return;
+    }
+    if (logSource !== "control-plane") {
+      setStatus("failed");
+      return;
+    }
+    void markDeploymentFailed(deployment.id)
+      .then(() => setStatus("failed"))
       .catch((cause: unknown) => {
         setError(cause instanceof Error ? cause.message : "Could not record the deployment status.");
       });
@@ -88,10 +131,7 @@ export function DeploymentStatusView({ deployment, logSource }: DeploymentStatus
                 {deployment.repo_url}
               </CardDescription>
             </div>
-            <Badge variant={running ? "secondary" : "default"}>
-              {running ? <Loader2 className="animate-spin" /> : <CheckCircle2 />}
-              {running ? "Running" : "Succeeded"}
-            </Badge>
+            {statusBadge(status)}
           </div>
         </CardHeader>
         <CardContent className="grid gap-3 pt-4 text-sm sm:grid-cols-2">
@@ -116,6 +156,7 @@ export function DeploymentStatusView({ deployment, logSource }: DeploymentStatus
       <Terminal
         streamUrl={deploymentLogsUrl(deployment.id, logSource)}
         onComplete={handleComplete}
+        onFailed={handleFailed}
       />
     </div>
   );

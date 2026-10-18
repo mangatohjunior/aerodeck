@@ -10,6 +10,7 @@ import {
   listControlPlaneEnvironments,
   openControlPlaneDeploymentLogs,
   succeedControlPlaneDeployment,
+  failControlPlaneDeployment,
   readControlPlaneConfig,
   authenticateControlPlaneUser,
   createControlPlaneDeployment,
@@ -826,6 +827,36 @@ describe("succeedControlPlaneDeployment", () => {
         return true;
       },
     );
+  });
+});
+
+describe("failControlPlaneDeployment", () => {
+  it("records failed with the bearer", async () => {
+    clearControlPlaneTokenCache();
+    const deploymentId = "66666666-6666-4666-8666-666666666666";
+    let method = "";
+    const fetchImpl: typeof fetch = async (input, init) => {
+      const url = String(input);
+      if (url.endsWith("/api/v1/auth/token")) {
+        return jsonResponse({ access_token: "issued-bearer", expires_in: 900 });
+      }
+      method = init?.method ?? "";
+      if (url.endsWith(`/deployments/${deploymentId}/failed`)) {
+        return jsonResponse({
+          id: deploymentId,
+          repo_url: "https://github.com/mangatohjunior/aerodeck",
+          owner: "mangatohjunior",
+          repo: "aerodeck",
+          status: "failed",
+          started_at: "2026-10-18T00:00:00.000Z",
+        });
+      }
+      return jsonResponse({ detail: "missing" }, 404);
+    };
+
+    const stored = await failControlPlaneDeployment(config, deploymentId, { fetch: fetchImpl });
+    assert.equal(method, "POST");
+    assert.equal(stored.status, "failed");
   });
 });
 

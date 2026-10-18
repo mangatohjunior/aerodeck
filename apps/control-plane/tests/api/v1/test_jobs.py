@@ -131,6 +131,10 @@ async def test_provision_dispatch_failure_after_seed_publishes_queue_failed(
 
         lines = await published_lines(None, uuid.UUID(deployment_id))
         assert lines == [PROVISION_QUEUED_LINE, PROVISION_QUEUE_FAILED_LINE]
+
+        stored = await client.get(f"/api/v1/deployments/{deployment_id}", headers=auth)
+        assert stored.status_code == 200, stored.text
+        assert stored.json()["status"] == "failed"
     finally:
         queued_app.dependency_overrides[get_job_dispatcher] = lambda: dispatcher
         clear_memory_log_lines()

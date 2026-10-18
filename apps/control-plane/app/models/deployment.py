@@ -11,6 +11,7 @@ class DeploymentStatus(enum.StrEnum):
     queued = "queued"
     running = "running"
     succeeded = "succeeded"
+    failed = "failed"
 
 
 class Deployment(UUIDPrimaryKeyMixin, TimestampMixin, Base):

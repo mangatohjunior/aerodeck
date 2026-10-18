@@ -181,6 +181,11 @@ async def test_provision_failure_publishes_safe_line_without_done(
 
     tasks.use_provisioner(LeakyProvisioner())
     deployment_id = uuid4()
+    marked: list[object] = []
+    monkeypatch.setattr(
+        "app.services.deployments.mark_deployment_failed_sync",
+        lambda deployment_id: marked.append(deployment_id),
+    )
     try:
         result = worker_app.tasks[tasks.PROVISION_TASK].apply(
             kwargs={"project_id": "p", "environment_id": "e", "deployment_id": str(deployment_id)}
@@ -197,6 +202,7 @@ async def test_provision_failure_publishes_safe_line_without_done(
     assert secret_blob not in "".join(lines)
     assert "dop_v1" not in "".join(lines)
     assert "SECRETTOKEN" not in "".join(lines)
+    assert marked == [deployment_id]
 
 
 @pytest.mark.asyncio
@@ -248,6 +254,11 @@ async def test_exhausted_transient_publishes_failure_without_done(
     provisioner.failures = 99
     provisioner.error = TransientJobError
     deployment_id = uuid4()
+    marked: list[object] = []
+    monkeypatch.setattr(
+        "app.services.deployments.mark_deployment_failed_sync",
+        lambda deployment_id: marked.append(deployment_id),
+    )
 
     result = worker_app.tasks[tasks.PROVISION_TASK].apply(
         kwargs={"project_id": "p", "environment_id": "e", "deployment_id": str(deployment_id)}
@@ -260,6 +271,7 @@ async def test_exhausted_transient_publishes_failure_without_done(
     assert lines[0] == PROVISION_START_LINE
     assert lines[-1] == "Provision failed: TransientJobError"
     assert DONE_LINE not in lines
+    assert marked == [deployment_id]
 
 
 @pytest.mark.asyncio

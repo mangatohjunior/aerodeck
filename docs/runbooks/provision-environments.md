@@ -71,7 +71,8 @@ worker then adds start, then on success `Environment provision finished.` and
 emit it; the SSE follower ends on follow-idle instead. Those lines never include
 exception message text or provisioner `detail` (Terraform stdout/stderr can hold
 secrets). Mapping the Deploy form onto this call is story #125 (console selects an environment and
-queues provision). A `failed` deployment status stays a follow-up (#127).
+queues provision). Final provision failure (and broker failure after the seed line) also
+sets deployment status to `failed` (#127) so the console badge is not left as Running.
 
 Dry-run detail contains `terraform plan only`. Apply detail contains
 `applied stored plan`. Locks retry (`TransientJobError`). Policy or bad

@@ -155,6 +155,20 @@ export async function markDeploymentSucceeded(id: string): Promise<Deployment> {
   return readJson(response);
 }
 
+export async function markDeploymentFailed(id: string): Promise<Deployment> {
+  const response = await fetch(`/api/console/deployments/${encodeURIComponent(id)}/failed`, {
+    method: "POST",
+    credentials: "same-origin",
+    cache: "no-store",
+  });
+  return readJson(response);
+}
+
+/** Log lines that mean provision ended without Done (mirror control-plane constants). */
+export function isProvisionFailureLogLine(line: string): boolean {
+  return line === "Provision queue failed" || line.startsWith("Provision failed:");
+}
+
 export function deploymentLogsUrl(id: string, source: ProjectSource): string {
   const deploymentId = encodeURIComponent(id);
   if (source === "control-plane") {

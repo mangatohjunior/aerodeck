@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { createDeployment, errorFromFailedCreate, ProvisionEnqueueFailed } from "./api";
+import {
+  createDeployment,
+  errorFromFailedCreate,
+  isProvisionFailureLogLine,
+  ProvisionEnqueueFailed,
+} from "./api";
 import { PROVISION_ENQUEUE_FAILED, type Deployment } from "./types";
 
 describe("errorFromFailedCreate", () => {
@@ -30,6 +35,15 @@ describe("errorFromFailedCreate", () => {
     );
     assert.equal(error instanceof ProvisionEnqueueFailed, false);
     assert.equal(error.message, "Control plane request failed.");
+  });
+});
+
+describe("isProvisionFailureLogLine", () => {
+  it("matches queue and worker failure lines", () => {
+    assert.equal(isProvisionFailureLogLine("Provision queue failed"), true);
+    assert.equal(isProvisionFailureLogLine("Provision failed: PermanentJobError"), true);
+    assert.equal(isProvisionFailureLogLine("Done"), false);
+    assert.equal(isProvisionFailureLogLine("Queued environment provision..."), false);
   });
 });
 

@@ -17,7 +17,7 @@ from app.services.deployment_logs import (
     PROVISION_QUEUED_LINE,
     publish_line,
 )
-from app.services.deployments import DeploymentService
+from app.services.deployments import DeploymentService, mark_deployment_failed_isolated
 from app.services.environments import EnvironmentService
 from app.services.provisioning import JobKind
 
@@ -94,6 +94,15 @@ class JobService:
                         "event=deployment_log_queue_failed_publish_skipped deployment=%s error_type=%s",
                         linked_deployment,
                         type(publish_exc).__name__,
+                    )
+                try:
+                    # Own session+commit: the request that raised will roll back.
+                    await mark_deployment_failed_isolated(linked_deployment)
+                except Exception as status_exc:
+                    logger.warning(
+                        "event=deployment_failed_status_skipped deployment=%s error_type=%s",
+                        linked_deployment,
+                        type(status_exc).__name__,
                     )
             raise
         logger.info("queued %s job %s for environment %s", kind.value, job_id, environment.id)

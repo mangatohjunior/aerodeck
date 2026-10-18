@@ -205,6 +205,37 @@ export async function succeedControlPlaneDeployment(
   return parseDeployment(await response.json());
 }
 
+export async function failControlPlaneDeployment(
+  config: ControlPlaneConfig,
+  deploymentId: string,
+  options: ListOptions = {},
+): Promise<Deployment> {
+  if (!isControlPlaneUuid(deploymentId)) {
+    throw new ControlPlaneError("control plane deployment id was not a uuid");
+  }
+  const fetchImpl = options.fetch ?? fetch;
+  const now = options.now ?? Date.now;
+  const accessToken = await accessTokenFor(config, fetchImpl, now);
+  const response = await fetchImpl(
+    `${config.baseUrl}/api/v1/deployments/${encodeURIComponent(deploymentId)}/failed`,
+    {
+      method: "POST",
+      headers: {
+        accept: "application/json",
+        authorization: `Bearer ${accessToken}`,
+      },
+      cache: "no-store",
+    },
+  );
+  if (response.status === 404) {
+    throw new ControlPlaneError("control plane deployment was not found (404)", 404);
+  }
+  if (!response.ok) {
+    throw new ControlPlaneError(`control plane deployment request failed (${response.status})`, response.status);
+  }
+  return parseDeployment(await response.json());
+}
+
 export type ControlPlaneUser = {
   id: string;
   email: string;
@@ -317,7 +348,7 @@ export async function revokeControlPlaneSession(
   throw new ControlPlaneError(`control plane session logout failed (${response.status})`, response.status);
 }
 
-const DEPLOYMENT_STATUSES = new Set<DeploymentStatus>(["queued", "running", "succeeded"]);
+const DEPLOYMENT_STATUSES = new Set<DeploymentStatus>(["queued", "running", "succeeded", "failed"]);
 
 export async function listControlPlaneDeployments(
   config: ControlPlaneConfig,
