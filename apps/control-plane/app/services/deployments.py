@@ -44,6 +44,9 @@ class DeploymentService:
 
     async def mark_succeeded(self, deployment_id: uuid.UUID) -> Deployment:
         deployment = await self.get(deployment_id)
+        if deployment.status == DeploymentStatus.succeeded:
+            logger.info("deployment %s already succeeded; leave unchanged", deployment_id)
+            return deployment
         if deployment.status == DeploymentStatus.failed:
             logger.info("deployment %s already failed; leave unchanged", deployment_id)
             return deployment

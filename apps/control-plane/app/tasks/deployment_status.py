@@ -47,4 +47,5 @@ def try_mark_deployment_failed_sync(deployment_id: uuid.UUID) -> None:
             "event=deployment_failed_status_skipped deployment=%s error_type=%s",
             deployment_id,
             type(status_exc).__name__,
+            exc_info=status_exc,
         )

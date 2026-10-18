@@ -5,6 +5,7 @@ import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
 
 import {
+  isProvisionFailureLogLine,
   PROVISION_FAILED_LINE_PREFIX,
   PROVISION_QUEUE_FAILED_LINE,
 } from "./api";
@@ -29,5 +30,15 @@ describe("provision log line contract", () => {
       /return f"Provision failed: \{type\(exc\)\.__name__\}"/,
     );
     assert.equal(PROVISION_FAILED_LINE_PREFIX, "Provision failed:");
+  });
+
+  it("matches queue and worker failure lines", () => {
+    assert.equal(isProvisionFailureLogLine(PROVISION_QUEUE_FAILED_LINE), true);
+    assert.equal(
+      isProvisionFailureLogLine(`${PROVISION_FAILED_LINE_PREFIX} PermanentJobError`),
+      true,
+    );
+    assert.equal(isProvisionFailureLogLine("Done"), false);
+    assert.equal(isProvisionFailureLogLine("Queued environment provision..."), false);
   });
 });

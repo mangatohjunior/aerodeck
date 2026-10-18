@@ -1,38 +1,8 @@
-import { connection, NextResponse } from "next/server";
-
-import {
-  failControlPlaneDeployment,
-  isControlPlaneUuid,
-  readControlPlaneConfig,
-} from "@/lib/control-plane";
-import { jsonControlPlaneError, jsonError } from "@/lib/mock-http";
-import { requireSessionUser } from "@/lib/session";
+import { recordConsoleDeploymentOutcome } from "@/lib/console-deployment-outcome";
 
 export async function POST(
   _request: Request,
   context: { params: Promise<{ id: string }> },
 ) {
-  await connection();
-
-  const user = await requireSessionUser();
-  if (user instanceof NextResponse) {
-    return user;
-  }
-
-  const config = readControlPlaneConfig();
-  if (!config) {
-    return jsonError(404, "Deployment status stays on the mock API.", "not_found");
-  }
-
-  const { id } = await context.params;
-  if (!isControlPlaneUuid(id)) {
-    return jsonError(400, "Deployment id must be a UUID.", "invalid_deployment_id");
-  }
-
-  try {
-    const deployment = await failControlPlaneDeployment(config, id);
-    return NextResponse.json(deployment);
-  } catch (cause) {
-    return jsonControlPlaneError(cause, "console_deployment_failed_status");
-  }
+  return recordConsoleDeploymentOutcome(context, "failed");
 }
