@@ -1,23 +1,30 @@
 import uuid
 from collections.abc import Sequence
 from datetime import UTC, datetime
+from typing import Protocol
 
 from app.core.errors import NotFoundError
 from app.core.github import canonical_github_repo_url, parse_github_repo
 from app.core.logging import get_logger
 from app.models.deployment import Deployment, DeploymentStatus
+from app.models.project import Environment
 from app.repositories.deployments import DeploymentRepository
 from app.schemas.deployment import DeploymentCreate
-from app.services.environments import EnvironmentService
 
 logger = get_logger("services.deployments")
+
+
+class EnvironmentLookup(Protocol):
+    """Narrow create-time check that the linked environment exists."""
+
+    async def get(self, project_id: uuid.UUID, environment_id: uuid.UUID) -> Environment: ...
 
 
 class DeploymentService:
     def __init__(
         self,
         deployments: DeploymentRepository,
-        environments: EnvironmentService,
+        environments: EnvironmentLookup | None = None,
     ) -> None:
         self._deployments = deployments
         self._environments = environments
@@ -30,6 +37,8 @@ class DeploymentService:
         project_id = data.project_id
         environment_id = data.environment_id
         if project_id is not None and environment_id is not None:
+            if self._environments is None:
+                raise RuntimeError("environment link requires an EnvironmentLookup")
             await self._environments.get(project_id, environment_id)
         stored = await self._deployments.add(
             Deployment(

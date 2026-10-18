@@ -1,7 +1,8 @@
 "use client";
 
+import Link from "next/link";
 import { CheckCircle2, Loader2, Rocket, XCircle } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { LinkButton } from "@/components/link-button";
 import { Terminal } from "@/components/terminal";
@@ -16,10 +17,17 @@ import {
 } from "@/components/ui/card";
 import {
   deploymentLogsUrl,
+  fetchEnvironments,
   markDeploymentFailed,
   markDeploymentSucceeded,
 } from "@/lib/api";
-import type { Deployment, DeploymentStatus, ProjectSource } from "@/lib/types";
+import { deploymentEnvironmentLabel } from "@/lib/deployment-environment-label";
+import type {
+  Deployment,
+  DeploymentStatus,
+  EnvironmentOption,
+  ProjectSource,
+} from "@/lib/types";
 
 type DeploymentStatusViewProps = {
   deployment: Deployment;
@@ -69,7 +77,28 @@ function statusBadge(status: DeploymentStatus) {
 export function DeploymentStatusView({ deployment, logSource }: DeploymentStatusViewProps) {
   const [status, setStatus] = useState<DeploymentStatus>(deployment.status);
   const [error, setError] = useState<string | null>(null);
+  const [environments, setEnvironments] = useState<EnvironmentOption[]>([]);
   const copy = logSourceCopy(logSource);
+  const envLabel = deploymentEnvironmentLabel(deployment, environments);
+
+  useEffect(() => {
+    if (logSource !== "control-plane" || !deployment.project_id || !deployment.environment_id) {
+      return;
+    }
+    let cancelled = false;
+    fetchEnvironments()
+      .then((page) => {
+        if (!cancelled) {
+          setEnvironments(page.items);
+        }
+      })
+      .catch(() => {
+        // Labels stay optional; detail still works without the catalog.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [logSource, deployment.project_id, deployment.environment_id]);
 
   function recordOutcome(outcome: TerminalOutcome) {
     if (status === "succeeded" || status === "failed") {
@@ -139,16 +168,18 @@ export function DeploymentStatusView({ deployment, logSource }: DeploymentStatus
             <p className="mt-0.5">{copy.targetLabel}</p>
           </div>
           {deployment.project_id && deployment.environment_id ? (
-            <>
-              <div>
-                <p className="text-xs text-muted-foreground">Project</p>
-                <p className="mt-0.5 font-mono text-xs break-all">{deployment.project_id}</p>
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Environment</p>
-                <p className="mt-0.5 font-mono text-xs break-all">{deployment.environment_id}</p>
-              </div>
-            </>
+            <div className="sm:col-span-2">
+              <p className="text-xs text-muted-foreground">Environment</p>
+              <p className="mt-0.5 text-sm">
+                {envLabel ? (
+                  envLabel
+                ) : (
+                  <Link href="/projects" className="text-primary hover:underline">
+                    Linked environment
+                  </Link>
+                )}
+              </p>
+            </div>
           ) : null}
         </CardContent>
       </Card>
