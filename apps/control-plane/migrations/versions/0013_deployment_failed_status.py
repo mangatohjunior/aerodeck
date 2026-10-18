@@ -26,4 +26,5 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     # Rewrite failed rows so the app enum can drop the value; no ALTER on SQLite.
-    op.execute("UPDATE deployments SET status = 'running' WHERE status = 'failed'")
+    # ``queued`` avoids looking like an in-progress deploy after rollback.
+    op.execute("UPDATE deployments SET status = 'queued' WHERE status = 'failed'")

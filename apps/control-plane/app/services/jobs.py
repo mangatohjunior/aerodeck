@@ -17,7 +17,8 @@ from app.services.deployment_logs import (
     PROVISION_QUEUED_LINE,
     publish_line,
 )
-from app.services.deployments import DeploymentService, mark_deployment_failed_isolated
+from app.services.deployments import DeploymentService
+from app.tasks.deployment_status import mark_deployment_failed_isolated
 from app.services.environments import EnvironmentService
 from app.services.provisioning import JobKind
 

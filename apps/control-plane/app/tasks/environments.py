@@ -95,7 +95,7 @@ def _run(
         if deployment_id is not None and not _will_retry(task, exc):
             # No Done: Terminal treats Done as success. Stream ends on follow-idle.
             publish_provision_lines_sync(redis_url, deployment_id, provision_failure_line(exc))
-            from app.services.deployments import mark_deployment_failed_sync
+            from app.tasks.deployment_status import mark_deployment_failed_sync
 
             try:
                 mark_deployment_failed_sync(deployment_id)

@@ -183,7 +183,7 @@ async def test_provision_failure_publishes_safe_line_without_done(
     deployment_id = uuid4()
     marked: list[object] = []
     monkeypatch.setattr(
-        "app.services.deployments.mark_deployment_failed_sync",
+        "app.tasks.deployment_status.mark_deployment_failed_sync",
         lambda deployment_id: marked.append(deployment_id),
     )
     try:
@@ -256,7 +256,7 @@ async def test_exhausted_transient_publishes_failure_without_done(
     deployment_id = uuid4()
     marked: list[object] = []
     monkeypatch.setattr(
-        "app.services.deployments.mark_deployment_failed_sync",
+        "app.tasks.deployment_status.mark_deployment_failed_sync",
         lambda deployment_id: marked.append(deployment_id),
     )
 
