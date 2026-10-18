@@ -13,9 +13,9 @@ export async function POST() {
   const token = (await cookies()).get(SESSION_COOKIE)?.value;
   const config = readControlPlaneConfig();
   const mockUser = getUserBySessionToken(token);
-  if (token && config && shouldRevokeControlPlaneSession(token, config, mockUser)) {
+  if (shouldRevokeControlPlaneSession(token, config, mockUser)) {
     try {
-      await revokeControlPlaneSession(config, token);
+      await revokeControlPlaneSession(config!, token!);
     } catch (cause) {
       if (cause instanceof ControlPlaneError) {
         console.error("event=console_logout_failed detail=%s", cause.message);
