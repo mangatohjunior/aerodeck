@@ -80,10 +80,8 @@ export function LoginForm() {
       <CardHeader className="border-b">
         <CardTitle>Sign in</CardTitle>
         <CardDescription>
-          Email and password against{" "}
-          <span className="font-mono">/api/mock/v1/auth/login</span>, or Continue
-          with Google against the mock OIDC callback. Nothing is stored in
-          localStorage.
+          Email and password, or Continue with Google when an OAuth client
+          is configured. Nothing is stored in localStorage.
         </CardDescription>
       </CardHeader>
       <form onSubmit={handleSubmit}>

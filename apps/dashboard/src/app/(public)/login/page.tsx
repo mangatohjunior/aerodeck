@@ -16,7 +16,7 @@ export default function LoginPage() {
       <PageHeader
         eyebrow="Login"
         title="Sign in"
-        description="Email and password, or Continue with Google. Mock Google does not call Google Cloud until GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET are set."
+        description="Email and password, or Continue with Google. A configured OAuth client signs you in with your Google account. Operators follow docs/runbooks/google-sign-in.md."
       />
       <Suspense fallback={<LoginForm />}>
         <GuestOnly>

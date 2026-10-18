@@ -18,15 +18,18 @@ On `aerodeck-dev-control`, run
 `apps/control-plane/scripts/enroll-console-client.sh`. It generates a secret,
 stores only the SHA-256 digest in `/etc/aerodeck/control-plane.env`, writes
 the secret to `/etc/aerodeck/dashboard.env`, and restarts the API. Running it
-again rotates that secret. It replaces the whole `AERODECK_AUTH_CLIENTS` map
-with the `console` client. The start script keeps the other keys already in
-the control-plane env file.
+again rotates that secret and keeps `GOOGLE_CLIENT_ID` and
+`GOOGLE_CLIENT_SECRET` when those lines are already in `dashboard.env`. It
+replaces the whole `AERODECK_AUTH_CLIENTS` map with the `console` client. The
+start script keeps the other keys already in the control-plane env file.
+Google setup is [google-sign-in.md](google-sign-in.md).
 
-Copy the script onto the Droplet (the image does not include it until the
-next control-plane image build), then:
+Copy `enroll-console-client.sh` and `dashboard_env.py` into the same directory
+on the Droplet (the image does not include them until the next control-plane
+image build), then:
 
 ```bash
-sed -i 's/\r$//' /root/enroll-console-client.sh
+sed -i 's/\r$//' /root/enroll-console-client.sh /root/dashboard_env.py
 sudo bash /root/enroll-console-client.sh
 ```
 
