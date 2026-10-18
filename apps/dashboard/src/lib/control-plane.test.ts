@@ -5,6 +5,7 @@ import {
   clearControlPlaneTokenCache,
   ControlPlaneError,
   listControlPlaneProjects,
+  listControlPlaneSandboxes,
   readControlPlaneConfig,
   type ControlPlaneConfig,
 } from "./control-plane";
@@ -133,6 +134,100 @@ describe("listControlPlaneProjects", () => {
         assert.ok(cause instanceof ControlPlaneError);
         assert.equal(cause.message.includes("super-secret"), false);
         assert.match(cause.message, /token request failed \(401\)/);
+        return true;
+      },
+    );
+  });
+});
+
+const projectRow = {
+  id: "11111111-1111-4111-8111-111111111111",
+  slug: "payments",
+  name: "Payments",
+  description: null,
+  created_at: "2026-10-18T00:00:00.000Z",
+  updated_at: "2026-10-18T00:00:00.000Z",
+};
+
+const sandboxRow = {
+  id: "33333333-3333-4333-8333-333333333333",
+  project_id: projectRow.id,
+  image: "debian-slim",
+  vcpu: 1,
+  memory_mib: 128,
+  ttl_seconds: 3600,
+  status: "running",
+  expires_at: "2026-10-18T01:00:00.000Z",
+  created_at: "2026-10-18T00:00:00.000Z",
+  host_id: null,
+};
+
+describe("listControlPlaneSandboxes", () => {
+  it("lists every project's sandboxes with one bearer", async () => {
+    clearControlPlaneTokenCache();
+    const calls: string[] = [];
+    const fetchImpl: typeof fetch = async (input, init) => {
+      const url = String(input);
+      calls.push(url);
+      const headers = new Headers(init?.headers);
+      if (url.endsWith("/api/v1/auth/token")) {
+        return jsonResponse({ access_token: "issued-bearer", expires_in: 900 });
+      }
+      if (url.includes("/api/v1/projects?")) {
+        assert.equal(headers.get("authorization"), "Bearer issued-bearer");
+        return jsonResponse({
+          items: [
+            projectRow,
+            { ...projectRow, id: "22222222-2222-4222-8222-222222222222", slug: "platform" },
+          ],
+          total: 2,
+          limit: 200,
+          offset: 0,
+        });
+      }
+      assert.equal(headers.get("authorization"), "Bearer issued-bearer");
+      if (url.includes(projectRow.id) && url.includes("offset=0")) {
+        return jsonResponse({ items: [sandboxRow], total: 2, limit: 200, offset: 0 });
+      }
+      if (url.includes(projectRow.id)) {
+        return jsonResponse({
+          items: [{ ...sandboxRow, id: "44444444-4444-4444-8444-444444444444" }],
+          total: 2,
+          limit: 200,
+          offset: 1,
+        });
+      }
+      return jsonResponse({ items: [], total: 0, limit: 200, offset: 0 });
+    };
+
+    const page = await listControlPlaneSandboxes(config, { fetch: fetchImpl });
+    assert.equal(page.total, 2);
+    assert.equal(page.items[0]?.image, "debian-slim");
+    assert.equal(calls.filter((url) => url.endsWith("/api/v1/auth/token")).length, 1);
+    assert.equal(calls.filter((url) => url.includes("/sandboxes?")).length, 3);
+    assert.equal(JSON.stringify(page).includes("super-secret"), false);
+    assert.equal(JSON.stringify(page).includes("issued-bearer"), false);
+  });
+
+  it("does not include the upstream body when a sandbox list fails", async () => {
+    clearControlPlaneTokenCache();
+    const fetchImpl: typeof fetch = async (input) => {
+      const url = String(input);
+      if (url.endsWith("/api/v1/auth/token")) {
+        return jsonResponse({ access_token: "issued-bearer", expires_in: 900 });
+      }
+      if (url.includes("/api/v1/projects?")) {
+        return jsonResponse({ items: [projectRow], total: 1, limit: 200, offset: 0 });
+      }
+      return jsonResponse({ detail: "nope", client_secret: "super-secret" }, 503);
+    };
+
+    await assert.rejects(
+      () => listControlPlaneSandboxes(config, { fetch: fetchImpl }),
+      (cause: unknown) => {
+        assert.ok(cause instanceof ControlPlaneError);
+        assert.equal(cause.message.includes("super-secret"), false);
+        assert.match(cause.message, /sandboxes request failed \(503\)/);
         return true;
       },
     );

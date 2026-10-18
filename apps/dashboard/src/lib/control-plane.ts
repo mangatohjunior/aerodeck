@@ -1,4 +1,4 @@
-import type { Project } from "./types";
+import type { Project, Sandbox } from "./types";
 
 const CLIENT_ID_MAX = 128;
 const CLIENT_SECRET_MAX = 512;
@@ -16,6 +16,11 @@ export type ControlPlaneProjectPage = {
   total: number;
   limit: number;
   offset: number;
+};
+
+export type ControlPlaneSandboxPage = {
+  items: Sandbox[];
+  total: number;
 };
 
 type CachedToken = {
@@ -79,6 +84,60 @@ export async function listControlPlaneProjects(
     );
   }
   return parseProjectPage(await response.json());
+}
+
+const SANDBOX_PAGE_CAP = 20;
+
+export async function listControlPlaneSandboxes(
+  config: ControlPlaneConfig,
+  options: ListOptions = {},
+): Promise<ControlPlaneSandboxPage> {
+  const projects = await listControlPlaneProjects(config, options);
+  const fetchImpl = options.fetch ?? fetch;
+  const now = options.now ?? Date.now;
+  const accessToken = await accessTokenFor(config, fetchImpl, now);
+  const items: Sandbox[] = [];
+  for (const project of projects.items) {
+    const page = await listProjectSandboxes(config, project.id, accessToken, fetchImpl);
+    items.push(...page);
+  }
+  return { items, total: items.length };
+}
+
+async function listProjectSandboxes(
+  config: ControlPlaneConfig,
+  projectId: string,
+  accessToken: string,
+  fetchImpl: typeof fetch,
+): Promise<Sandbox[]> {
+  const items: Sandbox[] = [];
+  let offset = 0;
+  let total = 0;
+  for (let page = 0; page < SANDBOX_PAGE_CAP; page += 1) {
+    const response = await fetchImpl(
+      `${config.baseUrl}/api/v1/projects/${encodeURIComponent(projectId)}/sandboxes?limit=${PAGE_LIMIT}&offset=${offset}`,
+      {
+        headers: {
+          accept: "application/json",
+          authorization: `Bearer ${accessToken}`,
+        },
+        cache: "no-store",
+      },
+    );
+    if (!response.ok) {
+      throw new ControlPlaneError(
+        `control plane sandboxes request failed (${response.status})`,
+      );
+    }
+    const parsed = parseSandboxPage(await response.json());
+    items.push(...parsed.items);
+    total = parsed.total;
+    if (parsed.items.length === 0 || items.length >= total) {
+      break;
+    }
+    offset += parsed.items.length;
+  }
+  return items;
 }
 
 function normalizeBaseUrl(raw: string | undefined): string | null {
@@ -204,5 +263,54 @@ function parseProject(value: unknown): Project {
     description,
     created_at: row.created_at,
     updated_at: row.updated_at,
+  };
+}
+
+const SANDBOX_STATUSES = new Set(["pending", "running", "stopped", "expired"]);
+
+function parseSandboxPage(body: unknown): { items: Sandbox[]; total: number } {
+  if (!body || typeof body !== "object") {
+    throw new ControlPlaneError("control plane sandboxes response was not a page");
+  }
+  const record = body as Record<string, unknown>;
+  if (!Array.isArray(record.items)) {
+    throw new ControlPlaneError("control plane sandboxes response was not a page");
+  }
+  const items = record.items.map(parseSandbox);
+  return {
+    items,
+    total: typeof record.total === "number" ? record.total : items.length,
+  };
+}
+
+function parseSandbox(value: unknown): Sandbox {
+  if (!value || typeof value !== "object") {
+    throw new ControlPlaneError("control plane sandboxes response was not a page");
+  }
+  const row = value as Record<string, unknown>;
+  if (
+    typeof row.id !== "string" ||
+    typeof row.project_id !== "string" ||
+    typeof row.image !== "string" ||
+    typeof row.vcpu !== "number" ||
+    typeof row.memory_mib !== "number" ||
+    typeof row.ttl_seconds !== "number" ||
+    typeof row.status !== "string" ||
+    !SANDBOX_STATUSES.has(row.status) ||
+    typeof row.expires_at !== "string" ||
+    typeof row.created_at !== "string"
+  ) {
+    throw new ControlPlaneError("control plane sandboxes response was not a page");
+  }
+  return {
+    id: row.id,
+    project_id: row.project_id,
+    image: row.image,
+    vcpu: row.vcpu,
+    memory_mib: row.memory_mib,
+    ttl_seconds: row.ttl_seconds,
+    status: row.status as Sandbox["status"],
+    expires_at: row.expires_at,
+    created_at: row.created_at,
   };
 }

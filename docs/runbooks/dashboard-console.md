@@ -4,8 +4,11 @@ The Next.js app in `apps/dashboard`. The browser keeps the `aerodeck_session`
 cookie. The server calls the control plane with an enrolled client. The
 browser never sees that client secret or the control-plane bearer.
 
-Overview and Projects read `GET /api/v1/projects`. Sandboxes, deployments, and
-sign-in stay on the mock API ([dashboard-mock.md](dashboard-mock.md)).
+Overview and Projects read `GET /api/v1/projects`. Sandboxes read
+`GET /api/v1/projects/{id}/sandboxes` through `GET /api/console/sandboxes`.
+Deployments and sign-in stay on the mock API
+([dashboard-mock.md](dashboard-mock.md)). When `CONTROL_PLANE_URL` is unset,
+projects and sandboxes fall back to the local seed.
 
 Do not `terraform apply` from a laptop. Port 3000 stays VPC-only.
 
