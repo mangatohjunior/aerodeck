@@ -47,7 +47,8 @@ cd apps/control-plane
 uvicorn main:app --reload --port 8000
 ```
 
-Probes (no auth): `GET /healthz`, `GET /readyz`.
+Probes (no auth): `GET /healthz`, `GET /readyz`, `GET /metrics`.
+Alerts: [metrics.md](metrics.md).
 
 Issue a token, then call the API:
 

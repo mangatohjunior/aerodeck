@@ -8,6 +8,7 @@ exponential backoff; anything else fails the job immediately.
 from celery import Task, shared_task
 
 from app.core.logging import get_logger
+from app.core.metrics import record_iac_apply_failure
 from app.services.provisioning import JobKind, NoopProvisioner, Provisioner, TransientJobError
 
 logger = get_logger("tasks.environments")
@@ -37,7 +38,13 @@ def _run(
     attempt = task.request.retries + 1
     logger.info("%s environment=%s project=%s attempt=%d", kind.value, environment_id, project_id, attempt)
     operation = _provisioner.provision if kind is JobKind.provision else _provisioner.reconcile
-    outcome = operation(project_id=project_id, environment_id=environment_id, **meta)
+    try:
+        outcome = operation(project_id=project_id, environment_id=environment_id, **meta)
+    except Exception:
+        if kind is JobKind.provision:
+            logger.error("event=iac_apply_failed environment=%s project=%s", environment_id, project_id)
+            record_iac_apply_failure()
+        raise
     logger.info("%s environment=%s changed=%s", kind.value, environment_id, outcome.changed)
     return outcome.as_dict()
 

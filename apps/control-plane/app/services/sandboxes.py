@@ -6,6 +6,7 @@ from starlette.concurrency import run_in_threadpool
 
 from app.core.errors import NotFoundError
 from app.core.logging import get_logger
+from app.core.metrics import record_sandbox_reap_failure
 from app.models.sandbox import Sandbox, SandboxStatus
 from app.repositories.sandboxes import SandboxRepository
 from app.schemas.sandbox import SandboxCreate
@@ -91,7 +92,8 @@ class SandboxService:
             try:
                 reaped.append(await self._teardown(sandbox))
             except SandboxError:
-                logger.exception("failed to reap sandbox %s; continuing", sandbox.id)
+                logger.error("event=sandbox_reap_failed sandbox_id=%s", sandbox.id)
+                record_sandbox_reap_failure()
         return reaped
 
     async def _teardown_if_expired(self, sandbox: Sandbox, *, now: datetime | None = None) -> Sandbox:

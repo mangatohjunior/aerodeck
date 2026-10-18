@@ -167,6 +167,10 @@ jobs:
       - name: Apply stored plan
         run: bash scripts/ci.sh apply ${{ github.event.inputs.environment }}
 
+      - name: Record apply failure
+        if: failure()
+        run: echo "event=iac_apply_failed environment=${{ github.event.inputs.environment }}"
+
   apply-prod:
     name: apply (prod)
     needs: [credentials, plan]
@@ -209,3 +213,7 @@ jobs:
 
       - name: Apply stored plan
         run: bash scripts/ci.sh apply prod
+
+      - name: Record apply failure
+        if: failure()
+        run: echo "event=iac_apply_failed environment=prod"
