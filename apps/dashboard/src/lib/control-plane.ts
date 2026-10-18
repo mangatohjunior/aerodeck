@@ -1,4 +1,4 @@
-import type { Deployment, DeploymentStatus, Project, Sandbox } from "./types";
+import type { Deployment, DeploymentStatus, EnvironmentOption, Project, Sandbox } from "./types";
 
 const CLIENT_ID_MAX = 128;
 const CLIENT_SECRET_MAX = 512;
@@ -356,6 +356,120 @@ export async function createControlPlaneDeployment(
   return parseDeployment(await response.json());
 }
 
+export async function listControlPlaneEnvironments(
+  config: ControlPlaneConfig,
+  options: ListOptions = {},
+): Promise<EnvironmentOption[]> {
+  const projects = await listControlPlaneProjects(config, options);
+  const fetchImpl = options.fetch ?? fetch;
+  const now = options.now ?? Date.now;
+  const accessToken = await accessTokenFor(config, fetchImpl, now);
+  const items: EnvironmentOption[] = [];
+  for (const project of projects.items) {
+    const page = await listProjectEnvironments(config, project, accessToken, fetchImpl);
+    items.push(...page);
+  }
+  return items;
+}
+
+export async function getControlPlaneEnvironment(
+  config: ControlPlaneConfig,
+  projectId: string,
+  environmentId: string,
+  options: ListOptions = {},
+): Promise<EnvironmentOption> {
+  if (!isDeploymentLogId(projectId) || !isDeploymentLogId(environmentId)) {
+    throw new ControlPlaneError("control plane environment ids were not uuids");
+  }
+  const fetchImpl = options.fetch ?? fetch;
+  const now = options.now ?? Date.now;
+  const accessToken = await accessTokenFor(config, fetchImpl, now);
+  const projects = await listControlPlaneProjects(config, options);
+  const project = projects.items.find((row) => row.id === projectId);
+  if (!project) {
+    throw new ControlPlaneError("control plane environment was not found (404)", 404);
+  }
+  const response = await fetchImpl(
+    `${config.baseUrl}/api/v1/projects/${encodeURIComponent(projectId)}/environments/${encodeURIComponent(environmentId)}`,
+    {
+      headers: {
+        accept: "application/json",
+        authorization: `Bearer ${accessToken}`,
+      },
+      cache: "no-store",
+    },
+  );
+  if (response.status === 404) {
+    throw new ControlPlaneError("control plane environment was not found (404)", 404);
+  }
+  if (!response.ok) {
+    throw new ControlPlaneError(
+      `control plane environment request failed (${response.status})`,
+      response.status,
+    );
+  }
+  return parseEnvironmentOption(await response.json(), project);
+}
+
+export async function provisionControlPlaneEnvironment(
+  config: ControlPlaneConfig,
+  projectId: string,
+  environmentId: string,
+  deploymentId: string,
+  options: ListOptions = {},
+): Promise<void> {
+  if (
+    !isDeploymentLogId(projectId) ||
+    !isDeploymentLogId(environmentId) ||
+    !isDeploymentLogId(deploymentId)
+  ) {
+    throw new ControlPlaneError("control plane provision ids were not uuids");
+  }
+  const fetchImpl = options.fetch ?? fetch;
+  const now = options.now ?? Date.now;
+  const accessToken = await accessTokenFor(config, fetchImpl, now);
+  const response = await fetchImpl(
+    `${config.baseUrl}/api/v1/projects/${encodeURIComponent(projectId)}/environments/${encodeURIComponent(environmentId)}/provision`,
+    {
+      method: "POST",
+      headers: {
+        accept: "application/json",
+        authorization: `Bearer ${accessToken}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ deployment_id: deploymentId }),
+      cache: "no-store",
+    },
+  );
+  if (response.status === 404) {
+    throw new ControlPlaneError("control plane provision target was not found (404)", 404);
+  }
+  if (response.status === 503) {
+    throw new ControlPlaneError("control plane provision queue unavailable (503)", 503);
+  }
+  if (!response.ok) {
+    throw new ControlPlaneError(`control plane provision request failed (${response.status})`, response.status);
+  }
+}
+
+export async function createControlPlaneDeploymentAndProvision(
+  config: ControlPlaneConfig,
+  input: { repoUrl: string; projectId: string; environmentId: string },
+  options: ListOptions = {},
+): Promise<Deployment> {
+  // Resolve the environment first so a bad target never creates a deployment row.
+  await getControlPlaneEnvironment(config, input.projectId, input.environmentId, options);
+  const deployment = await createControlPlaneDeployment(config, input.repoUrl, options);
+  await provisionControlPlaneEnvironment(
+    config,
+    input.projectId,
+    input.environmentId,
+    deployment.id,
+    options,
+  );
+  return deployment;
+}
+
 export async function getControlPlaneDeployment(
   config: ControlPlaneConfig,
   deploymentId: string,
@@ -384,6 +498,65 @@ export async function getControlPlaneDeployment(
     throw new ControlPlaneError(`control plane deployment request failed (${response.status})`, response.status);
   }
   return parseDeployment(await response.json());
+}
+
+async function listProjectEnvironments(
+  config: ControlPlaneConfig,
+  project: Project,
+  accessToken: string,
+  fetchImpl: typeof fetch,
+): Promise<EnvironmentOption[]> {
+  const response = await fetchImpl(
+    `${config.baseUrl}/api/v1/projects/${encodeURIComponent(project.id)}/environments?limit=${PAGE_LIMIT}`,
+    {
+      headers: {
+        accept: "application/json",
+        authorization: `Bearer ${accessToken}`,
+      },
+      cache: "no-store",
+    },
+  );
+  if (!response.ok) {
+    throw new ControlPlaneError(
+      `control plane environments request failed (${response.status})`,
+      response.status,
+    );
+  }
+  const body = await response.json();
+  if (!body || typeof body !== "object" || !Array.isArray((body as { items?: unknown }).items)) {
+    throw new ControlPlaneError("control plane environments response was not a page");
+  }
+  return ((body as { items: unknown[] }).items).map((row) => parseEnvironmentOption(row, project));
+}
+
+function parseEnvironmentOption(value: unknown, project: Project): EnvironmentOption {
+  if (!value || typeof value !== "object") {
+    throw new ControlPlaneError("control plane environments response was not a page");
+  }
+  const row = value as Record<string, unknown>;
+  if (
+    typeof row.id !== "string" ||
+    typeof row.project_id !== "string" ||
+    typeof row.slug !== "string" ||
+    typeof row.name !== "string" ||
+    typeof row.kind !== "string" ||
+    typeof row.region !== "string"
+  ) {
+    throw new ControlPlaneError("control plane environments response was not a page");
+  }
+  if (row.project_id !== project.id) {
+    throw new ControlPlaneError("control plane environments response was not a page");
+  }
+  return {
+    id: row.id,
+    project_id: row.project_id,
+    project_slug: project.slug,
+    project_name: project.name,
+    slug: row.slug,
+    name: row.name,
+    kind: row.kind,
+    region: row.region,
+  };
 }
 
 async function listProjectSandboxes(

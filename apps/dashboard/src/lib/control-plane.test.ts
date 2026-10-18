@@ -12,6 +12,7 @@ import {
   readControlPlaneConfig,
   authenticateControlPlaneUser,
   createControlPlaneDeployment,
+  createControlPlaneDeploymentAndProvision,
   getControlPlaneDeployment,
   createControlPlaneSession,
   linkControlPlaneGoogleUser,
@@ -368,6 +369,144 @@ describe("openControlPlaneDeploymentLogs", () => {
         return true;
       },
     );
+  });
+});
+
+describe("createControlPlaneDeploymentAndProvision", () => {
+  it("resolves the environment, creates the deployment, then queues provision", async () => {
+    clearControlPlaneTokenCache();
+    const projectId = "11111111-1111-4111-8111-111111111111";
+    const environmentId = "22222222-2222-4222-8222-222222222222";
+    const deploymentId = "33333333-3333-4333-8333-333333333333";
+    const calls: string[] = [];
+    const fetchImpl: typeof fetch = async (input, init) => {
+      const url = String(input);
+      if (url.endsWith("/api/v1/auth/token")) {
+        return jsonResponse({ access_token: "issued-bearer", expires_in: 900 });
+      }
+      calls.push(`${init?.method ?? "GET"} ${url}`);
+      if (url.includes("/api/v1/projects?") && !url.includes("/environments")) {
+        return jsonResponse({
+          items: [
+            {
+              id: projectId,
+              slug: "payments",
+              name: "Payments",
+              description: null,
+              created_at: "2026-10-18T00:00:00.000Z",
+              updated_at: "2026-10-18T00:00:00.000Z",
+            },
+          ],
+          total: 1,
+          limit: 200,
+          offset: 0,
+        });
+      }
+      if (url.endsWith(`/projects/${projectId}/environments/${environmentId}`)) {
+        return jsonResponse({
+          id: environmentId,
+          project_id: projectId,
+          slug: "prod",
+          name: "Prod",
+          kind: "prod",
+          region: "ams3",
+          created_at: "2026-10-18T00:00:00.000Z",
+          updated_at: "2026-10-18T00:00:00.000Z",
+        });
+      }
+      if (url.endsWith("/api/v1/deployments") && init?.method === "POST") {
+        return jsonResponse({
+          id: deploymentId,
+          repo_url: "https://github.com/acme/payments",
+          owner: "acme",
+          repo: "payments",
+          status: "running",
+          started_at: "2026-10-18T00:00:00.000Z",
+        });
+      }
+      if (url.endsWith(`/environments/${environmentId}/provision`) && init?.method === "POST") {
+        assert.equal(init.body, JSON.stringify({ deployment_id: deploymentId }));
+        return jsonResponse({
+          job_id: "44444444-4444-4444-8444-444444444444",
+          kind: "provision",
+          project_id: projectId,
+          environment_id: environmentId,
+          status: "queued",
+        });
+      }
+      return jsonResponse({ detail: "unexpected", secret: "super-secret" }, 500);
+    };
+
+    const deployment = await createControlPlaneDeploymentAndProvision(
+      config,
+      {
+        repoUrl: "https://github.com/acme/payments",
+        projectId,
+        environmentId,
+      },
+      { fetch: fetchImpl },
+    );
+    assert.equal(deployment.id, deploymentId);
+    assert.ok(calls.some((call) => call.includes(`/environments/${environmentId}`) && call.startsWith("GET")));
+    assert.ok(calls.some((call) => call.includes("/api/v1/deployments") && call.startsWith("POST")));
+    assert.ok(calls.some((call) => call.includes("/provision") && call.startsWith("POST")));
+  });
+
+  it("does not create a deployment when the environment is missing", async () => {
+    clearControlPlaneTokenCache();
+    const projectId = "11111111-1111-4111-8111-111111111111";
+    const environmentId = "22222222-2222-4222-8222-222222222222";
+    let created = false;
+    const fetchImpl: typeof fetch = async (input, init) => {
+      const url = String(input);
+      if (url.endsWith("/api/v1/auth/token")) {
+        return jsonResponse({ access_token: "issued-bearer", expires_in: 900 });
+      }
+      if (url.includes("/api/v1/projects?") && !url.includes("/environments")) {
+        return jsonResponse({
+          items: [
+            {
+              id: projectId,
+              slug: "payments",
+              name: "Payments",
+              description: null,
+              created_at: "2026-10-18T00:00:00.000Z",
+              updated_at: "2026-10-18T00:00:00.000Z",
+            },
+          ],
+          total: 1,
+          limit: 200,
+          offset: 0,
+        });
+      }
+      if (url.endsWith(`/environments/${environmentId}`)) {
+        return jsonResponse({ detail: "missing", secret: "super-secret" }, 404);
+      }
+      if (url.endsWith("/api/v1/deployments") && init?.method === "POST") {
+        created = true;
+      }
+      return jsonResponse({ detail: "unexpected" }, 500);
+    };
+
+    await assert.rejects(
+      () =>
+        createControlPlaneDeploymentAndProvision(
+          config,
+          {
+            repoUrl: "https://github.com/acme/payments",
+            projectId,
+            environmentId,
+          },
+          { fetch: fetchImpl },
+        ),
+      (cause: unknown) => {
+        assert.ok(cause instanceof ControlPlaneError);
+        assert.equal(cause.message.includes("super-secret"), false);
+        assert.match(cause.message, /not found \(404\)/);
+        return true;
+      },
+    );
+    assert.equal(created, false);
   });
 });
 

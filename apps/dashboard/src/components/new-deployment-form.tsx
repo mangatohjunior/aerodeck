@@ -2,7 +2,7 @@
 
 import { Loader2, Rocket } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -15,14 +15,53 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { createDeployment } from "@/lib/api";
+import { createDeployment, fetchEnvironments } from "@/lib/api";
 import { parseGithubRepo } from "@/lib/github";
+import type { EnvironmentOption } from "@/lib/types";
+import { cn } from "@/lib/utils";
 
 export function NewDeploymentForm({ controlPlane = false }: { controlPlane?: boolean }) {
   const router = useRouter();
   const [repoUrl, setRepoUrl] = useState("");
+  const [environmentKey, setEnvironmentKey] = useState("");
+  const [environments, setEnvironments] = useState<EnvironmentOption[]>([]);
+  const [environmentsError, setEnvironmentsError] = useState<string | null>(null);
+  const [loadingEnvironments, setLoadingEnvironments] = useState(controlPlane);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (!controlPlane) {
+      return;
+    }
+    let cancelled = false;
+    setLoadingEnvironments(true);
+    setEnvironmentsError(null);
+    fetchEnvironments()
+      .then((page) => {
+        if (cancelled) {
+          return;
+        }
+        setEnvironments(page.items);
+        if (page.items.length === 1) {
+          setEnvironmentKey(`${page.items[0].project_id}:${page.items[0].id}`);
+        }
+      })
+      .catch((cause) => {
+        if (cancelled) {
+          return;
+        }
+        setEnvironmentsError(cause instanceof Error ? cause.message : "Could not load environments.");
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setLoadingEnvironments(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [controlPlane]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -33,9 +72,19 @@ export function NewDeploymentForm({ controlPlane = false }: { controlPlane?: boo
       return;
     }
 
+    let target: { projectId: string; environmentId: string } | undefined;
+    if (controlPlane) {
+      const selected = environments.find((row) => `${row.project_id}:${row.id}` === environmentKey);
+      if (!selected) {
+        setError("Select an environment to provision.");
+        return;
+      }
+      target = { projectId: selected.project_id, environmentId: selected.id };
+    }
+
     setSubmitting(true);
     try {
-      const deployment = await createDeployment(repoUrl, controlPlane);
+      const deployment = await createDeployment(repoUrl, controlPlane, target);
       router.push(`/deployments/${deployment.id}`);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Deploy failed.");
@@ -44,6 +93,11 @@ export function NewDeploymentForm({ controlPlane = false }: { controlPlane?: boo
     }
   }
 
+  const canSubmit =
+    !submitting &&
+    repoUrl.trim().length > 0 &&
+    (!controlPlane || (environmentKey.length > 0 && !loadingEnvironments));
+
   return (
     <Card className="overflow-hidden ring-primary/15">
       <div className="h-1 bg-gradient-to-r from-primary via-runway to-primary/40" />
@@ -51,12 +105,12 @@ export function NewDeploymentForm({ controlPlane = false }: { controlPlane?: boo
         <CardTitle>Repository</CardTitle>
         <CardDescription>
           {controlPlane
-            ? "HTTPS GitHub URL. The dashboard server stores the deployment in the control plane."
+            ? "HTTPS GitHub URL and an existing environment. The dashboard server stores the deployment and queues provision."
             : "HTTPS GitHub URL. Validated in the browser, then POSTed to /api/mock/v1/deployments."}
         </CardDescription>
       </CardHeader>
       <form onSubmit={handleSubmit}>
-        <CardContent className="pt-4">
+        <CardContent className="flex flex-col gap-4 pt-4">
           <div className="flex flex-col gap-2">
             <Label htmlFor="github-url">GitHub URL</Label>
             <Input
@@ -76,23 +130,59 @@ export function NewDeploymentForm({ controlPlane = false }: { controlPlane?: boo
               }}
               className="h-10"
             />
-            {error ? (
-              <p className="text-sm text-destructive" role="alert">
-                {error}
-              </p>
-            ) : (
-              <p className="text-xs text-muted-foreground">
-                Example: https://github.com/org/app.git
-              </p>
-            )}
+            <p className="text-xs text-muted-foreground">Example: https://github.com/org/app.git</p>
           </div>
+          {controlPlane ? (
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="environment">Environment</Label>
+              <select
+                id="environment"
+                className={cn(
+                  "h-10 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none",
+                  "focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50",
+                  "disabled:cursor-not-allowed disabled:opacity-50",
+                )}
+                value={environmentKey}
+                disabled={submitting || loadingEnvironments || environments.length === 0}
+                onChange={(event) => {
+                  setEnvironmentKey(event.target.value);
+                  if (error) {
+                    setError(null);
+                  }
+                }}
+              >
+                <option value="">
+                  {loadingEnvironments
+                    ? "Loading environments…"
+                    : environments.length === 0
+                      ? "No environments available"
+                      : "Select an environment"}
+                </option>
+                {environments.map((row) => (
+                  <option key={`${row.project_id}:${row.id}`} value={`${row.project_id}:${row.id}`}>
+                    {row.project_slug}/{row.slug} ({row.kind}, {row.region})
+                  </option>
+                ))}
+              </select>
+              {environmentsError ? (
+                <p className="text-sm text-destructive" role="alert">
+                  {environmentsError}
+                </p>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  Provision runs on the control-plane worker for the selected environment.
+                </p>
+              )}
+            </div>
+          ) : null}
+          {error ? (
+            <p className="text-sm text-destructive" role="alert">
+              {error}
+            </p>
+          ) : null}
         </CardContent>
         <CardFooter className="justify-end">
-          <Button
-            type="submit"
-            size="lg"
-            disabled={submitting || repoUrl.trim().length === 0}
-          >
+          <Button type="submit" size="lg" disabled={!canSubmit}>
             {submitting ? (
               <Loader2 data-icon="inline-start" className="animate-spin" />
             ) : (

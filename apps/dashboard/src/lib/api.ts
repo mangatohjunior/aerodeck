@@ -2,6 +2,7 @@ import { MOCK_API_PREFIX } from "@/lib/catalog";
 import type {
   ApiError,
   Deployment,
+  EnvironmentOptionPage,
   ProjectPage,
   ProjectSource,
   PublicUser,
@@ -60,13 +61,30 @@ export async function fetchDeployment(id: string, controlPlane = false): Promise
   return readJson(response);
 }
 
-export async function createDeployment(repoUrl: string, controlPlane = false): Promise<Deployment> {
+export async function fetchEnvironments(): Promise<EnvironmentOptionPage> {
+  const response = await fetch("/api/console/environments", {
+    credentials: "same-origin",
+    cache: "no-store",
+  });
+  return readJson(response);
+}
+
+export async function createDeployment(
+  repoUrl: string,
+  controlPlane = false,
+  target?: { projectId: string; environmentId: string },
+): Promise<Deployment> {
   const path = controlPlane ? "/api/console/deployments" : `${MOCK_API_PREFIX}/deployments`;
+  const body: Record<string, string> = { repo_url: repoUrl };
+  if (controlPlane && target) {
+    body.project_id = target.projectId;
+    body.environment_id = target.environmentId;
+  }
   const response = await fetch(path, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     credentials: "same-origin",
-    body: JSON.stringify({ repo_url: repoUrl }),
+    body: JSON.stringify(body),
   });
   return readJson(response);
 }

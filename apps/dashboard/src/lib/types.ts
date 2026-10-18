@@ -48,6 +48,23 @@ export type Deployment = {
   status: DeploymentStatus;
 };
 
+export type EnvironmentOption = {
+  id: string;
+  project_id: string;
+  project_slug: string;
+  project_name: string;
+  slug: string;
+  name: string;
+  kind: string;
+  region: string;
+};
+
+export type EnvironmentOptionPage = {
+  items: EnvironmentOption[];
+  total: number;
+  source: ProjectSource;
+};
+
 export type ApiError = {
   detail: string;
   code: string;

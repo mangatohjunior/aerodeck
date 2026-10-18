@@ -9,8 +9,12 @@ Overview and Projects read `GET /api/v1/projects`. Sandboxes read
 Creating a deployment uses `POST /api/v1/deployments` through
 `POST /api/console/deployments` when the console client is set, and stays on
 `/api/mock/v1/deployments` when it is not
-([dashboard-mock.md](dashboard-mock.md)). The list and the deployment page
-follow the same split. The terminal reads
+([dashboard-mock.md](dashboard-mock.md)). With the console client, Deploy also
+lists environments via `GET /api/console/environments` and, on submit, queues
+`POST .../environments/{id}/provision` with the new `deployment_id` so the
+terminal can follow worker lines. Without the client, Deploy does not call
+provision. The list and the deployment page follow the same mock/control-plane
+split. The terminal reads
 `GET /api/v1/deployments/{id}/logs` through
 `GET /api/console/deployments/{id}/logs` when the console client is set, and
 stays on `/api/mock/v1/deployments/{id}/logs` when it is not. An unknown
