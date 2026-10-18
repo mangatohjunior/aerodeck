@@ -1,4 +1,4 @@
-"""Auth primitives: client-secret hashing and signed, short-lived access tokens.
+"""Auth primitives: client-secret hashing, password hashing, and signed tokens.
 
 Tokens are HS256 JWTs. The signing key never leaves ``Settings``; callers pass
 it in so this module has no configuration dependency of its own.
@@ -30,6 +30,13 @@ class TokenClaims:
 
 def hash_client_secret(secret: str) -> str:
     return hashlib.sha256(secret.encode("utf-8")).hexdigest()
+
+
+def hash_password(password: str) -> str:
+    """scrypt hash. The password is not recoverable from the stored value."""
+    salt = secrets.token_bytes(16)
+    digest = hashlib.scrypt(password.encode("utf-8"), salt=salt, n=2**14, r=8, p=1, dklen=32)
+    return f"scrypt${salt.hex()}${digest.hex()}"
 
 
 def verify_client_secret(secret: str, expected_hash: str) -> bool:
