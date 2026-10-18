@@ -16,8 +16,9 @@ follow the same split. The terminal reads
 stays on `/api/mock/v1/deployments/{id}/logs` when it is not. An unknown
 deployment id does not stream. When the worker has published lines for that
 id (Redis list `aerodeck:deployment-logs:{id}`, or the in-process store when
-Redis is unset), the control-plane stream prefers those lines; otherwise it
-keeps the three-line stub. When the stream emits `Done`, the dashboard
+Redis is unset), the control-plane stream prefers those lines and appends
+`Done` if the publisher omitted it; otherwise it keeps the three-line stub.
+When the stream emits `Done`, the dashboard
 server records `succeeded` with `POST /api/v1/deployments/{id}/succeeded`.
 The mock log route still marks its own row succeeded. Sign-in still
 posts to `/api/mock/v1/auth/login`. When the console client is set, that

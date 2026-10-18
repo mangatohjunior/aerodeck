@@ -6,9 +6,7 @@ worker-published lines when present, otherwise the stub. ``POST .../succeeded``
 records that the stream finished. Neither call touches DigitalOcean.
 """
 
-import asyncio
 import uuid
-from collections.abc import AsyncIterator
 from uuid import UUID
 
 from fastapi import APIRouter, status
@@ -18,12 +16,13 @@ from app.api.deps import DeploymentServiceDep, PaginationDep, SettingsDep
 from app.schemas.auth import ErrorResponse
 from app.schemas.common import Page
 from app.schemas.deployment import DeploymentCreate, DeploymentRead
-from app.services.deployment_logs import STUB_LOG_LINES, published_lines
+from app.services.deployment_logs import iter_deployment_log_sse
 
 router = APIRouter(prefix="/deployments", tags=["deployments"])
 
 _NOT_FOUND = {status.HTTP_404_NOT_FOUND: {"model": ErrorResponse}}
 _UNAUTHENTICATED = {status.HTTP_401_UNAUTHORIZED: {"model": ErrorResponse}}
+_UNAVAILABLE = {status.HTTP_503_SERVICE_UNAVAILABLE: {"model": ErrorResponse}}
 
 
 @router.get("", response_model=Page[DeploymentRead], summary="List deployments")
@@ -62,24 +61,18 @@ async def get_deployment(deployment_id: uuid.UUID, deployments: DeploymentServic
     "/{deployment_id}/succeeded",
     response_model=DeploymentRead,
     status_code=status.HTTP_200_OK,
-    summary="Record that a deployment stub finished",
+    summary="Record that a deployment finished",
     responses=_NOT_FOUND | _UNAUTHENTICATED,
 )
 async def succeed_deployment(deployment_id: uuid.UUID, deployments: DeploymentServiceDep) -> DeploymentRead:
     return DeploymentRead.model_validate(await deployments.mark_succeeded(deployment_id))
 
 
-async def _paced_sse(lines: tuple[str, ...] | list[str]) -> AsyncIterator[bytes]:
-    for line in lines:
-        yield f"data: {line}\n\n".encode()
-        await asyncio.sleep(0.05)
-
-
 @router.get(
     "/{deployment_id}/logs",
     summary="Stream deployment logs (SSE)",
     response_class=StreamingResponse,
-    responses=_NOT_FOUND | _UNAUTHENTICATED,
+    responses=_NOT_FOUND | _UNAUTHENTICATED | _UNAVAILABLE,
 )
 async def stream_deployment_logs(
     deployment_id: UUID,
@@ -88,9 +81,8 @@ async def stream_deployment_logs(
 ) -> StreamingResponse:
     """Stream published lines when present; otherwise the stub for a stored deployment."""
     await deployments.get(deployment_id)
-    lines = await published_lines(settings.redis_url, deployment_id)
     return StreamingResponse(
-        _paced_sse(lines if lines is not None else STUB_LOG_LINES),
+        iter_deployment_log_sse(settings.redis_url, deployment_id),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",

@@ -52,6 +52,8 @@ async def test_deployment_logs_prefer_published_lines(
     body = response.text
     assert "data: Plan: 1 to add" in body
     assert "data: Apply complete" in body
+    assert "data: Done" in body
+    assert body.count("data: Done") == 1
     assert "Initializing Terraform" not in body
     assert "Provisioning K3s" not in body
 
