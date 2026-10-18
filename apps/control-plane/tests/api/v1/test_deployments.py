@@ -45,6 +45,7 @@ async def test_unknown_deployment_does_not_stream(client: AsyncClient, auth: dic
 
     finished = await client.post(f"{DEPLOYMENTS}/{missing}/succeeded", headers=auth)
     assert finished.status_code == 404
+    assert finished.json()["code"] == "not_found"
 
 
 async def test_create_stores_a_github_repository(client: AsyncClient, auth: dict[str, str]) -> None:

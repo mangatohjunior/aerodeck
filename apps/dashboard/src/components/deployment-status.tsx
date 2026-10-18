@@ -42,6 +42,9 @@ export function DeploymentStatusView({ deployment, logSource }: DeploymentStatus
   const copy = logSourceCopy(logSource);
 
   function handleComplete() {
+    if (status === "succeeded") {
+      return;
+    }
     if (logSource !== "control-plane") {
       setStatus("succeeded");
       return;

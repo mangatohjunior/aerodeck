@@ -20,8 +20,7 @@ class DeploymentRepository:
         return await self._session.get(Deployment, deployment_id)
 
     async def save(self, deployment: Deployment) -> Deployment:
-        self._session.add(deployment)
-        await self._session.flush()
+        await self.add(deployment)
         await self._session.refresh(deployment)
         return deployment
 
