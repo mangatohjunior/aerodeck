@@ -9,6 +9,9 @@ import {
   openControlPlaneDeploymentLogs,
   readControlPlaneConfig,
   authenticateControlPlaneUser,
+  createControlPlaneDeployment,
+  getControlPlaneDeployment,
+  listControlPlaneDeployments,
   registerControlPlaneUser,
   type ControlPlaneConfig,
 } from "./control-plane";
@@ -423,6 +426,92 @@ describe("authenticateControlPlaneUser", () => {
         assert.equal(cause.message.includes("correct-horse"), false);
         assert.equal(cause.message.includes("ada@example.com"), false);
         assert.match(cause.message, /login rejected \(401\)/);
+        return true;
+      },
+    );
+  });
+});
+
+const deploymentRow = {
+  id: "66666666-6666-4666-8666-666666666666",
+  repo_url: "https://github.com/mangatohjunior/aerodeck",
+  owner: "mangatohjunior",
+  repo: "aerodeck",
+  status: "running",
+  started_at: "2026-10-18T00:00:00.000Z",
+  created_at: "2026-10-18T00:00:00.000Z",
+  updated_at: "2026-10-18T00:00:00.000Z",
+};
+
+describe("control plane deployments", () => {
+  it("creates and lists a deployment with one bearer and no secret in the result", async () => {
+    clearControlPlaneTokenCache();
+    let authorization = "";
+    let posted = "";
+    const fetchImpl: typeof fetch = async (input, init) => {
+      const url = String(input);
+      if (url.endsWith("/api/v1/auth/token")) {
+        return jsonResponse({ access_token: "issued-bearer", expires_in: 900 });
+      }
+      authorization = new Headers(init?.headers).get("authorization") ?? "";
+      if (init?.method === "POST") {
+        posted = typeof init.body === "string" ? init.body : "";
+        return jsonResponse(deploymentRow, 201);
+      }
+      return jsonResponse({ items: [deploymentRow], total: 1, limit: 200, offset: 0 });
+    };
+
+    const created = await createControlPlaneDeployment(config, "https://github.com/mangatohjunior/aerodeck?token=secret", {
+      fetch: fetchImpl,
+    });
+    const listed = await listControlPlaneDeployments(config, { fetch: fetchImpl });
+    assert.equal(authorization, "Bearer issued-bearer");
+    assert.match(posted, /github.com\/mangatohjunior\/aerodeck/);
+    assert.equal(JSON.stringify(created).includes("secret"), false);
+    assert.equal(JSON.stringify(created).includes("super-secret"), false);
+    assert.equal(listed[0]?.id, deploymentRow.id);
+  });
+
+  it("does not include the upstream body when create fails", async () => {
+    clearControlPlaneTokenCache();
+    const fetchImpl: typeof fetch = async (input) => {
+      const url = String(input);
+      if (url.endsWith("/api/v1/auth/token")) {
+        return jsonResponse({ access_token: "issued-bearer", expires_in: 900 });
+      }
+      return jsonResponse({ detail: "nope", repo_url: "https://gitlab.com/org/repo" }, 422);
+    };
+    await assert.rejects(
+      () => createControlPlaneDeployment(config, "https://gitlab.com/org/repo", { fetch: fetchImpl }),
+      (cause: unknown) => {
+        assert.ok(cause instanceof ControlPlaneError);
+        assert.equal(cause.message.includes("gitlab.com"), false);
+        assert.match(cause.message, /rejected \(422\)/);
+        return true;
+      },
+    );
+  });
+
+  it("reads one deployment and hides a missing row", async () => {
+    clearControlPlaneTokenCache();
+    const fetchImpl: typeof fetch = async (input) => {
+      const url = String(input);
+      if (url.endsWith("/api/v1/auth/token")) {
+        return jsonResponse({ access_token: "issued-bearer", expires_in: 900 });
+      }
+      if (url.endsWith(`/deployments/${deploymentRow.id}`)) {
+        return jsonResponse(deploymentRow);
+      }
+      return jsonResponse({ detail: "missing", secret: "super-secret" }, 404);
+    };
+    const found = await getControlPlaneDeployment(config, deploymentRow.id, { fetch: fetchImpl });
+    assert.equal(found.repo, "aerodeck");
+    await assert.rejects(
+      () => getControlPlaneDeployment(config, "77777777-7777-4777-8777-777777777777", { fetch: fetchImpl }),
+      (cause: unknown) => {
+        assert.ok(cause instanceof ControlPlaneError);
+        assert.equal(cause.message.includes("super-secret"), false);
+        assert.match(cause.message, /not found \(404\)/);
         return true;
       },
     );

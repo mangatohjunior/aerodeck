@@ -38,20 +38,27 @@ export async function fetchSandboxPage(): Promise<SandboxPage> {
   return readJson(response);
 }
 
-export async function fetchDeployments(): Promise<Deployment[]> {
-  const response = await fetch(`${MOCK_API_PREFIX}/deployments`);
+export async function fetchDeployments(controlPlane = false): Promise<Deployment[]> {
+  const path = controlPlane ? "/api/console/deployments" : `${MOCK_API_PREFIX}/deployments`;
+  const response = await fetch(path, { credentials: "same-origin", cache: "no-store" });
   return readJson(response);
 }
 
-export async function fetchDeployment(id: string): Promise<Deployment> {
-  const response = await fetch(`${MOCK_API_PREFIX}/deployments/${id}`);
+export async function fetchDeployment(id: string, controlPlane = false): Promise<Deployment> {
+  const deploymentId = encodeURIComponent(id);
+  const path = controlPlane
+    ? `/api/console/deployments/${deploymentId}`
+    : `${MOCK_API_PREFIX}/deployments/${deploymentId}`;
+  const response = await fetch(path, { credentials: "same-origin", cache: "no-store" });
   return readJson(response);
 }
 
-export async function createDeployment(repoUrl: string): Promise<Deployment> {
-  const response = await fetch(`${MOCK_API_PREFIX}/deployments`, {
+export async function createDeployment(repoUrl: string, controlPlane = false): Promise<Deployment> {
+  const path = controlPlane ? "/api/console/deployments" : `${MOCK_API_PREFIX}/deployments`;
+  const response = await fetch(path, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
+    credentials: "same-origin",
     body: JSON.stringify({ repo_url: repoUrl }),
   });
   return readJson(response);

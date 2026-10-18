@@ -1,4 +1,4 @@
-import type { Project, Sandbox } from "./types";
+import type { Deployment, DeploymentStatus, Project, Sandbox } from "./types";
 
 const CLIENT_ID_MAX = 128;
 const CLIENT_SECRET_MAX = 512;
@@ -202,6 +202,101 @@ export async function authenticateControlPlaneUser(
   return parseControlPlaneUser(await response.json());
 }
 
+const DEPLOYMENT_PAGE_CAP = 20;
+const DEPLOYMENT_STATUSES = new Set<DeploymentStatus>(["queued", "running", "succeeded"]);
+
+export async function listControlPlaneDeployments(
+  config: ControlPlaneConfig,
+  options: ListOptions = {},
+): Promise<Deployment[]> {
+  const fetchImpl = options.fetch ?? fetch;
+  const now = options.now ?? Date.now;
+  const accessToken = await accessTokenFor(config, fetchImpl, now);
+  const items: Deployment[] = [];
+  let offset = 0;
+  let total = 0;
+  for (let page = 0; page < DEPLOYMENT_PAGE_CAP; page += 1) {
+    const response = await fetchImpl(
+      `${config.baseUrl}/api/v1/deployments?limit=${PAGE_LIMIT}&offset=${offset}`,
+      {
+        headers: {
+          accept: "application/json",
+          authorization: `Bearer ${accessToken}`,
+        },
+        cache: "no-store",
+      },
+    );
+    if (!response.ok) {
+      throw new ControlPlaneError(`control plane deployments request failed (${response.status})`);
+    }
+    const parsed = parseDeploymentPage(await response.json());
+    items.push(...parsed.items);
+    total = parsed.total;
+    offset += parsed.items.length;
+    if (parsed.items.length === 0 || items.length >= total) {
+      break;
+    }
+  }
+  return items;
+}
+
+export async function createControlPlaneDeployment(
+  config: ControlPlaneConfig,
+  repoUrl: string,
+  options: ListOptions = {},
+): Promise<Deployment> {
+  const fetchImpl = options.fetch ?? fetch;
+  const now = options.now ?? Date.now;
+  const accessToken = await accessTokenFor(config, fetchImpl, now);
+  const response = await fetchImpl(`${config.baseUrl}/api/v1/deployments`, {
+    method: "POST",
+    headers: {
+      accept: "application/json",
+      authorization: `Bearer ${accessToken}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ repo_url: repoUrl }),
+    cache: "no-store",
+  });
+  if (response.status === 422) {
+    throw new ControlPlaneError("control plane deployment rejected (422)");
+  }
+  if (!response.ok) {
+    throw new ControlPlaneError(`control plane deployment request failed (${response.status})`);
+  }
+  return parseDeployment(await response.json());
+}
+
+export async function getControlPlaneDeployment(
+  config: ControlPlaneConfig,
+  deploymentId: string,
+  options: ListOptions = {},
+): Promise<Deployment> {
+  if (!isDeploymentLogId(deploymentId)) {
+    throw new ControlPlaneError("control plane deployment id was not a uuid");
+  }
+  const fetchImpl = options.fetch ?? fetch;
+  const now = options.now ?? Date.now;
+  const accessToken = await accessTokenFor(config, fetchImpl, now);
+  const response = await fetchImpl(
+    `${config.baseUrl}/api/v1/deployments/${encodeURIComponent(deploymentId)}`,
+    {
+      headers: {
+        accept: "application/json",
+        authorization: `Bearer ${accessToken}`,
+      },
+      cache: "no-store",
+    },
+  );
+  if (response.status === 404) {
+    throw new ControlPlaneError("control plane deployment was not found (404)");
+  }
+  if (!response.ok) {
+    throw new ControlPlaneError(`control plane deployment request failed (${response.status})`);
+  }
+  return parseDeployment(await response.json());
+}
+
 async function listProjectSandboxes(
   config: ControlPlaneConfig,
   projectId: string,
@@ -388,6 +483,46 @@ async function errorCode(response: Response): Promise<string> {
   } catch {
     return "";
   }
+}
+
+function parseDeploymentPage(body: unknown): { items: Deployment[]; total: number } {
+  if (!body || typeof body !== "object") {
+    throw new ControlPlaneError("control plane deployments response was not a page");
+  }
+  const record = body as Record<string, unknown>;
+  if (!Array.isArray(record.items)) {
+    throw new ControlPlaneError("control plane deployments response was not a page");
+  }
+  return {
+    items: record.items.map(parseDeployment),
+    total: typeof record.total === "number" ? record.total : record.items.length,
+  };
+}
+
+function parseDeployment(value: unknown): Deployment {
+  if (!value || typeof value !== "object") {
+    throw new ControlPlaneError("control plane deployment response was not a deployment");
+  }
+  const row = value as Record<string, unknown>;
+  if (
+    typeof row.id !== "string" ||
+    typeof row.repo_url !== "string" ||
+    typeof row.owner !== "string" ||
+    typeof row.repo !== "string" ||
+    typeof row.started_at !== "string" ||
+    typeof row.status !== "string" ||
+    !DEPLOYMENT_STATUSES.has(row.status as DeploymentStatus)
+  ) {
+    throw new ControlPlaneError("control plane deployment response was not a deployment");
+  }
+  return {
+    id: row.id,
+    repo_url: row.repo_url,
+    owner: row.owner,
+    repo: row.repo,
+    started_at: row.started_at,
+    status: row.status as DeploymentStatus,
+  };
 }
 
 function parseControlPlaneUser(body: unknown): ControlPlaneUser {

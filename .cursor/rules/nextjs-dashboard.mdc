@@ -42,9 +42,9 @@ The browser never calls FastAPI. The session cookie stays on this origin. Contro
 - `GET /api/console/projects` requires `aerodeck_session`. The route handler then calls `GET /api/v1/projects` with an enrolled client (`CONTROL_PLANE_URL`, `CONTROL_PLANE_CLIENT_ID`, `CONTROL_PLANE_CLIENT_SECRET`). Those names must not be `NEXT_PUBLIC_*`.
 - `GET /api/console/sandboxes` uses the same session and client. It lists `GET /api/v1/projects/{project_id}/sandboxes` for each project on that page.
 - When those variables are unset, both routes return the in-memory seed and `source: "mock"`.
-- Creating a deployment and logout stay on `/api/mock/v1`. Login still posts there; the handler checks the control plane when the console client is set.
+- Logout stays on `/api/mock/v1`. Login still posts there; the handler checks the control plane when the console client is set.
 - **Forbidden in client components:** `fetch` to the FastAPI origin, `EventSource` against control-plane `/api/v1`, and JWTs in `localStorage` or query strings.
-- Clicking **Deploy** POSTs `/api/mock/v1/deployments` and navigates to `/deployments/{id}`.
+- Clicking **Deploy** POSTs `/api/console/deployments` when the console client is set. That route calls `POST /api/v1/deployments` with the enrolled bearer, then opens `/deployments/{id}`. List and read use the same console prefix. Without the client, create, list, and read stay on `/api/mock/v1/deployments`.
 - Register POSTs `{ email, password }` to `/api/console/register` when the console client is set. That route calls `POST /api/v1/console-users` with the enrolled bearer. The response has no password and no hash. Without the client, register stays on `/api/mock/v1/auth/register`.
 - The **Terminal** consumes `text/event-stream`. With the console client set, that is same-origin `GET /api/console/deployments/{id}/logs`, which attaches the enrolled bearer to `GET /api/v1/deployments/{id}/logs`. Without the client, it stays on `/api/mock/v1/deployments/{id}/logs`. The control-plane stub lines are `Initializing Terraform...`, `Provisioning K3s...`, and `Done`. The browser must not open an `EventSource` against the FastAPI origin.
 
