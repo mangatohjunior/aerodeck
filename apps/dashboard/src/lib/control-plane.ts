@@ -317,7 +317,6 @@ export async function revokeControlPlaneSession(
   throw new ControlPlaneError(`control plane session logout failed (${response.status})`, response.status);
 }
 
-const DEPLOYMENT_PAGE_CAP = 20;
 const DEPLOYMENT_STATUSES = new Set<DeploymentStatus>(["queued", "running", "succeeded"]);
 
 export async function listControlPlaneDeployments(
@@ -330,7 +329,7 @@ export async function listControlPlaneDeployments(
   const items: Deployment[] = [];
   let offset = 0;
   let total = 0;
-  for (let page = 0; page < DEPLOYMENT_PAGE_CAP; page += 1) {
+  for (let page = 0; page < PAGE_CAP; page += 1) {
     const response = await fetchImpl(
       `${config.baseUrl}/api/v1/deployments?limit=${PAGE_LIMIT}&offset=${offset}`,
       {
@@ -354,7 +353,7 @@ export async function listControlPlaneDeployments(
   }
   if (items.length < total) {
     throw new ControlPlaneError(
-      `control plane deployments list exceeded page cap (${DEPLOYMENT_PAGE_CAP})`,
+      `control plane deployments list exceeded page cap (${PAGE_CAP})`,
     );
   }
   return items;

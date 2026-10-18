@@ -71,6 +71,9 @@ export type ApiError = {
   deployment_id?: string;
 };
 
+/** Console Deploy create when the deployment row exists but provision was not queued. */
+export const PROVISION_ENQUEUE_FAILED = "provision_enqueue_failed";
+
 export type PublicUser = {
   id: string;
   email: string;

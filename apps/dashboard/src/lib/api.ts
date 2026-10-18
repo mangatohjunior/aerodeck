@@ -1,12 +1,13 @@
 import { MOCK_API_PREFIX } from "@/lib/catalog";
-import type {
-  ApiError,
-  Deployment,
-  EnvironmentOptionPage,
-  ProjectPage,
-  ProjectSource,
-  PublicUser,
-  SandboxPage,
+import {
+  PROVISION_ENQUEUE_FAILED,
+  type ApiError,
+  type Deployment,
+  type EnvironmentOptionPage,
+  type ProjectPage,
+  type ProjectSource,
+  type PublicUser,
+  type SandboxPage,
 } from "@/lib/types";
 
 export class SessionEnded extends Error {
@@ -30,7 +31,7 @@ export class ProvisionEnqueueFailed extends Error {
 /** Map a failed Deploy create response; used by createDeployment and tests. */
 export function errorFromFailedCreate(body: ApiError, status: number): Error {
   if (
-    body.code === "provision_enqueue_failed" &&
+    body.code === PROVISION_ENQUEUE_FAILED &&
     typeof body.deployment_id === "string" &&
     body.deployment_id.length > 0
   ) {

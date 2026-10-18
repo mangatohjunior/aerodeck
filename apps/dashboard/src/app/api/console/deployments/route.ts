@@ -9,6 +9,7 @@ import {
 } from "@/lib/control-plane";
 import { jsonError } from "@/lib/mock-http";
 import { requireSessionUser } from "@/lib/session";
+import { PROVISION_ENQUEUE_FAILED } from "@/lib/types";
 
 export async function GET() {
   await connection();
@@ -97,7 +98,7 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           detail: "Deployment was created but provision could not be queued.",
-          code: "provision_enqueue_failed",
+          code: PROVISION_ENQUEUE_FAILED,
           deployment_id: cause.deploymentId,
         },
         { status },
