@@ -37,11 +37,14 @@ const tokens = new Map<string, CachedToken>();
 
 export class ControlPlaneError extends Error {
   readonly status?: number;
+  /** Set when a deployment row was created but a later step (e.g. provision) failed. */
+  readonly deploymentId?: string;
 
-  constructor(message: string, status?: number) {
+  constructor(message: string, status?: number, deploymentId?: string) {
     super(message);
     this.name = "ControlPlaneError";
     this.status = status;
+    this.deploymentId = deploymentId;
   }
 }
 
@@ -384,11 +387,6 @@ export async function getControlPlaneEnvironment(
   const fetchImpl = options.fetch ?? fetch;
   const now = options.now ?? Date.now;
   const accessToken = await accessTokenFor(config, fetchImpl, now);
-  const projects = await listControlPlaneProjects(config, options);
-  const project = projects.items.find((row) => row.id === projectId);
-  if (!project) {
-    throw new ControlPlaneError("control plane environment was not found (404)", 404);
-  }
   const response = await fetchImpl(
     `${config.baseUrl}/api/v1/projects/${encodeURIComponent(projectId)}/environments/${encodeURIComponent(environmentId)}`,
     {
@@ -408,7 +406,11 @@ export async function getControlPlaneEnvironment(
       response.status,
     );
   }
-  return parseEnvironmentOption(await response.json(), project);
+  return parseEnvironmentOption(await response.json(), {
+    id: projectId,
+    slug: "",
+    name: "",
+  });
 }
 
 export async function provisionControlPlaneEnvironment(
@@ -460,13 +462,21 @@ export async function createControlPlaneDeploymentAndProvision(
   // Resolve the environment first so a bad target never creates a deployment row.
   await getControlPlaneEnvironment(config, input.projectId, input.environmentId, options);
   const deployment = await createControlPlaneDeployment(config, input.repoUrl, options);
-  await provisionControlPlaneEnvironment(
-    config,
-    input.projectId,
-    input.environmentId,
-    deployment.id,
-    options,
-  );
+  try {
+    await provisionControlPlaneEnvironment(
+      config,
+      input.projectId,
+      input.environmentId,
+      deployment.id,
+      options,
+    );
+  } catch (cause) {
+    // Deployment exists; attach its id so the console can open /deployments/{id}.
+    if (cause instanceof ControlPlaneError) {
+      throw new ControlPlaneError(cause.message, cause.status, deployment.id);
+    }
+    throw cause;
+  }
   return deployment;
 }
 
@@ -506,30 +516,46 @@ async function listProjectEnvironments(
   accessToken: string,
   fetchImpl: typeof fetch,
 ): Promise<EnvironmentOption[]> {
-  const response = await fetchImpl(
-    `${config.baseUrl}/api/v1/projects/${encodeURIComponent(project.id)}/environments?limit=${PAGE_LIMIT}`,
-    {
-      headers: {
-        accept: "application/json",
-        authorization: `Bearer ${accessToken}`,
+  const items: EnvironmentOption[] = [];
+  let offset = 0;
+  let total = 0;
+  for (let page = 0; page < SANDBOX_PAGE_CAP; page += 1) {
+    const response = await fetchImpl(
+      `${config.baseUrl}/api/v1/projects/${encodeURIComponent(project.id)}/environments?limit=${PAGE_LIMIT}&offset=${offset}`,
+      {
+        headers: {
+          accept: "application/json",
+          authorization: `Bearer ${accessToken}`,
+        },
+        cache: "no-store",
       },
-      cache: "no-store",
-    },
-  );
-  if (!response.ok) {
-    throw new ControlPlaneError(
-      `control plane environments request failed (${response.status})`,
-      response.status,
     );
+    if (!response.ok) {
+      throw new ControlPlaneError(
+        `control plane environments request failed (${response.status})`,
+        response.status,
+      );
+    }
+    const body = await response.json();
+    if (!body || typeof body !== "object" || !Array.isArray((body as { items?: unknown }).items)) {
+      throw new ControlPlaneError("control plane environments response was not a page");
+    }
+    const record = body as { items: unknown[]; total?: unknown };
+    const pageItems = record.items.map((row) => parseEnvironmentOption(row, project));
+    items.push(...pageItems);
+    total = typeof record.total === "number" ? record.total : items.length;
+    if (pageItems.length === 0 || items.length >= total) {
+      break;
+    }
+    offset += pageItems.length;
   }
-  const body = await response.json();
-  if (!body || typeof body !== "object" || !Array.isArray((body as { items?: unknown }).items)) {
-    throw new ControlPlaneError("control plane environments response was not a page");
-  }
-  return ((body as { items: unknown[] }).items).map((row) => parseEnvironmentOption(row, project));
+  return items;
 }
 
-function parseEnvironmentOption(value: unknown, project: Project): EnvironmentOption {
+function parseEnvironmentOption(
+  value: unknown,
+  project: Pick<Project, "id" | "slug" | "name">,
+): EnvironmentOption {
   if (!value || typeof value !== "object") {
     throw new ControlPlaneError("control plane environments response was not a page");
   }

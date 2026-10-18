@@ -4,6 +4,7 @@ import {
   ControlPlaneError,
   createControlPlaneDeployment,
   createControlPlaneDeploymentAndProvision,
+  isDeploymentLogId,
   listControlPlaneDeployments,
   readControlPlaneConfig,
 } from "@/lib/control-plane";
@@ -75,6 +76,9 @@ export async function POST(request: Request) {
       "missing_environment",
     );
   }
+  if (wantsProvision && (!isDeploymentLogId(projectId) || !isDeploymentLogId(environmentId))) {
+    return jsonError(400, "project_id and environment_id must be UUIDs.", "invalid_environment_id");
+  }
 
   try {
     if (wantsProvision) {
@@ -88,8 +92,22 @@ export async function POST(request: Request) {
     const deployment = await createControlPlaneDeployment(config, payload.repo_url);
     return NextResponse.json(deployment, { status: 201 });
   } catch (cause) {
+    if (cause instanceof ControlPlaneError && cause.deploymentId) {
+      const status = cause.status === 503 ? 503 : 502;
+      return NextResponse.json(
+        {
+          detail: "Deployment was created but provision could not be queued.",
+          code: "provision_enqueue_failed",
+          deployment_id: cause.deploymentId,
+        },
+        { status },
+      );
+    }
     if (cause instanceof ControlPlaneError && cause.status === 404) {
-      return jsonError(404, "Environment was not found.", "not_found");
+      const detail = cause.message.includes("provision target")
+        ? "Provision target was not found."
+        : "Environment was not found.";
+      return jsonError(404, detail, "not_found");
     }
     if (cause instanceof ControlPlaneError && cause.status === 503) {
       return jsonError(503, "Provision queue is unavailable.", "queue_unavailable");

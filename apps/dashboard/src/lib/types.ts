@@ -68,6 +68,7 @@ export type EnvironmentOptionPage = {
 export type ApiError = {
   detail: string;
   code: string;
+  deployment_id?: string;
 };
 
 export type PublicUser = {

@@ -7,6 +7,7 @@ import {
   ControlPlaneError,
   listControlPlaneProjects,
   listControlPlaneSandboxes,
+  listControlPlaneEnvironments,
   openControlPlaneDeploymentLogs,
   succeedControlPlaneDeployment,
   readControlPlaneConfig,
@@ -195,6 +196,112 @@ const sandboxRow = {
   created_at: "2026-10-18T00:00:00.000Z",
   host_id: null,
 };
+
+const environmentRow = {
+  id: "55555555-5555-4555-8555-555555555555",
+  project_id: projectRow.id,
+  slug: "prod",
+  name: "Prod",
+  kind: "prod",
+  region: "ams3",
+  created_at: "2026-10-18T00:00:00.000Z",
+  updated_at: "2026-10-18T00:00:00.000Z",
+};
+
+describe("listControlPlaneEnvironments", () => {
+  it("lists every project's environments with one bearer", async () => {
+    clearControlPlaneTokenCache();
+    const calls: string[] = [];
+    const fetchImpl: typeof fetch = async (input, init) => {
+      const url = String(input);
+      calls.push(url);
+      const headers = new Headers(init?.headers);
+      if (url.endsWith("/api/v1/auth/token")) {
+        return jsonResponse({ access_token: "issued-bearer", expires_in: 900 });
+      }
+      if (url.includes("/api/v1/projects?") && !url.includes("/environments")) {
+        assert.equal(headers.get("authorization"), "Bearer issued-bearer");
+        return jsonResponse({
+          items: [
+            projectRow,
+            { ...projectRow, id: "22222222-2222-4222-8222-222222222222", slug: "platform" },
+          ],
+          total: 2,
+          limit: 200,
+          offset: 0,
+        });
+      }
+      assert.equal(headers.get("authorization"), "Bearer issued-bearer");
+      if (url.includes(projectRow.id) && url.includes("offset=0")) {
+        return jsonResponse({ items: [environmentRow], total: 2, limit: 200, offset: 0 });
+      }
+      if (url.includes(projectRow.id)) {
+        return jsonResponse({
+          items: [{ ...environmentRow, id: "66666666-6666-4666-8666-666666666666", slug: "staging" }],
+          total: 2,
+          limit: 200,
+          offset: 1,
+        });
+      }
+      return jsonResponse({ items: [], total: 0, limit: 200, offset: 0 });
+    };
+
+    const items = await listControlPlaneEnvironments(config, { fetch: fetchImpl });
+    assert.equal(items.length, 2);
+    assert.equal(items[0]?.slug, "prod");
+    assert.equal(items[0]?.project_slug, "payments");
+    assert.equal(calls.filter((url) => url.endsWith("/api/v1/auth/token")).length, 1);
+    assert.equal(calls.filter((url) => url.includes("/environments?")).length, 3);
+    assert.equal(JSON.stringify(items).includes("super-secret"), false);
+  });
+
+  it("does not include the upstream body when an environment list fails", async () => {
+    clearControlPlaneTokenCache();
+    const fetchImpl: typeof fetch = async (input) => {
+      const url = String(input);
+      if (url.endsWith("/api/v1/auth/token")) {
+        return jsonResponse({ access_token: "issued-bearer", expires_in: 900 });
+      }
+      if (url.includes("/api/v1/projects?") && !url.includes("/environments")) {
+        return jsonResponse({ items: [projectRow], total: 1, limit: 200, offset: 0 });
+      }
+      return jsonResponse({ detail: "nope", client_secret: "super-secret" }, 503);
+    };
+
+    await assert.rejects(
+      () => listControlPlaneEnvironments(config, { fetch: fetchImpl }),
+      (cause: unknown) => {
+        assert.ok(cause instanceof ControlPlaneError);
+        assert.equal(cause.message.includes("super-secret"), false);
+        assert.match(cause.message, /environments request failed \(503\)/);
+        return true;
+      },
+    );
+  });
+
+  it("rejects a malformed environments page", async () => {
+    clearControlPlaneTokenCache();
+    const fetchImpl: typeof fetch = async (input) => {
+      const url = String(input);
+      if (url.endsWith("/api/v1/auth/token")) {
+        return jsonResponse({ access_token: "issued-bearer", expires_in: 900 });
+      }
+      if (url.includes("/api/v1/projects?") && !url.includes("/environments")) {
+        return jsonResponse({ items: [projectRow], total: 1, limit: 200, offset: 0 });
+      }
+      return jsonResponse({ items: "nope" });
+    };
+
+    await assert.rejects(
+      () => listControlPlaneEnvironments(config, { fetch: fetchImpl }),
+      (cause: unknown) => {
+        assert.ok(cause instanceof ControlPlaneError);
+        assert.match(cause.message, /was not a page/);
+        return true;
+      },
+    );
+  });
+});
 
 describe("listControlPlaneSandboxes", () => {
   it("lists every project's sandboxes with one bearer", async () => {
@@ -385,23 +492,6 @@ describe("createControlPlaneDeploymentAndProvision", () => {
         return jsonResponse({ access_token: "issued-bearer", expires_in: 900 });
       }
       calls.push(`${init?.method ?? "GET"} ${url}`);
-      if (url.includes("/api/v1/projects?") && !url.includes("/environments")) {
-        return jsonResponse({
-          items: [
-            {
-              id: projectId,
-              slug: "payments",
-              name: "Payments",
-              description: null,
-              created_at: "2026-10-18T00:00:00.000Z",
-              updated_at: "2026-10-18T00:00:00.000Z",
-            },
-          ],
-          total: 1,
-          limit: 200,
-          offset: 0,
-        });
-      }
       if (url.endsWith(`/projects/${projectId}/environments/${environmentId}`)) {
         return jsonResponse({
           id: environmentId,
@@ -462,23 +552,6 @@ describe("createControlPlaneDeploymentAndProvision", () => {
       if (url.endsWith("/api/v1/auth/token")) {
         return jsonResponse({ access_token: "issued-bearer", expires_in: 900 });
       }
-      if (url.includes("/api/v1/projects?") && !url.includes("/environments")) {
-        return jsonResponse({
-          items: [
-            {
-              id: projectId,
-              slug: "payments",
-              name: "Payments",
-              description: null,
-              created_at: "2026-10-18T00:00:00.000Z",
-              updated_at: "2026-10-18T00:00:00.000Z",
-            },
-          ],
-          total: 1,
-          limit: 200,
-          offset: 0,
-        });
-      }
       if (url.endsWith(`/environments/${environmentId}`)) {
         return jsonResponse({ detail: "missing", secret: "super-secret" }, 404);
       }
@@ -507,6 +580,66 @@ describe("createControlPlaneDeploymentAndProvision", () => {
       },
     );
     assert.equal(created, false);
+  });
+
+  it("attaches the deployment id when provision enqueue fails after create", async () => {
+    clearControlPlaneTokenCache();
+    const projectId = "11111111-1111-4111-8111-111111111111";
+    const environmentId = "22222222-2222-4222-8222-222222222222";
+    const deploymentId = "33333333-3333-4333-8333-333333333333";
+    const fetchImpl: typeof fetch = async (input, init) => {
+      const url = String(input);
+      if (url.endsWith("/api/v1/auth/token")) {
+        return jsonResponse({ access_token: "issued-bearer", expires_in: 900 });
+      }
+      if (url.endsWith(`/environments/${environmentId}`) && (init?.method ?? "GET") === "GET") {
+        return jsonResponse({
+          id: environmentId,
+          project_id: projectId,
+          slug: "prod",
+          name: "Prod",
+          kind: "prod",
+          region: "ams3",
+          created_at: "2026-10-18T00:00:00.000Z",
+          updated_at: "2026-10-18T00:00:00.000Z",
+        });
+      }
+      if (url.endsWith("/api/v1/deployments") && init?.method === "POST") {
+        return jsonResponse({
+          id: deploymentId,
+          repo_url: "https://github.com/acme/payments",
+          owner: "acme",
+          repo: "payments",
+          status: "running",
+          started_at: "2026-10-18T00:00:00.000Z",
+        });
+      }
+      if (url.endsWith(`/environments/${environmentId}/provision`) && init?.method === "POST") {
+        return jsonResponse({ detail: "queue down", secret: "super-secret" }, 503);
+      }
+      return jsonResponse({ detail: "unexpected" }, 500);
+    };
+
+    await assert.rejects(
+      () =>
+        createControlPlaneDeploymentAndProvision(
+          config,
+          {
+            repoUrl: "https://github.com/acme/payments",
+            projectId,
+            environmentId,
+          },
+          { fetch: fetchImpl },
+        ),
+      (cause: unknown) => {
+        assert.ok(cause instanceof ControlPlaneError);
+        assert.equal(cause.status, 503);
+        assert.equal(cause.deploymentId, deploymentId);
+        assert.equal(cause.message.includes("super-secret"), false);
+        assert.match(cause.message, /queue unavailable \(503\)/);
+        return true;
+      },
+    );
   });
 });
 

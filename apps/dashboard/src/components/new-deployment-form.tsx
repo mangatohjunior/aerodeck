@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { createDeployment, fetchEnvironments } from "@/lib/api";
+import { createDeployment, fetchEnvironments, ProvisionEnqueueFailed } from "@/lib/api";
 import { parseGithubRepo } from "@/lib/github";
 import type { EnvironmentOption } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -87,6 +87,11 @@ export function NewDeploymentForm({ controlPlane = false }: { controlPlane?: boo
       const deployment = await createDeployment(repoUrl, controlPlane, target);
       router.push(`/deployments/${deployment.id}`);
     } catch (cause) {
+      if (cause instanceof ProvisionEnqueueFailed) {
+        // Row exists; open it so the operator can see queued/failure lines.
+        router.push(`/deployments/${cause.deploymentId}`);
+        return;
+      }
       setError(cause instanceof Error ? cause.message : "Deploy failed.");
     } finally {
       setSubmitting(false);
@@ -135,6 +140,7 @@ export function NewDeploymentForm({ controlPlane = false }: { controlPlane?: boo
           {controlPlane ? (
             <div className="flex flex-col gap-2">
               <Label htmlFor="environment">Environment</Label>
+              {/* Native select: dashboard UI kit has no Select yet; keep styles aligned with Input. */}
               <select
                 id="environment"
                 className={cn(

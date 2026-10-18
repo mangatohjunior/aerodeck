@@ -16,10 +16,27 @@ export class SessionEnded extends Error {
   }
 }
 
+/** Deployment row exists but provision enqueue failed; open the deployment page. */
+export class ProvisionEnqueueFailed extends Error {
+  readonly deploymentId: string;
+
+  constructor(detail: string, deploymentId: string) {
+    super(detail);
+    this.name = "ProvisionEnqueueFailed";
+    this.deploymentId = deploymentId;
+  }
+}
+
 async function readJson<T>(response: Response): Promise<T> {
   const body = (await response.json()) as T | ApiError;
   if (!response.ok) {
     const error = body as ApiError;
+    if (typeof error.deployment_id === "string" && error.deployment_id.length > 0) {
+      throw new ProvisionEnqueueFailed(
+        error.detail ?? `Request failed (${response.status})`,
+        error.deployment_id,
+      );
+    }
     throw new Error(error.detail ?? `Request failed (${response.status})`);
   }
   return body as T;
