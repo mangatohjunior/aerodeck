@@ -83,7 +83,11 @@ async def stream_deployment_logs(
     await deployments.get(deployment_id)
     await ensure_log_store_ready(settings.redis_url)
     return StreamingResponse(
-        iter_deployment_log_sse(settings.redis_url, deployment_id),
+        iter_deployment_log_sse(
+            settings.redis_url,
+            deployment_id,
+            follow_idle_seconds=settings.deployment_log_follow_idle_seconds,
+        ),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",

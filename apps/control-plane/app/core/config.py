@@ -61,6 +61,9 @@ class Settings(BaseSettings):
     job_retry_backoff_max_seconds: int = Field(default=600, ge=1, le=3600)
     # Results are kept in Redis this long so GET /api/v1/jobs/{id} can report them.
     job_result_ttl_seconds: int = Field(default=86_400, ge=60)
+    # How long GET .../deployments/{id}/logs waits for the next published line
+    # (or Done) after catching up. Deploy-scale default; does not invent Done.
+    deployment_log_follow_idle_seconds: int = Field(default=1_800, ge=1, le=86_400)
 
     # Optional static bearer Traefik sends when polling GET /api/v1/edge/traefik.
     # When unset, any enrolled API client token is accepted instead.

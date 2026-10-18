@@ -1,5 +1,4 @@
 from pathlib import Path
-from unittest.mock import AsyncMock
 from uuid import UUID, uuid4
 
 import pytest
@@ -97,12 +96,11 @@ async def test_deployment_logs_return_503_when_redis_is_down(
         certificate_key_dir=str(tmp_path / "cert-keys"),
         redis_url="redis://example/0",
     )
-    broken = AsyncMock()
-    broken.ping = AsyncMock(side_effect=RedisError("down"))
-    monkeypatch.setattr(
-        "app.services.deployment_logs.aioredis.from_url",
-        lambda *_args, **_kwargs: broken,
-    )
+
+    async def boom(_url: str, timeout: float = 2.0) -> None:
+        raise RedisError("down")
+
+    monkeypatch.setattr("app.services.deployment_logs.ping_broker", boom)
 
     response = await client.get(f"{DEPLOYMENTS}/{deployment_id}/logs", headers=auth)
     assert response.status_code == 503
