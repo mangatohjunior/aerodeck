@@ -99,19 +99,10 @@ export async function POST(request: Request) {
       );
     }
     if (cause instanceof ControlPlaneError && cause.status === 404) {
-      const detail = cause.message.includes("provision target")
-        ? "Provision target was not found."
-        : "Environment was not found.";
-      return jsonError(404, detail, "not_found");
+      // Pre-create failures only (post-create 404s carry deploymentId above).
+      return jsonError(404, "Environment was not found.", "not_found");
     }
-    if (
-      cause instanceof ControlPlaneError &&
-      cause.status === 503 &&
-      cause.message.includes("provision queue")
-    ) {
-      return jsonError(503, "Provision queue is unavailable.", "queue_unavailable");
-    }
-    if (cause instanceof ControlPlaneError && cause.message.includes("rejected (422)")) {
+    if (cause instanceof ControlPlaneError && cause.status === 422) {
       return jsonError(400, "Enter a GitHub URL like https://github.com/org/repo", "invalid_github_url");
     }
     const detail = cause instanceof ControlPlaneError ? cause.message : "request failed";

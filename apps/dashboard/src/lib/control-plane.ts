@@ -118,9 +118,6 @@ export function isControlPlaneUuid(value: string): boolean {
   return CONTROL_PLANE_UUID.test(value);
 }
 
-/** @deprecated Prefer {@link isControlPlaneUuid}. */
-export const isDeploymentLogId = isControlPlaneUuid;
-
 export async function openControlPlaneDeploymentLogs(
   config: ControlPlaneConfig,
   deploymentId: string,

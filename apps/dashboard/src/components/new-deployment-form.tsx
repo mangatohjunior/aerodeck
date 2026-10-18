@@ -2,7 +2,7 @@
 
 import { Loader2, Rocket } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useEffect, useState, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -15,54 +15,28 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { createDeployment, fetchEnvironments, ProvisionEnqueueFailed } from "@/lib/api";
+import {
+  createDeployment,
+  ProvisionEnqueueFailed,
+  shouldOpenDeploymentAfterCreate,
+} from "@/lib/api";
 import { parseGithubRepo } from "@/lib/github";
-import type { EnvironmentOption } from "@/lib/types";
+import { useDeployEnvironments } from "@/lib/use-deploy-environments";
 import { cn } from "@/lib/utils";
 
 export function NewDeploymentForm({ controlPlane = false }: { controlPlane?: boolean }) {
   const router = useRouter();
   const [repoUrl, setRepoUrl] = useState("");
-  const [environmentKey, setEnvironmentKey] = useState("");
-  const [environments, setEnvironments] = useState<EnvironmentOption[]>([]);
-  const [environmentsError, setEnvironmentsError] = useState<string | null>(null);
-  const [loadingEnvironments, setLoadingEnvironments] = useState(controlPlane);
+  const {
+    environmentKey,
+    setEnvironmentKey,
+    environments,
+    environmentsError,
+    loadingEnvironments,
+  } = useDeployEnvironments(controlPlane);
   const [error, setError] = useState<string | null>(null);
   const [repoInvalid, setRepoInvalid] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-
-  useEffect(() => {
-    if (!controlPlane) {
-      return;
-    }
-    let cancelled = false;
-    setLoadingEnvironments(true);
-    setEnvironmentsError(null);
-    fetchEnvironments()
-      .then((page) => {
-        if (cancelled) {
-          return;
-        }
-        setEnvironments(page.items);
-        if (page.items.length === 1) {
-          setEnvironmentKey(`${page.items[0].project_id}:${page.items[0].id}`);
-        }
-      })
-      .catch((cause) => {
-        if (cancelled) {
-          return;
-        }
-        setEnvironmentsError(cause instanceof Error ? cause.message : "Could not load environments.");
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setLoadingEnvironments(false);
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [controlPlane]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -88,11 +62,15 @@ export function NewDeploymentForm({ controlPlane = false }: { controlPlane?: boo
     setSubmitting(true);
     try {
       const deployment = await createDeployment(repoUrl, controlPlane, target);
-      router.push(`/deployments/${deployment.id}`);
+      if (shouldOpenDeploymentAfterCreate(deployment)) {
+        router.push(`/deployments/${deployment.id}`);
+      }
     } catch (cause) {
       if (cause instanceof ProvisionEnqueueFailed) {
-        // Row exists; open it so the operator can see queued/failure lines.
-        router.push(`/deployments/${cause.deploymentId}`);
+        // Do not open the terminal: empty logs would stub Done and mark succeeded.
+        setError(
+          `${cause.message} Deployment ${cause.deploymentId} was stored, but provision was not queued.`,
+        );
         return;
       }
       setError(cause instanceof Error ? cause.message : "Deploy failed.");

@@ -16,7 +16,7 @@ export class SessionEnded extends Error {
   }
 }
 
-/** Deployment row exists but provision enqueue failed; open the deployment page. */
+/** Deployment row exists but provision was not queued — do not open the terminal yet. */
 export class ProvisionEnqueueFailed extends Error {
   readonly deploymentId: string;
 
@@ -27,11 +27,26 @@ export class ProvisionEnqueueFailed extends Error {
   }
 }
 
+/** True only for a successful create that should open `/deployments/{id}`. */
+export function shouldOpenDeploymentAfterCreate(result: unknown): result is { id: string } {
+  return (
+    !!result &&
+    typeof result === "object" &&
+    "id" in result &&
+    typeof (result as { id: unknown }).id === "string" &&
+    !(result instanceof ProvisionEnqueueFailed)
+  );
+}
+
 async function readJson<T>(response: Response): Promise<T> {
   const body = (await response.json()) as T | ApiError;
   if (!response.ok) {
     const error = body as ApiError;
-    if (typeof error.deployment_id === "string" && error.deployment_id.length > 0) {
+    if (
+      error.code === "provision_enqueue_failed" &&
+      typeof error.deployment_id === "string" &&
+      error.deployment_id.length > 0
+    ) {
       throw new ProvisionEnqueueFailed(
         error.detail ?? `Request failed (${response.status})`,
         error.deployment_id,
@@ -40,6 +55,10 @@ async function readJson<T>(response: Response): Promise<T> {
     throw new Error(error.detail ?? `Request failed (${response.status})`);
   }
   return body as T;
+}
+
+async function readCreateDeploymentResponse(response: Response): Promise<Deployment> {
+  return readJson<Deployment>(response);
 }
 
 export async function fetchHealth(): Promise<{ status: string; mode: string }> {
@@ -103,7 +122,7 @@ export async function createDeployment(
     credentials: "same-origin",
     body: JSON.stringify(body),
   });
-  return readJson(response);
+  return readCreateDeploymentResponse(response);
 }
 
 export async function fetchLogSource(): Promise<ProjectSource> {
