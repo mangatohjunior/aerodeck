@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
+import { isMissingControlPlaneSession } from "./session";
 import {
   clearControlPlaneTokenCache,
   ControlPlaneError,
@@ -32,6 +33,19 @@ function jsonResponse(body: unknown, status = 200): Response {
     headers: { "content-type": "application/json" },
   });
 }
+
+describe("isMissingControlPlaneSession", () => {
+  it("treats only a not-found resolve as signed out", () => {
+    assert.equal(
+      isMissingControlPlaneSession(new ControlPlaneError("control plane session was not found (404)")),
+      true,
+    );
+    assert.equal(
+      isMissingControlPlaneSession(new ControlPlaneError("control plane session request failed (502)")),
+      false,
+    );
+  });
+});
 
 describe("readControlPlaneConfig", () => {
   it("requires an origin and both client credentials", () => {

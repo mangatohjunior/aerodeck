@@ -19,7 +19,10 @@ route checks `POST /api/v1/console-users/login` and sets `aerodeck_session`
 from the stored user and opens `POST /api/v1/console-sessions`. The cookie
 holds that token. A later read uses `POST /api/v1/console-sessions/resolve`,
 so a dashboard restart keeps the operator signed in. Sign-out posts
-`POST /api/v1/console-sessions/logout` and clears the cookie. A wrong password
+`POST /api/v1/console-sessions/logout` and clears the cookie only after that
+revoke succeeds. A failed revoke leaves the cookie in place. A resolve
+failure other than a missing session returns 502 and leaves the operator on
+the console. A wrong password
 and an unknown email return the same error. Without the client, sign-in and
 the session stay in the mock store. A real Google callback
 links that verified email with `POST /api/v1/console-users/google` when the

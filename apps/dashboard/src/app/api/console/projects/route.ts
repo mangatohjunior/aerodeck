@@ -7,15 +7,15 @@ import {
 } from "@/lib/control-plane";
 import { jsonError } from "@/lib/mock-http";
 import { listProjects } from "@/lib/mock-store";
-import { getSessionUser } from "@/lib/session";
+import { requireSessionUser } from "@/lib/session";
 import type { ProjectPage } from "@/lib/types";
 
 export async function GET() {
   await connection();
 
-  const user = await getSessionUser();
-  if (!user) {
-    return jsonError(401, "Not signed in.", "unauthenticated");
+  const user = await requireSessionUser();
+  if (user instanceof NextResponse) {
+    return user;
   }
 
   const config = readControlPlaneConfig();

@@ -8,6 +8,13 @@ import type {
   SandboxPage,
 } from "@/lib/types";
 
+export class SessionEnded extends Error {
+  constructor() {
+    super("Not signed in.");
+    this.name = "SessionEnded";
+  }
+}
+
 async function readJson<T>(response: Response): Promise<T> {
   const body = (await response.json()) as T | ApiError;
   if (!response.ok) {
@@ -113,6 +120,9 @@ export async function fetchMe(): Promise<PublicUser> {
     credentials: "same-origin",
     cache: "no-store",
   });
+  if (response.status === 401) {
+    throw new SessionEnded();
+  }
   return readJson(response);
 }
 
