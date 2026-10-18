@@ -9,6 +9,7 @@ from app.core.logging import get_logger
 from app.models.certificate import Certificate, CertificateStatus
 from app.repositories.certificates import CertificateRepository
 from app.services.acme import AcmeIssuer, IssuedCertificate, is_due_for_renewal
+from app.services.certificate_keys import FileCertificateKeyStore
 from app.services.routes import RouteService
 
 logger = get_logger("services.certificates")
@@ -20,12 +21,14 @@ class CertificateService:
         certificates: CertificateRepository,
         routes: RouteService,
         issuer: AcmeIssuer,
+        keys: FileCertificateKeyStore,
         *,
         renew_before: timedelta,
     ) -> None:
         self._certificates = certificates
         self._routes = routes
         self._issuer = issuer
+        self._keys = keys
         self._renew_before = renew_before
 
     async def get(self, project_id: uuid.UUID, route_id: uuid.UUID) -> Certificate:
@@ -79,7 +82,7 @@ class CertificateService:
         certificate.not_after = material.not_after
         certificate.fingerprint_sha256 = material.fingerprint_sha256
         certificate.certificate_pem = material.certificate_pem
-        certificate.private_key_pem = material.private_key_pem
         certificate.last_error = None
+        self._keys.put(certificate.id, material.private_key_pem)
         logger.info("issued certificate for %s until %s", hostname, material.not_after.isoformat())
         return certificate

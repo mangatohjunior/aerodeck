@@ -16,7 +16,7 @@ class CertificateStatus(enum.StrEnum):
 
 
 class Certificate(UUIDPrimaryKeyMixin, TimestampMixin, Base):
-    """TLS material for one route. Private key never leaves the Traefik snapshot."""
+    """TLS metadata for one route. The private key is a file, not a column."""
 
     __tablename__ = "certificates"
     __table_args__ = (UniqueConstraint("route_id", name="uq_certificates_route_id"),)
@@ -33,7 +33,6 @@ class Certificate(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     not_after: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     fingerprint_sha256: Mapped[str | None] = mapped_column(String(64))
     certificate_pem: Mapped[str | None] = mapped_column(Text)
-    private_key_pem: Mapped[str | None] = mapped_column(Text)
     last_error: Mapped[str | None] = mapped_column(String(500))
 
     route: Mapped[Route] = relationship(back_populates="certificate")

@@ -44,8 +44,8 @@ def database_url(tmp_path: Path) -> str:
 
 
 @pytest.fixture
-def settings(database_url: str) -> Settings:
-    return make_settings(database_url)
+def settings(database_url: str, tmp_path: Path) -> Settings:
+    return make_settings(database_url, certificate_key_dir=str(tmp_path / "cert-keys"))
 
 
 @pytest.fixture

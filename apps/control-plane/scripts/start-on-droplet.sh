@@ -110,7 +110,14 @@ docker run --rm --network host --name aerodeck-migrate \
 
 docker rm -f aerodeck-api aerodeck-worker >/dev/null 2>&1 || true
 
+# uid 10001 is the image user. Keys must survive `docker rm` and stay out of Postgres.
+CERT_KEY_DIR=/var/lib/aerodeck/certs
+mkdir -p "${CERT_KEY_DIR}"
+chown 10001:10001 "${CERT_KEY_DIR}"
+chmod 700 "${CERT_KEY_DIR}"
+
 docker run -d --name aerodeck-api --network host --restart unless-stopped \
+  -v "${CERT_KEY_DIR}:${CERT_KEY_DIR}" \
   "${DOCKER_ENV_FLAGS[@]}" \
   "${IMAGE}"
 

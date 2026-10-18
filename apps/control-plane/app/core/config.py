@@ -76,6 +76,8 @@ class Settings(BaseSettings):
     acme_account_key: SecretStr | None = None
     acme_lifetime_days: int = Field(default=90, ge=1, le=366)
     certificate_renew_before_days: int = Field(default=30, ge=1, le=60)
+    # Private keys for issued certs. Not in Postgres. Bind-mount this path into the API container.
+    certificate_key_dir: str = "/var/lib/aerodeck/certs"
 
     # Public address record created and deleted with each route.
     dns_records_provider: Literal["memory", "digitalocean"] = "memory"
