@@ -107,19 +107,23 @@ export async function listControlPlaneSandboxes(
 const DEPLOYMENT_ID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+export function isDeploymentLogId(deploymentId: string): boolean {
+  return DEPLOYMENT_ID.test(deploymentId);
+}
+
 export async function openControlPlaneDeploymentLogs(
   config: ControlPlaneConfig,
   deploymentId: string,
   options: ListOptions = {},
 ): Promise<ReadableStream<Uint8Array>> {
-  if (!DEPLOYMENT_ID.test(deploymentId)) {
+  if (!isDeploymentLogId(deploymentId)) {
     throw new ControlPlaneError("control plane deployment id was not a uuid");
   }
   const fetchImpl = options.fetch ?? fetch;
   const now = options.now ?? Date.now;
   const accessToken = await accessTokenFor(config, fetchImpl, now);
   const response = await fetchImpl(
-    `${config.baseUrl}/api/v1/deployments/${deploymentId}/logs`,
+    `${config.baseUrl}/api/v1/deployments/${encodeURIComponent(deploymentId)}/logs`,
     {
       headers: {
         accept: "text/event-stream",

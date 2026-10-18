@@ -2,6 +2,7 @@ import { connection } from "next/server";
 
 import {
   ControlPlaneError,
+  isDeploymentLogId,
   openControlPlaneDeploymentLogs,
   readControlPlaneConfig,
 } from "@/lib/control-plane";
@@ -25,6 +26,10 @@ export async function GET(
   }
 
   const { id } = await context.params;
+  if (!isDeploymentLogId(id)) {
+    return jsonError(400, "Deployment id must be a UUID.", "invalid_deployment_id");
+  }
+
   try {
     const body = await openControlPlaneDeploymentLogs(config, id);
     return new Response(body, {

@@ -22,9 +22,23 @@ type DeploymentStatusViewProps = {
   logSource: ProjectSource;
 };
 
+function logSourceCopy(source: ProjectSource): { sseLabel: string; targetLabel: string } {
+  if (source === "control-plane") {
+    return {
+      sseLabel: "Control-plane SSE for ",
+      targetLabel: "DigitalOcean · control plane",
+    };
+  }
+  return {
+    sseLabel: "Mock SSE for ",
+    targetLabel: "DigitalOcean · mock provisioner",
+  };
+}
+
 export function DeploymentStatusView({ deployment, logSource }: DeploymentStatusViewProps) {
   const [status, setStatus] = useState<DeploymentStatus>(deployment.status);
   const running = status === "running" || status === "queued";
+  const copy = logSourceCopy(logSource);
 
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
@@ -37,7 +51,7 @@ export function DeploymentStatusView({ deployment, logSource }: DeploymentStatus
             Deployment Status
           </h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            {logSource === "control-plane" ? "Control-plane SSE for " : "Mock SSE for "}
+            {copy.sseLabel}
             <span className="font-mono text-foreground">
               {deployment.owner}/{deployment.repo}
             </span>
@@ -73,11 +87,7 @@ export function DeploymentStatusView({ deployment, logSource }: DeploymentStatus
           </div>
           <div>
             <p className="text-xs text-muted-foreground">Target</p>
-            <p className="mt-0.5">
-              {logSource === "control-plane"
-                ? "DigitalOcean · control plane"
-                : "DigitalOcean · mock provisioner"}
-            </p>
+            <p className="mt-0.5">{copy.targetLabel}</p>
           </div>
         </CardContent>
       </Card>
