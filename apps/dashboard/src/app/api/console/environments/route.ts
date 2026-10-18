@@ -19,7 +19,7 @@ export async function GET() {
 
   const config = readControlPlaneConfig();
   if (!config) {
-    return jsonError(404, "Environments stay on the control plane.", "not_found");
+    return jsonError(404, "Environments stay on the mock API.", "not_found");
   }
 
   try {

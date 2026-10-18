@@ -10,6 +10,11 @@ export function useDeployEnvironments(enabled: boolean) {
   const [environments, setEnvironments] = useState<EnvironmentOption[]>([]);
   const [environmentsError, setEnvironmentsError] = useState<string | null>(null);
   const [loadingEnvironments, setLoadingEnvironments] = useState(enabled);
+  const [reloadToken, setReloadToken] = useState(0);
+
+  function reload() {
+    setReloadToken((token) => token + 1);
+  }
 
   useEffect(() => {
     if (!enabled) {
@@ -42,7 +47,7 @@ export function useDeployEnvironments(enabled: boolean) {
     return () => {
       cancelled = true;
     };
-  }, [enabled]);
+  }, [enabled, reloadToken]);
 
   return {
     environmentKey,
@@ -50,5 +55,6 @@ export function useDeployEnvironments(enabled: boolean) {
     environments,
     environmentsError,
     loadingEnvironments,
+    reload,
   };
 }

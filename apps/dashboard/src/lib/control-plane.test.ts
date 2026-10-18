@@ -214,6 +214,43 @@ describe("listControlPlaneProjects", () => {
     );
     assert.equal(urls.filter((url) => url.includes("/api/v1/projects?")).length, 2);
   });
+
+  it("throws when the project list exceeds the page cap", async () => {
+    clearControlPlaneTokenCache();
+    const fetchImpl: typeof fetch = async (input) => {
+      const url = String(input);
+      if (url.endsWith("/api/v1/auth/token")) {
+        return jsonResponse({ access_token: "issued-bearer", expires_in: 900 });
+      }
+      // Always return one item and a huge total so the cap loop never finishes.
+      const offsetMatch = /offset=(\d+)/.exec(url);
+      const offset = offsetMatch ? Number(offsetMatch[1]) : 0;
+      return jsonResponse({
+        items: [
+          {
+            id: `11111111-1111-4111-8111-${String(offset).padStart(12, "0")}`,
+            slug: `p-${offset}`,
+            name: `Project ${offset}`,
+            description: null,
+            created_at: "2026-10-18T00:00:00.000Z",
+            updated_at: "2026-10-18T00:00:00.000Z",
+          },
+        ],
+        total: 10_000,
+        limit: 200,
+        offset,
+      });
+    };
+
+    await assert.rejects(
+      () => listControlPlaneProjects(config, { fetch: fetchImpl }),
+      (cause: unknown) => {
+        assert.ok(cause instanceof ControlPlaneError);
+        assert.match(cause.message, /exceeded page cap/);
+        return true;
+      },
+    );
+  });
 });
 
 const projectRow = {

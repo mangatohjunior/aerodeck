@@ -110,6 +110,11 @@ export async function listControlPlaneProjects(
     }
     offset += parsed.items.length;
   }
+  if (items.length < total) {
+    throw new ControlPlaneError(
+      `control plane projects list exceeded page cap (${PAGE_CAP})`,
+    );
+  }
   return { items, total, limit, offset: 0 };
 }
 
@@ -346,6 +351,11 @@ export async function listControlPlaneDeployments(
     if (parsed.items.length === 0 || items.length >= total) {
       break;
     }
+  }
+  if (items.length < total) {
+    throw new ControlPlaneError(
+      `control plane deployments list exceeded page cap (${DEPLOYMENT_PAGE_CAP})`,
+    );
   }
   return items;
 }
@@ -637,6 +647,11 @@ async function listPaginatedProjectCollection<T>(
       break;
     }
     offset += parsed.items.length;
+  }
+  if (items.length < total) {
+    throw new ControlPlaneError(
+      `control plane ${resource} list exceeded page cap (${PAGE_CAP})`,
+    );
   }
   return items;
 }

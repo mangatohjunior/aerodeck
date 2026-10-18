@@ -29,15 +29,22 @@ export function NewDeploymentForm({ controlPlane = false }: { controlPlane?: boo
     environments,
     environmentsError,
     loadingEnvironments,
+    reload,
   } = useDeployEnvironments(controlPlane);
   const [error, setError] = useState<string | null>(null);
   const [repoInvalid, setRepoInvalid] = useState(false);
+  const [environmentRequired, setEnvironmentRequired] = useState(false);
+  const [enqueueBlocked, setEnqueueBlocked] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (enqueueBlocked) {
+      return;
+    }
     setError(null);
     setRepoInvalid(false);
+    setEnvironmentRequired(false);
 
     if (!parseGithubRepo(repoUrl)) {
       setRepoInvalid(true);
@@ -49,6 +56,7 @@ export function NewDeploymentForm({ controlPlane = false }: { controlPlane?: boo
     if (controlPlane) {
       const selected = environments.find((row) => `${row.project_id}:${row.id}` === environmentKey);
       if (!selected) {
+        setEnvironmentRequired(true);
         setError("Select an environment to provision.");
         return;
       }
@@ -64,8 +72,11 @@ export function NewDeploymentForm({ controlPlane = false }: { controlPlane?: boo
       router.push(`/deployments/${deployment.id}`);
     } catch (cause) {
       if (cause instanceof ProvisionEnqueueFailed) {
-        // Do not open the terminal or surface the id: empty logs would stub Done (#127).
-        setError(cause.message);
+        // Do not open the terminal or create another row; orphan cleanup is #127.
+        setEnqueueBlocked(true);
+        setError(
+          `${cause.message} Do not Deploy again until that running row is cleaned up.`,
+        );
         return;
       }
       setError(cause instanceof Error ? cause.message : "Deploy failed.");
@@ -76,11 +87,11 @@ export function NewDeploymentForm({ controlPlane = false }: { controlPlane?: boo
 
   const canSubmit =
     !submitting &&
+    !enqueueBlocked &&
     repoUrl.trim().length > 0 &&
     (!controlPlane || (environmentKey.length > 0 && !loadingEnvironments));
 
-  const environmentInvalid =
-    !!environmentsError || error === "Select an environment to provision.";
+  const environmentInvalid = !!environmentsError || environmentRequired;
 
   return (
     <Card className="overflow-hidden ring-primary/15">
@@ -105,13 +116,13 @@ export function NewDeploymentForm({ controlPlane = false }: { controlPlane?: boo
               placeholder="https://github.com/mangatohjunior/aerodeck"
               value={repoUrl}
               aria-invalid={repoInvalid ? true : undefined}
-              disabled={submitting}
+              disabled={submitting || enqueueBlocked}
               onValueChange={(value) => {
                 setRepoUrl(value);
                 if (repoInvalid) {
                   setRepoInvalid(false);
                 }
-                if (error) {
+                if (error && !enqueueBlocked) {
                   setError(null);
                 }
               }}
@@ -133,10 +144,18 @@ export function NewDeploymentForm({ controlPlane = false }: { controlPlane?: boo
                 )}
                 value={environmentKey}
                 aria-invalid={environmentInvalid ? true : undefined}
-                disabled={submitting || loadingEnvironments || environments.length === 0}
+                disabled={
+                  submitting ||
+                  enqueueBlocked ||
+                  loadingEnvironments ||
+                  environments.length === 0
+                }
                 onChange={(event) => {
                   setEnvironmentKey(event.target.value);
-                  if (error) {
+                  if (environmentRequired) {
+                    setEnvironmentRequired(false);
+                  }
+                  if (error && !enqueueBlocked) {
                     setError(null);
                   }
                 }}
@@ -155,9 +174,20 @@ export function NewDeploymentForm({ controlPlane = false }: { controlPlane?: boo
                 ))}
               </select>
               {environmentsError ? (
-                <p className="text-sm text-destructive" role="alert">
-                  {environmentsError}
-                </p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="text-sm text-destructive" role="alert">
+                    {environmentsError}
+                  </p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={loadingEnvironments || enqueueBlocked}
+                    onClick={() => reload()}
+                  >
+                    Retry
+                  </Button>
+                </div>
               ) : (
                 <p className="text-xs text-muted-foreground">
                   Provision runs on the control-plane worker for the selected environment.

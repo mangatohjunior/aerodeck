@@ -13,12 +13,14 @@ Creating a deployment uses `POST /api/v1/deployments` through
 lists environments via `GET /api/console/environments` and, on submit, queues
 `POST .../environments/{id}/provision` with the new `deployment_id` so the
 terminal can follow worker lines. If provision cannot be queued after create,
-the form stays put with a generic message. The JSON body still returns
+the form stays put, disables Deploy, and shows a generic message so a retry
+does not create another orphan row. The JSON body still returns
 `deployment_id` for typed client handling and server logs, but the UI must not
 navigate to the terminal (opening empty logs would stub `Done`). Without the
 client, Deploy does not call provision. The list and the deployment page follow
 the same mock/control-plane split. Blocking stub-success for never-seeded rows
-is a follow-up (#127). The terminal reads
+is a follow-up (#127). Deploy uses a native `<select>` for environments until
+the dashboard UI kit gains a shadcn `Select`. The terminal reads
 `GET /api/v1/deployments/{id}/logs` through
 `GET /api/console/deployments/{id}/logs` when the console client is set, and
 stays on `/api/mock/v1/deployments/{id}/logs` when it is not. An unknown
