@@ -61,17 +61,28 @@ skipped the push. Actions → **Control plane image** → re-run the latest
 **main** workflow. Confirm DigitalOcean → Container Registry → `aerodeck`
 shows `control-plane` tags `main` and a git SHA. Then `docker pull` again.
 
-## 5. Copy the start scripts from the laptop
+## 5. Install the start scripts from the image
 
-The scripts live in git. They must be **LF** (Unix) line endings. From
-PowerShell in the repo:
+The scripts are in the image at `/app/scripts/`. Use those. An old file at
+`/root/start-on-droplet.sh` (copied earlier with `scp`) curls `:8000` once
+and exits with `curl: (7) ... after 0 ms` while uvicorn is still binding.
 
-```powershell
-scp -i $env:USERPROFILE\.ssh\aerodeck_ed25519 `
-  apps/control-plane/scripts/start-on-droplet.sh `
-  apps/control-plane/scripts/rewrite_do_postgres_url.py `
-  root@174.138.9.16:/root/
+On the Droplet, after the pull in step 4:
+
+```bash
+IMAGE=$(tr -d '[:space:]' < /etc/aerodeck/control-plane-image)
+docker run --rm --entrypoint cat "$IMAGE" /app/scripts/start-on-droplet.sh > /root/start-on-droplet.sh
+docker run --rm --entrypoint cat "$IMAGE" /app/scripts/rewrite_do_postgres_url.py > /root/rewrite_do_postgres_url.py
+sed -i 's/\r$//' /root/start-on-droplet.sh /root/rewrite_do_postgres_url.py
+chmod +x /root/start-on-droplet.sh
+grep -n 'waiting up to 30s' /root/start-on-droplet.sh
 ```
+
+`grep` must print a line. The script then waits up to 30s and does not print
+`curl: (7)` while uvicorn is binding.
+
+Laptop `scp` still works when SSH is open, but the image copy is the one
+that matches the tag you just pulled.
 
 On the Droplet, strip CR if you still see `set: pipefail: invalid option name`:
 
@@ -142,9 +153,11 @@ Expect `aerodeck-api`, `aerodeck-worker`, and `aerodeck-redis` **Up**.
 `curl` to `:8000` from the laptop will time out. That is the cloud firewall,
 not a dead process.
 
-If the script’s first `curl` fails but `docker ps` shows **healthy**, uvicorn
-was still starting. Wait a few seconds and curl again. `docker logs aerodeck-api`
-shows the bind line `Uvicorn running on http://0.0.0.0:8000`.
+The script prints `waiting up to 30s for the API on :8000`, then the JSON
+from `/healthz` and `/readyz`. `curl: (7) ... after 0 ms` means
+`/root/start-on-droplet.sh` is still the old copy. Repeat step 5 from the
+image, then run the script again. `docker logs aerodeck-api` shows
+`Uvicorn running on http://0.0.0.0:8000` once it has bound.
 
 ## 9. Optional: API clients
 

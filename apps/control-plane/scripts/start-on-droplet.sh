@@ -116,8 +116,10 @@ docker run -d --name aerodeck-api --network host --restart unless-stopped \
 
 wait_for_health() {
   local i
+  echo "waiting up to 30s for the API on :8000"
   for i in $(seq 1 30); do
-    if curl -fsS http://127.0.0.1:8000/healthz >/dev/null 2>&1; then
+    # Hide connection refused. A bare curl exits in 0 ms while uvicorn binds.
+    if curl -fsS --max-time 2 -o /dev/null http://127.0.0.1:8000/healthz 2>/dev/null; then
       return 0
     fi
     sleep 1
