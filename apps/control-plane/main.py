@@ -19,12 +19,13 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict
 
 from app.api.deps import SettingsDep
+from app.api.metrics import router as metrics_router
 from app.api.v1.router import api_v1_router
 from app.core.config import Settings, get_settings
-from app.core.db import bind_engine, create_engine, ping, unbind_engine
+from app.core.db import bind_engine, create_engine, unbind_engine
 from app.core.errors import AppError
 from app.core.logging import configure_logging, get_logger
-from app.core.queue import ping_broker
+from app.core.readiness import collect_checks
 from app.schemas.auth import ErrorResponse
 
 logger = get_logger("control_plane")
@@ -102,29 +103,8 @@ async def healthz(settings: SettingsDep) -> HealthResponse:
     summary="Readiness probe",
 )
 async def readyz(request: Request, settings: SettingsDep) -> JSONResponse:
-    checks: dict[str, Literal["ok", "failed", "skipped"]] = {}
-
     engine = getattr(request.app.state, "engine", None)
-    if engine is None:
-        checks["database"] = "skipped"
-    else:
-        try:
-            await ping(engine)
-            checks["database"] = "ok"
-        except Exception:
-            logger.exception("database readiness check failed")
-            checks["database"] = "failed"
-
-    if settings.redis_url is None:
-        checks["queue"] = "skipped"
-    else:
-        try:
-            await ping_broker(settings.redis_url)
-            checks["queue"] = "ok"
-        except Exception:
-            logger.exception("queue readiness check failed")
-            checks["queue"] = "failed"
-
+    checks = await collect_checks(engine, settings.redis_url)
     ready = all(v != "failed" for v in checks.values())
     payload = ReadinessResponse(status="ready" if ready else "degraded", checks=checks)
     return JSONResponse(
@@ -192,6 +172,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return _error_response(status.HTTP_500_INTERNAL_SERVER_ERROR, "Internal server error", "internal_error")
 
     app.include_router(health_router)
+    app.include_router(metrics_router)
     app.include_router(api_v1_router)
     return app
 
