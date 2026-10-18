@@ -16,14 +16,16 @@ Related detail (do not start there): [terraform-state.md](terraform-state.md),
 
 | You create (this runbook) | Terraform / CI creates later |
 | ------------------------- | ---------------------------- |
-| DigitalOcean account + billing | Projects `aerodeck-dev`, `aerodeck-staging`, `aerodeck-prod` |
-| API token | VPCs, Droplets, Postgres, Redis, firewalls |
-| Spaces bucket `aerodeck-tfstate` + access key | State objects `<env>/platform/terraform.tfstate` |
-| Container Registry `aerodeck` | Image tags `<git sha>` and `main` (on push to `main`) |
+| DigitalOcean account + billing | Environment projects `aerodeck-dev`, `aerodeck-staging`, `aerodeck-prod` |
+| One console project (default or `aerodeck-ops`) | VPCs, Droplets, Postgres, Redis, firewalls |
+| API token | State objects `<env>/platform/terraform.tfstate` |
+| One Spaces bucket `aerodeck-tfstate` + access key | Image tags `<git sha>` and `main` (on push to `main`) |
+| Container Registry `aerodeck` | |
 | GitHub Actions secrets and environments | Nothing in GitHub |
 
 Do **not** hand-create a project, VPC, Droplet, or database named
-`aerodeck-*`. CI would fight you on the next apply.
+`aerodeck-dev`, `aerodeck-staging`, or `aerodeck-prod`. CI would fight you
+on the next apply.
 
 Skip a domain and SSH keys for now. You can add them later without repeating
 this runbook.
@@ -41,6 +43,21 @@ this runbook.
    Droplet, Postgres) is **ams3** in `envs/*.tfvars` because Regular
    Basic is not sold in NYC. The bucket does not have to match the
    Droplet region.
+
+## 1b. Console project (Spaces needs one)
+
+The DigitalOcean UI will not create a Spaces bucket without a **project**.
+That project is a folder in the console, not an AeroDeck environment.
+
+- **Do not** create `aerodeck-dev`, `aerodeck-staging`, or `aerodeck-prod`.
+  Terraform creates those three on first apply, one per environment.
+- **Do** use the account **default** project (DigitalOcean already made one),
+  **or** create a single extra project named `aerodeck-ops`.
+- Put the state bucket (and later the registry) in that one ops/default
+  project. **One** bucket for all environments, not one bucket per env.
+
+If you already created `aerodeck-dev` (or staging/prod) by hand: rename it
+to `aerodeck-ops` or delete it while it is empty, before first apply.
 
 ## 2. API token
 
@@ -63,16 +80,18 @@ in `.tfvars` or `backend.hcl`.
 
 The platform stack **uses** this bucket; it does not create it.
 
-1. **Create** → **Spaces Object Storage** → **Create a Spaces Bucket**
+1. In the top bar, select the **default** project or `aerodeck-ops`
+   (step 1b). Not `aerodeck-dev`.
+2. **Create** → **Spaces Object Storage** → **Create a Spaces Bucket**
    ([https://cloud.digitalocean.com/spaces](https://cloud.digitalocean.com/spaces)).
-2. Datacenter: **nyc3**.
-3. Name: `aerodeck-tfstate` (must match `packages/iac-engine/backend.hcl`).
+3. Datacenter: **nyc3**.
+4. Name: `aerodeck-tfstate` (must match `packages/iac-engine/backend.hcl`).
    Bucket names are globally unique; if this name is taken, stop and change
    `backend.hcl` in a PR before going further.
-4. File listing: **Restrict File Listing**.
-5. Create the bucket.
-6. Bucket settings: enable **versioning**.
-7. CDN: leave **off**. This bucket holds state, not public assets.
+5. File listing: **Restrict File Listing**.
+6. Create the bucket.
+7. Bucket settings: enable **versioning**.
+8. CDN: leave **off**. This bucket holds state, not public assets.
 
 Confirm HTTPS endpoint `https://nyc3.digitaloceanspaces.com` (already in
 `backend.hcl`).
@@ -199,6 +218,7 @@ stack: [iac-destroy.md](iac-destroy.md).
 | Situation | What to do |
 | --------- | ---------- |
 | Account exists, no billing | Add billing; continue from step 2 |
+| Hand-created `aerodeck-dev` (or staging/prod) | Rename to `aerodeck-ops` or delete while empty, before first apply |
 | Token lost | Revoke it, generate a new one, update `DIGITALOCEAN_TOKEN` |
 | Bucket name taken | Rename in a PR (`backend.hcl`) **before** creating another bucket |
 | Registry already named something else | Set `DOCR_NAME` and `control_plane_image` to match |
