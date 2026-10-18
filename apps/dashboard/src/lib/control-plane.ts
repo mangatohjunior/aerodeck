@@ -379,11 +379,16 @@ export async function listControlPlaneDeployments(
 export async function createControlPlaneDeployment(
   config: ControlPlaneConfig,
   repoUrl: string,
-  options: ListOptions = {},
+  options: ListOptions & { projectId?: string; environmentId?: string } = {},
 ): Promise<Deployment> {
   const fetchImpl = options.fetch ?? fetch;
   const now = options.now ?? Date.now;
   const accessToken = await accessTokenFor(config, fetchImpl, now);
+  const body: Record<string, string> = { repo_url: repoUrl };
+  if (options.projectId && options.environmentId) {
+    body.project_id = options.projectId;
+    body.environment_id = options.environmentId;
+  }
   const response = await fetchImpl(`${config.baseUrl}/api/v1/deployments`, {
     method: "POST",
     headers: {
@@ -391,7 +396,7 @@ export async function createControlPlaneDeployment(
       authorization: `Bearer ${accessToken}`,
       "content-type": "application/json",
     },
-    body: JSON.stringify({ repo_url: repoUrl }),
+    body: JSON.stringify(body),
     cache: "no-store",
   });
   if (response.status === 422) {
@@ -512,7 +517,11 @@ export async function createControlPlaneDeploymentAndProvision(
 ): Promise<Deployment> {
   // Resolve the environment first so a bad target never creates a deployment row.
   await getControlPlaneEnvironment(config, input.projectId, input.environmentId, options);
-  const deployment = await createControlPlaneDeployment(config, input.repoUrl, options);
+  const deployment = await createControlPlaneDeployment(config, input.repoUrl, {
+    ...options,
+    projectId: input.projectId,
+    environmentId: input.environmentId,
+  });
   try {
     await provisionControlPlaneEnvironment(
       config,
@@ -887,6 +896,19 @@ function parseDeploymentPage(body: unknown): { items: Deployment[]; total: numbe
   };
 }
 
+function optionalUuidField(value: unknown): string | null | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (value === null) {
+    return null;
+  }
+  if (typeof value === "string") {
+    return value;
+  }
+  throw new ControlPlaneError("control plane deployment response was not a deployment");
+}
+
 function parseDeployment(value: unknown): Deployment {
   if (!value || typeof value !== "object") {
     throw new ControlPlaneError("control plane deployment response was not a deployment");
@@ -903,11 +925,15 @@ function parseDeployment(value: unknown): Deployment {
   ) {
     throw new ControlPlaneError("control plane deployment response was not a deployment");
   }
+  const projectId = optionalUuidField(row.project_id);
+  const environmentId = optionalUuidField(row.environment_id);
   return {
     id: row.id,
     repo_url: row.repo_url,
     owner: row.owner,
     repo: row.repo,
+    ...(projectId !== undefined ? { project_id: projectId } : {}),
+    ...(environmentId !== undefined ? { environment_id: environmentId } : {}),
     started_at: row.started_at,
     status: row.status as DeploymentStatus,
   };

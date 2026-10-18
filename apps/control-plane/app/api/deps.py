@@ -92,13 +92,6 @@ def get_console_session_service(session: SessionDep) -> ConsoleSessionService:
 ConsoleSessionServiceDep = Annotated[ConsoleSessionService, Depends(get_console_session_service)]
 
 
-def get_deployment_service(session: SessionDep) -> DeploymentService:
-    return DeploymentService(DeploymentRepository(session))
-
-
-DeploymentServiceDep = Annotated[DeploymentService, Depends(get_deployment_service)]
-
-
 def get_hypervisor(settings: SettingsDep) -> Hypervisor:
     if settings.sandbox_hypervisor == "firecracker":
         url = settings.firecracker_api_url.strip()
@@ -142,6 +135,15 @@ def get_environment_service(session: SessionDep, projects: ProjectServiceDep) ->
 
 
 EnvironmentServiceDep = Annotated[EnvironmentService, Depends(get_environment_service)]
+
+
+def get_deployment_service(
+    session: SessionDep, environments: EnvironmentServiceDep
+) -> DeploymentService:
+    return DeploymentService(DeploymentRepository(session), environments)
+
+
+DeploymentServiceDep = Annotated[DeploymentService, Depends(get_deployment_service)]
 
 
 def get_dns_record_publisher(settings: SettingsDep) -> DnsRecordPublisher:

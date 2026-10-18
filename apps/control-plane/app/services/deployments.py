@@ -8,24 +8,38 @@ from app.core.logging import get_logger
 from app.models.deployment import Deployment, DeploymentStatus
 from app.repositories.deployments import DeploymentRepository
 from app.schemas.deployment import DeploymentCreate
+from app.services.environments import EnvironmentService
 
 logger = get_logger("services.deployments")
 
 
 class DeploymentService:
-    def __init__(self, deployments: DeploymentRepository) -> None:
+    def __init__(
+        self,
+        deployments: DeploymentRepository,
+        environments: EnvironmentService | None = None,
+    ) -> None:
         self._deployments = deployments
+        self._environments = environments
 
     async def create(self, data: DeploymentCreate) -> Deployment:
         parsed = parse_github_repo(data.repo_url)
         if parsed is None:
             raise ValueError("repo_url must be a GitHub repository URL")
         owner, repo = parsed
+        project_id = data.project_id
+        environment_id = data.environment_id
+        if project_id is not None and environment_id is not None:
+            if self._environments is None:
+                raise RuntimeError("environment link requires EnvironmentService")
+            await self._environments.get(project_id, environment_id)
         stored = await self._deployments.add(
             Deployment(
                 repo_url=canonical_github_repo_url(owner, repo),
                 owner=owner,
                 repo=repo,
+                project_id=project_id,
+                environment_id=environment_id,
                 status=DeploymentStatus.running,
                 started_at=datetime.now(UTC),
             )

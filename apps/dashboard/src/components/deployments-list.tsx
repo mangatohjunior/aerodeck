@@ -61,6 +61,11 @@ export function DeploymentsList({ controlPlane = false }: { controlPlane?: boole
                         {row.owner}/{row.repo}
                       </Link>
                       <p className="font-mono text-xs text-muted-foreground">{row.id}</p>
+                      {row.environment_id ? (
+                        <p className="font-mono text-xs text-muted-foreground">
+                          env {row.environment_id}
+                        </p>
+                      ) : null}
                     </div>
                     <p className="text-xs text-muted-foreground">{formatInstant(row.started_at)}</p>
                     <Badge variant="secondary">{row.status}</Badge>

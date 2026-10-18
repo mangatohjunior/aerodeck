@@ -138,6 +138,18 @@ export function DeploymentStatusView({ deployment, logSource }: DeploymentStatus
             <p className="text-xs text-muted-foreground">Target</p>
             <p className="mt-0.5">{copy.targetLabel}</p>
           </div>
+          {deployment.project_id && deployment.environment_id ? (
+            <>
+              <div>
+                <p className="text-xs text-muted-foreground">Project</p>
+                <p className="mt-0.5 font-mono text-xs break-all">{deployment.project_id}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Environment</p>
+                <p className="mt-0.5 font-mono text-xs break-all">{deployment.environment_id}</p>
+              </div>
+            </>
+          ) : null}
         </CardContent>
       </Card>
 

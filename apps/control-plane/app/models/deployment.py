@@ -1,7 +1,8 @@
 import enum
+import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, Enum, String
+from sqlalchemy import DateTime, Enum, ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
@@ -22,6 +23,12 @@ class Deployment(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     repo_url: Mapped[str] = mapped_column(String(512), nullable=False)
     owner: Mapped[str] = mapped_column(String(100), nullable=False)
     repo: Mapped[str] = mapped_column(String(100), nullable=False)
+    project_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("projects.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    environment_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("environments.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     status: Mapped[DeploymentStatus] = mapped_column(
         Enum(DeploymentStatus, name="deployment_status", native_enum=False, length=16),
         nullable=False,

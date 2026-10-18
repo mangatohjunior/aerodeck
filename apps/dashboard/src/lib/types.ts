@@ -44,6 +44,8 @@ export type Deployment = {
   repo_url: string;
   owner: string;
   repo: string;
+  project_id?: string | null;
+  environment_id?: string | null;
   started_at: string;
   status: DeploymentStatus;
 };

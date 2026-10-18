@@ -10,9 +10,11 @@ Creating a deployment uses `POST /api/v1/deployments` through
 `POST /api/console/deployments` when the console client is set, and stays on
 `/api/mock/v1/deployments` when it is not
 ([dashboard-mock.md](dashboard-mock.md)). With the console client, Deploy also
-lists environments via `GET /api/console/environments` and, on submit, queues
-`POST .../environments/{id}/provision` with the new `deployment_id` so the
-terminal can follow worker lines. If provision cannot be queued after create,
+lists environments via `GET /api/console/environments` and, on submit, creates
+the deployment with that `project_id`/`environment_id` (so list/detail keep the
+link after a restart) then queues `POST .../environments/{id}/provision` with
+the new `deployment_id` so the terminal can follow worker lines. Mock create
+stays unlinked. If provision cannot be queued after create,
 the form stays put, disables Deploy, and shows a generic message so a retry
 does not create another orphan row; enqueue also marks that row `failed`. The
 JSON body still returns `deployment_id` for typed client handling and server

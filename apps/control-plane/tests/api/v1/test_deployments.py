@@ -208,17 +208,87 @@ async def test_create_stores_a_github_repository(client: AsyncClient, auth: dict
     assert body["owner"] == "mangatohjunior"
     assert body["repo"] == "aerodeck"
     assert body["status"] == "running"
+    assert body["project_id"] is None
+    assert body["environment_id"] is None
     assert "secret" not in response.text
     assert "token" not in response.text
 
     fetched = await client.get(f"{DEPLOYMENTS}/{body['id']}", headers=auth)
     assert fetched.status_code == 200, fetched.text
     assert fetched.json()["id"] == body["id"]
+    assert fetched.json()["project_id"] is None
+    assert fetched.json()["environment_id"] is None
 
     listed = await client.get(DEPLOYMENTS, headers=auth)
     assert listed.status_code == 200, listed.text
     assert listed.json()["total"] == 1
     assert listed.json()["items"][0]["id"] == body["id"]
+    assert listed.json()["items"][0]["project_id"] is None
+    assert listed.json()["items"][0]["environment_id"] is None
+
+
+async def test_create_persists_environment_link(client: AsyncClient, auth: dict[str, str]) -> None:
+    project = await client.post(
+        "/api/v1/projects", json={"slug": "payments", "name": "Payments"}, headers=auth
+    )
+    assert project.status_code == 201, project.text
+    project_id = project.json()["id"]
+    environment = await client.post(
+        f"/api/v1/projects/{project_id}/environments",
+        json={"slug": "prod", "name": "Prod", "kind": "prod"},
+        headers=auth,
+    )
+    assert environment.status_code == 201, environment.text
+    environment_id = environment.json()["id"]
+
+    created = await client.post(
+        DEPLOYMENTS,
+        json={"repo_url": REPO, "project_id": project_id, "environment_id": environment_id},
+        headers=auth,
+    )
+    assert created.status_code == 201, created.text
+    body = created.json()
+    assert body["project_id"] == project_id
+    assert body["environment_id"] == environment_id
+
+    fetched = await client.get(f"{DEPLOYMENTS}/{body['id']}", headers=auth)
+    assert fetched.status_code == 200, fetched.text
+    assert fetched.json()["project_id"] == project_id
+    assert fetched.json()["environment_id"] == environment_id
+
+    listed = await client.get(DEPLOYMENTS, headers=auth)
+    assert listed.status_code == 200, listed.text
+    assert listed.json()["items"][0]["project_id"] == project_id
+    assert listed.json()["items"][0]["environment_id"] == environment_id
+
+
+async def test_create_rejects_partial_environment_link(
+    client: AsyncClient, auth: dict[str, str]
+) -> None:
+    response = await client.post(
+        DEPLOYMENTS,
+        json={"repo_url": REPO, "project_id": str(uuid4())},
+        headers=auth,
+    )
+    assert response.status_code == 422
+
+
+async def test_create_rejects_unknown_environment(client: AsyncClient, auth: dict[str, str]) -> None:
+    project = await client.post(
+        "/api/v1/projects", json={"slug": "payments", "name": "Payments"}, headers=auth
+    )
+    assert project.status_code == 201, project.text
+    response = await client.post(
+        DEPLOYMENTS,
+        json={
+            "repo_url": REPO,
+            "project_id": project.json()["id"],
+            "environment_id": str(uuid4()),
+        },
+        headers=auth,
+    )
+    assert response.status_code == 404
+    assert response.json()["code"] == "not_found"
 
 
 async def test_invalid_repository_url_stores_nothing(client: AsyncClient, auth: dict[str, str]) -> None:

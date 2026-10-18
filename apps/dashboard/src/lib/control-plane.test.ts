@@ -584,11 +584,21 @@ describe("createControlPlaneDeploymentAndProvision", () => {
         });
       }
       if (url.endsWith("/api/v1/deployments") && init?.method === "POST") {
+        assert.equal(
+          init.body,
+          JSON.stringify({
+            repo_url: "https://github.com/acme/payments",
+            project_id: projectId,
+            environment_id: environmentId,
+          }),
+        );
         return jsonResponse({
           id: deploymentId,
           repo_url: "https://github.com/acme/payments",
           owner: "acme",
           repo: "payments",
+          project_id: projectId,
+          environment_id: environmentId,
           status: "running",
           started_at: "2026-10-18T00:00:00.000Z",
         });
@@ -616,6 +626,8 @@ describe("createControlPlaneDeploymentAndProvision", () => {
       { fetch: fetchImpl },
     );
     assert.equal(deployment.id, deploymentId);
+    assert.equal(deployment.project_id, projectId);
+    assert.equal(deployment.environment_id, environmentId);
     assert.ok(calls.some((call) => call.includes(`/environments/${environmentId}`) && call.startsWith("GET")));
     assert.ok(calls.some((call) => call.includes("/api/v1/deployments") && call.startsWith("POST")));
     assert.ok(calls.some((call) => call.includes("/provision") && call.startsWith("POST")));
