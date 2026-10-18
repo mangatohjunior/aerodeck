@@ -1,14 +1,10 @@
 """Deployment log lines for the SSE route.
 
-Workers (and tests) publish lines keyed by deployment id. When at least one
-line exists, ``GET .../logs`` streams those lines. The stream ends only when
-the publisher writes ``Done`` (or, for Redis live follow, after
-``deployment_log_follow_idle_seconds`` with no new lines — it does **not**
-invent ``Done``).
-
-Without Redis (``redis_url is None``), the in-memory store is a **snapshot**:
-lines present at open are streamed once. With Redis, the stream **follows**
-the list until ``Done`` or the configured idle budget.
+Workers (and tests) publish lines keyed by deployment id. With Redis,
+``GET .../logs`` follows the list from empty until the publisher writes
+``Done`` (or idle timeout). It does not emit the three-line stub when Redis
+is configured. Without Redis, the in-memory store is a snapshot, or the stub
+when empty.
 """
 
 from __future__ import annotations
@@ -16,13 +12,14 @@ from __future__ import annotations
 import asyncio
 import time
 import uuid
-from collections.abc import AsyncIterator, Sequence
+from collections.abc import AsyncIterator, Generator, Sequence
 from contextlib import asynccontextmanager, contextmanager
 
 from redis import Redis
 from redis import asyncio as aioredis
 from redis.exceptions import RedisError
 
+from app.core.config import DEPLOYMENT_LOG_FOLLOW_IDLE_SECONDS_DEFAULT
 from app.core.errors import QueueUnavailableError
 from app.core.logging import get_logger
 from app.core.queue import ping_broker
@@ -32,7 +29,7 @@ logger = get_logger("services.deployment_logs")
 DONE_LINE = "Done"
 MAX_LINES = 10_000
 MAX_LINE_CHARS = 4_096
-DEFAULT_FOLLOW_IDLE_SECONDS = 1_800
+DEFAULT_FOLLOW_IDLE_SECONDS = DEPLOYMENT_LOG_FOLLOW_IDLE_SECONDS_DEFAULT
 
 # Same lines the dashboard Terminal prints. Keep this list the contract until
 # the worker publishes real events.
@@ -96,7 +93,7 @@ def _map_redis_error(exc: RedisError) -> QueueUnavailableError:
 
 
 @contextmanager
-def _sync_redis(redis_url: str):
+def _sync_redis(redis_url: str) -> Generator[Redis, None, None]:
     client = Redis.from_url(redis_url, socket_connect_timeout=2, socket_timeout=2)
     try:
         yield client
@@ -197,16 +194,14 @@ async def _sse_from_redis(
     *,
     follow_idle_seconds: int,
 ) -> AsyncIterator[bytes]:
-    """Follow the Redis list until Done, or idle out without inventing Done."""
+    """Follow the Redis list until Done, or idle out without inventing Done.
+
+    An empty list waits for the first publish (or idle). The three-line stub is
+    only used when Redis is unset.
+    """
     try:
         async with _async_redis(redis_url) as client:
             key = _key(deployment_id)
-            length = await client.llen(key)
-            if length == 0:
-                async for frame in _sse_from_sequence(STUB_LOG_LINES):
-                    yield frame
-                return
-
             start = 0
             idle_deadline = time.monotonic() + follow_idle_seconds
             while True:
@@ -242,7 +237,11 @@ async def iter_deployment_log_sse(
     *,
     follow_idle_seconds: int = DEFAULT_FOLLOW_IDLE_SECONDS,
 ) -> AsyncIterator[bytes]:
-    """Yield SSE frames for a stored deployment. Never invents a trailing Done."""
+    """Yield SSE frames for a stored deployment.
+
+    Does not invent ``Done`` after published lines. The local stub (only when
+    Redis is unset and memory is empty) still ends with ``Done`` by contract.
+    """
     if redis_url is None:
         lines = _memory.get(str(deployment_id))
         async for frame in _sse_from_sequence(lines if lines else STUB_LOG_LINES):

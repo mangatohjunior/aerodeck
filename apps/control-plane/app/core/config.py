@@ -19,6 +19,8 @@ from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 SHA256_HEX_LENGTH = 64
+# Shared with deployment log SSE follow (apps/control-plane/.../deployment_logs.py).
+DEPLOYMENT_LOG_FOLLOW_IDLE_SECONDS_DEFAULT = 1_800
 
 
 class Settings(BaseSettings):
@@ -63,7 +65,11 @@ class Settings(BaseSettings):
     job_result_ttl_seconds: int = Field(default=86_400, ge=60)
     # How long GET .../deployments/{id}/logs waits for the next published line
     # (or Done) after catching up. Deploy-scale default; does not invent Done.
-    deployment_log_follow_idle_seconds: int = Field(default=1_800, ge=1, le=86_400)
+    deployment_log_follow_idle_seconds: int = Field(
+        default=DEPLOYMENT_LOG_FOLLOW_IDLE_SECONDS_DEFAULT,
+        ge=1,
+        le=86_400,
+    )
 
     # Optional static bearer Traefik sends when polling GET /api/v1/edge/traefik.
     # When unset, any enrolled API client token is accepted instead.

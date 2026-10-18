@@ -152,6 +152,58 @@ async def test_published_lines_reads_redis_in_batches(monkeypatch: pytest.Monkey
 
 
 @pytest.mark.asyncio
+async def test_redis_empty_list_follows_worker_lines_without_stub(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(deployment_logs_mod, "_FOLLOW_POLL_SECONDS", 0)
+    monkeypatch.setattr(deployment_logs_mod, "_SSE_PACE_SECONDS", 0)
+    client = AsyncMock()
+    # Empty while the Terminal opens, then the worker publishes.
+    client.llen = AsyncMock(side_effect=[0, 0, 2])
+    client.lrange = AsyncMock(return_value=[b"from-worker", b"Done"])
+    monkeypatch.setattr(
+        "app.services.deployment_logs.aioredis.from_url",
+        lambda *_args, **_kwargs: client,
+    )
+    body = b"".join(
+        [
+            chunk
+            async for chunk in iter_deployment_log_sse(
+                "redis://example/0",
+                uuid4(),
+                follow_idle_seconds=1,
+            )
+        ]
+    )
+    assert body == b"data: from-worker\n\ndata: Done\n\n"
+    assert b"Initializing Terraform" not in body
+    assert b"Provisioning K3s" not in body
+
+
+@pytest.mark.asyncio
+async def test_redis_empty_list_idles_without_stub(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(deployment_logs_mod, "_FOLLOW_POLL_SECONDS", 0)
+    client = AsyncMock()
+    client.llen = AsyncMock(return_value=0)
+    monkeypatch.setattr(
+        "app.services.deployment_logs.aioredis.from_url",
+        lambda *_args, **_kwargs: client,
+    )
+    body = b"".join(
+        [
+            chunk
+            async for chunk in iter_deployment_log_sse(
+                "redis://example/0",
+                uuid4(),
+                follow_idle_seconds=1,
+            )
+        ]
+    )
+    assert body == b""
+    client.lrange.assert_not_called()
+
+
+@pytest.mark.asyncio
 async def test_redis_stream_stops_on_publisher_done(monkeypatch: pytest.MonkeyPatch) -> None:
     client = AsyncMock()
     client.llen = AsyncMock(return_value=2)
