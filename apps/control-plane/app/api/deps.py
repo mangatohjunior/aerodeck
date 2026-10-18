@@ -49,6 +49,7 @@ from app.services.projects import ProjectService
 from app.services.routes import RouteService
 from app.services.sandbox_hosts import SandboxHostService
 from app.services.sandboxes import SandboxService
+from app.tasks.deployment_status import try_mark_deployment_failed_isolated
 
 SettingsDep = Annotated[Settings, Depends(get_settings)]
 SessionDep = Annotated[AsyncSession, Depends(get_session)]
@@ -256,7 +257,13 @@ def get_job_service(
     deployments: DeploymentServiceDep,
     settings: SettingsDep,
 ) -> JobService:
-    return JobService(dispatcher, environments, deployments, redis_url=settings.redis_url)
+    return JobService(
+        dispatcher,
+        environments,
+        deployments,
+        redis_url=settings.redis_url,
+        mark_deployment_failed=try_mark_deployment_failed_isolated,
+    )
 
 
 JobServiceDep = Annotated[JobService, Depends(get_job_service)]

@@ -33,7 +33,7 @@ export async function recordConsoleDeploymentOutcome(
 
   const event =
     outcome === "succeeded"
-      ? "console_deployment_succeeded_failed"
+      ? "console_deployment_succeeded_status"
       : "console_deployment_failed_status";
   try {
     const mark =

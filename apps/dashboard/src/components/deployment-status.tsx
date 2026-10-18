@@ -83,6 +83,11 @@ export function DeploymentStatusView({ deployment, logSource }: DeploymentStatus
     void mark(deployment.id)
       .then((stored) => setStatus(stored.status))
       .catch((cause: unknown) => {
+        // Stream already showed provision ended without Done; keep the badge honest
+        // even if the status POST fails (worker may already have written failed).
+        if (outcome === "failed") {
+          setStatus("failed");
+        }
         setError(cause instanceof Error ? cause.message : "Could not record the deployment status.");
       });
   }
