@@ -43,27 +43,23 @@ class DeploymentService:
         return await self._deployments.list(limit=limit, offset=offset)
 
     async def mark_succeeded(self, deployment_id: uuid.UUID) -> Deployment:
-        deployment = await self.get(deployment_id)
-        if deployment.status == DeploymentStatus.succeeded:
-            logger.info("deployment %s already succeeded; leave unchanged", deployment_id)
-            return deployment
-        if deployment.status == DeploymentStatus.failed:
-            logger.info("deployment %s already failed; leave unchanged", deployment_id)
-            return deployment
-        deployment.status = DeploymentStatus.succeeded
-        stored = await self._deployments.save(deployment)
-        logger.info("deployment succeeded %s", stored.id)
-        return stored
+        return await self._mark_terminal(deployment_id, DeploymentStatus.succeeded)
 
     async def mark_failed(self, deployment_id: uuid.UUID) -> Deployment:
+        return await self._mark_terminal(deployment_id, DeploymentStatus.failed)
+
+    async def _mark_terminal(
+        self, deployment_id: uuid.UUID, status: DeploymentStatus
+    ) -> Deployment:
         deployment = await self.get(deployment_id)
-        if deployment.status == DeploymentStatus.succeeded:
-            logger.info("deployment %s already succeeded; leave unchanged", deployment_id)
+        if deployment.status in (DeploymentStatus.succeeded, DeploymentStatus.failed):
+            logger.info(
+                "deployment %s already %s; leave unchanged",
+                deployment_id,
+                deployment.status.value,
+            )
             return deployment
-        if deployment.status == DeploymentStatus.failed:
-            logger.info("deployment %s already failed; leave unchanged", deployment_id)
-            return deployment
-        deployment.status = DeploymentStatus.failed
+        deployment.status = status
         stored = await self._deployments.save(deployment)
-        logger.info("deployment failed %s", stored.id)
+        logger.info("deployment %s %s", stored.id, status.value)
         return stored
