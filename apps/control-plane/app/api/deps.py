@@ -16,6 +16,7 @@ from app.core.queue import create_celery_app
 from app.models.dns_record import DnsRecordType
 from app.repositories.certificates import CertificateRepository
 from app.repositories.console_users import ConsoleUserRepository
+from app.repositories.deployments import DeploymentRepository
 from app.repositories.clients import ClientRepository, SettingsClientRepository
 from app.repositories.dns_records import DnsRecordRepository
 from app.repositories.environments import EnvironmentRepository
@@ -29,6 +30,7 @@ from app.services.auth import AuthenticatedClient, AuthService
 from app.services.certificate_keys import FileCertificateKeyStore
 from app.services.certificates import CertificateService
 from app.services.console_users import ConsoleUserService
+from app.services.deployments import DeploymentService
 from app.services.dns01 import DigitalOceanDns01, Dns01Provider, Dns01UnavailableError, MemoryDns01
 from app.services.dns_records import (
     DigitalOceanDnsRecords,
@@ -78,6 +80,13 @@ def get_console_user_service(session: SessionDep) -> ConsoleUserService:
 
 
 ConsoleUserServiceDep = Annotated[ConsoleUserService, Depends(get_console_user_service)]
+
+
+def get_deployment_service(session: SessionDep) -> DeploymentService:
+    return DeploymentService(DeploymentRepository(session))
+
+
+DeploymentServiceDep = Annotated[DeploymentService, Depends(get_deployment_service)]
 
 
 def get_hypervisor(settings: SettingsDep) -> Hypervisor:
