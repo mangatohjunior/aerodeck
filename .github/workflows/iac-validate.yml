@@ -11,6 +11,7 @@ on:
       - ".github/workflows/iac-plan-apply.yml"
       - ".github/workflows/control-plane-image.yml"
       - ".github/workflows/iac-destroy.yml"
+      - ".github/workflows/droplet-power.yml"
   push:
     branches: [main]
     paths:
@@ -19,6 +20,7 @@ on:
       - ".github/workflows/iac-plan-apply.yml"
       - ".github/workflows/control-plane-image.yml"
       - ".github/workflows/iac-destroy.yml"
+      - ".github/workflows/droplet-power.yml"
 
 permissions:
   contents: read
@@ -73,6 +75,9 @@ jobs:
 
       - name: CI destroy shape
         run: python tests/test_ci_destroy.py
+
+      - name: Droplet power shape
+        run: python tests/test_droplet_power.py
 
       - name: rehome default VPC helpers
         run: python tests/test_rehome_default_vpc.py

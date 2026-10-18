@@ -1,0 +1,104 @@
+name: Droplet power
+
+# Manual start or stop of the control and edge Droplets for one environment.
+# workflow_dispatch on main only. Prod waits on the GitHub production environment.
+# Powering off does not stop Droplet billing. Destroy is iac-destroy.yml.
+#
+# Procedure: docs/runbooks/droplet-power.md
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: Start or stop the control and edge Droplets
+        type: choice
+        options: [start, stop]
+        required: true
+      environment:
+        description: Environment. Dev is the live console. Prod waits for production approval.
+        type: choice
+        options: [dev, staging, prod]
+        default: dev
+
+permissions:
+  contents: read
+
+concurrency:
+  group: droplet-power-${{ github.event.inputs.environment }}
+  cancel-in-progress: false
+
+jobs:
+  guard:
+    name: main only
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Refuse branches other than main
+        run: |
+          set -euo pipefail
+          if [ "${GITHUB_REF}" != "refs/heads/main" ]; then
+            echo "::error::Start and stop run only from the main branch."
+            exit 1
+          fi
+
+  power-nonprod:
+    name: ${{ github.event.inputs.action }} (${{ github.event.inputs.environment }})
+    needs: guard
+    if: >-
+      github.ref == 'refs/heads/main'
+      && contains(fromJSON('["dev","staging"]'), github.event.inputs.environment)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: ${{ github.event.inputs.environment }}
+    concurrency:
+      group: droplet-power-${{ github.event.inputs.environment }}
+      cancel-in-progress: false
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Power Droplets
+        env:
+          DIGITALOCEAN_TOKEN: ${{ secrets.DIGITALOCEAN_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "${DIGITALOCEAN_TOKEN}" ]; then
+            echo "::error::DIGITALOCEAN_TOKEN is not set."
+            exit 1
+          fi
+          python3 packages/iac-engine/scripts/droplet_power.py \
+            "${{ github.event.inputs.action }}" \
+            "${{ github.event.inputs.environment }}"
+
+  power-prod:
+    name: ${{ github.event.inputs.action }} (prod)
+    needs: guard
+    if: >-
+      github.ref == 'refs/heads/main'
+      && github.event.inputs.environment == 'prod'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: production
+    concurrency:
+      group: droplet-power-prod
+      cancel-in-progress: false
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Power Droplets
+        env:
+          DIGITALOCEAN_TOKEN: ${{ secrets.DIGITALOCEAN_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "${DIGITALOCEAN_TOKEN}" ]; then
+            echo "::error::DIGITALOCEAN_TOKEN is not set."
+            exit 1
+          fi
+          python3 packages/iac-engine/scripts/droplet_power.py \
+            "${{ github.event.inputs.action }}" \
+            prod
