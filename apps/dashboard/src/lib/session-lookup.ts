@@ -14,7 +14,7 @@ export type SessionLookup = {
 };
 
 export function isMissingControlPlaneSession(cause: ControlPlaneError): boolean {
-  return cause.message.includes("not found (404)");
+  return cause.status === 404;
 }
 
 /** Revoke only a control-plane cookie. A mock-store token stays local. */

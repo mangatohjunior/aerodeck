@@ -1,12 +1,11 @@
 import { connection, NextResponse } from "next/server";
 
 import {
-  ControlPlaneError,
   isDeploymentLogId,
   openControlPlaneDeploymentLogs,
   readControlPlaneConfig,
 } from "@/lib/control-plane";
-import { jsonError } from "@/lib/mock-http";
+import { jsonControlPlaneError, jsonError } from "@/lib/mock-http";
 import { requireSessionUser } from "@/lib/session";
 
 export async function GET(
@@ -41,8 +40,6 @@ export async function GET(
       },
     });
   } catch (cause) {
-    const detail = cause instanceof ControlPlaneError ? cause.message : "request failed";
-    console.error("event=console_deployment_logs_failed detail=%s", detail);
-    return jsonError(502, "Control plane request failed.", "control_plane_unavailable");
+    return jsonControlPlaneError(cause, "console_deployment_logs_failed");
   }
 }

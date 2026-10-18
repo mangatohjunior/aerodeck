@@ -19,6 +19,11 @@ class DeploymentRepository:
     async def get(self, deployment_id: uuid.UUID) -> Deployment | None:
         return await self._session.get(Deployment, deployment_id)
 
+    async def save(self, deployment: Deployment) -> Deployment:
+        await self.add(deployment)
+        await self._session.refresh(deployment)
+        return deployment
+
     async def list(self, *, limit: int, offset: int) -> tuple[Sequence[Deployment], int]:
         total = await self._session.scalar(select(func.count()).select_from(Deployment))
         rows = await self._session.scalars(

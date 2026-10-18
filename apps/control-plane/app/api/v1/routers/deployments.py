@@ -1,8 +1,9 @@
 """Deployment records and log streams.
 
 ``POST /api/v1/deployments`` stores a GitHub repository request. It does not
-call DigitalOcean. ``GET /api/v1/deployments/{deployment_id}/logs`` is still an
-SSE stub for any UUID. A later story limits that stream to a stored row.
+call DigitalOcean. ``GET /api/v1/deployments/{deployment_id}/logs`` streams the stub for a stored
+row. ``POST .../succeeded`` records that the stub finished. Neither call
+touches DigitalOcean.
 """
 
 import asyncio
@@ -13,7 +14,7 @@ from uuid import UUID
 from fastapi import APIRouter, status
 from fastapi.responses import StreamingResponse
 
-from app.api.deps import ClientDep, DeploymentServiceDep, PaginationDep
+from app.api.deps import DeploymentServiceDep, PaginationDep
 from app.schemas.auth import ErrorResponse
 from app.schemas.common import Page
 from app.schemas.deployment import DeploymentCreate, DeploymentRead
@@ -56,6 +57,17 @@ async def get_deployment(deployment_id: uuid.UUID, deployments: DeploymentServic
     return DeploymentRead.model_validate(await deployments.get(deployment_id))
 
 
+@router.post(
+    "/{deployment_id}/succeeded",
+    response_model=DeploymentRead,
+    status_code=status.HTTP_200_OK,
+    summary="Record that a deployment stub finished",
+    responses=_NOT_FOUND | _UNAUTHENTICATED,
+)
+async def succeed_deployment(deployment_id: uuid.UUID, deployments: DeploymentServiceDep) -> DeploymentRead:
+    return DeploymentRead.model_validate(await deployments.mark_succeeded(deployment_id))
+
+
 # Same lines the dashboard Terminal prints. Keep this list the contract until
 # the worker publishes real events.
 _MOCK_LOG_LINES = (
@@ -75,14 +87,14 @@ async def _mock_log_stream() -> AsyncIterator[bytes]:
     "/{deployment_id}/logs",
     summary="Stream deployment logs (SSE stub)",
     response_class=StreamingResponse,
+    responses=_NOT_FOUND | _UNAUTHENTICATED,
 )
 async def stream_deployment_logs(
     deployment_id: UUID,
-    client: ClientDep,
+    deployments: DeploymentServiceDep,
 ) -> StreamingResponse:
-    """Stub SSE stream. `deployment_id` is accepted so the path is stable."""
-    _ = client
-    _ = deployment_id
+    """Stub SSE stream for a stored deployment. An unknown id does not stream."""
+    await deployments.get(deployment_id)
     return StreamingResponse(
         _mock_log_stream(),
         media_type="text/event-stream",
