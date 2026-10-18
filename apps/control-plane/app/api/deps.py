@@ -250,8 +250,12 @@ def get_job_dispatcher(settings: SettingsDep) -> JobDispatcher:
 JobDispatcherDep = Annotated[JobDispatcher, Depends(get_job_dispatcher)]
 
 
-def get_job_service(dispatcher: JobDispatcherDep, environments: EnvironmentServiceDep) -> JobService:
-    return JobService(dispatcher, environments)
+def get_job_service(
+    dispatcher: JobDispatcherDep,
+    environments: EnvironmentServiceDep,
+    deployments: DeploymentServiceDep,
+) -> JobService:
+    return JobService(dispatcher, environments, deployments)
 
 
 JobServiceDep = Annotated[JobService, Depends(get_job_service)]

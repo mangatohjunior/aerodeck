@@ -50,6 +50,22 @@ curl -s http://127.0.0.1:8000/api/v1/jobs/<job-id> \
   -H "authorization: Bearer $TOKEN"
 ```
 
+To stream progress on a console deployment's terminal, pass that deployment's
+id in the JSON body (the deployment must already exist):
+
+```bash
+curl -s -X POST \
+  http://127.0.0.1:8000/api/v1/projects/<project-id>/environments/<env-id>/provision \
+  -H "authorization: Bearer $TOKEN" \
+  -H "content-type: application/json" \
+  -d '{"deployment_id":"<deployment-id>"}'
+```
+
+The worker then publishes lines onto
+`GET /api/v1/deployments/<deployment-id>/logs` (start, outcome detail or a short
+failure line, then `Done`). Secrets stay out of those lines. Mapping the Deploy
+form onto this call is a separate story.
+
 Dry-run detail contains `terraform plan only`. Apply detail contains
 `applied stored plan`. Locks retry (`TransientJobError`). Policy or bad
 input fails permanently.

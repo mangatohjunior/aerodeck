@@ -1,11 +1,22 @@
 import uuid
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.services.provisioning import JobKind
 
 JobStatusValue = Literal["queued", "running", "retrying", "succeeded", "failed"]
+
+
+class ProvisionJobCreate(BaseModel):
+    """Optional body for ``POST .../provision``. Links the job to a console deployment."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    deployment_id: uuid.UUID | None = Field(
+        default=None,
+        description="When set, the worker publishes progress lines for this deployment's log stream.",
+    )
 
 
 class JobAccepted(BaseModel):

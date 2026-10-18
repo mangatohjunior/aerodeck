@@ -151,6 +151,35 @@ def publish_line_sync(redis_url: str | None, deployment_id: uuid.UUID, line: str
         raise _map_redis_error(exc) from exc
 
 
+_FAILURE_LINE_MAX = 500
+
+
+def provision_failure_line(exc: BaseException) -> str:
+    """Short, single-line failure text for the terminal. No secret scrubbing beyond truncation."""
+    compact = " ".join(f"Provision failed: {type(exc).__name__}: {exc}".split())
+    if len(compact) > _FAILURE_LINE_MAX:
+        compact = compact[: _FAILURE_LINE_MAX - 3] + "..."
+    return compact
+
+
+def publish_provision_lines_sync(
+    redis_url: str | None,
+    deployment_id: uuid.UUID,
+    *lines: str,
+) -> None:
+    """Publish worker progress. Log-store failures must not fail the provision job."""
+    for line in lines:
+        try:
+            publish_line_sync(redis_url, deployment_id, line)
+        except (QueueUnavailableError, ValueError) as exc:
+            logger.warning(
+                "event=deployment_log_publish_skipped deployment=%s error_type=%s",
+                deployment_id,
+                type(exc).__name__,
+            )
+            return
+
+
 async def publish_line(redis_url: str | None, deployment_id: uuid.UUID, line: str) -> None:
     """Append one line from async API or test code."""
     text = _normalize_line(line)

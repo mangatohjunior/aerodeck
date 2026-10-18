@@ -12,6 +12,7 @@ from starlette.concurrency import run_in_threadpool
 
 from app.core.logging import get_logger
 from app.repositories.jobs import JobState
+from app.services.deployments import DeploymentService
 from app.services.environments import EnvironmentService
 from app.services.provisioning import JobKind
 
@@ -33,22 +34,42 @@ class JobTicket:
 
 
 class JobService:
-    def __init__(self, dispatcher: JobDispatcher, environments: EnvironmentService) -> None:
+    def __init__(
+        self,
+        dispatcher: JobDispatcher,
+        environments: EnvironmentService,
+        deployments: DeploymentService,
+    ) -> None:
         self._dispatcher = dispatcher
         self._environments = environments
+        self._deployments = deployments
 
-    async def enqueue(self, kind: JobKind, project_id: uuid.UUID, environment_id: uuid.UUID) -> JobTicket:
+    async def enqueue(
+        self,
+        kind: JobKind,
+        project_id: uuid.UUID,
+        environment_id: uuid.UUID,
+        *,
+        deployment_id: uuid.UUID | None = None,
+    ) -> JobTicket:
         environment = await self._environments.get(project_id, environment_id)
+        meta: dict[str, str] = {
+            "project_slug": environment.project.slug,
+            "environment_slug": environment.slug,
+            "environment_kind": environment.kind.value,
+            "region": environment.region,
+        }
+        if deployment_id is not None:
+            # Reject unknown ids before the worker publishes into an empty key.
+            await self._deployments.get(deployment_id)
+            meta["deployment_id"] = str(deployment_id)
         # Publishing to the broker is blocking I/O; keep it off the event loop.
         job_id = await run_in_threadpool(
             self._dispatcher.dispatch,
             kind,
             project_id=str(environment.project_id),
             environment_id=str(environment.id),
-            project_slug=environment.project.slug,
-            environment_slug=environment.slug,
-            environment_kind=environment.kind.value,
-            region=environment.region,
+            **meta,
         )
         logger.info("queued %s job %s for environment %s", kind.value, job_id, environment.id)
         return JobTicket(job_id=job_id, kind=kind, project_id=environment.project_id, environment_id=environment.id)

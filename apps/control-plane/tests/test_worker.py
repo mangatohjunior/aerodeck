@@ -1,11 +1,13 @@
 """Celery configuration and retry behaviour, run eagerly in-process."""
 
 from collections.abc import Iterator
+from uuid import uuid4
 
 import pytest
 from celery import Celery
 
 from app.core.queue import create_celery_app
+from app.services.deployment_logs import DONE_LINE, clear_memory_log_lines, published_lines
 from app.services.provisioning import (
     JobKind,
     JobOutcome,
@@ -124,3 +126,73 @@ def test_permanent_failures_do_not_retry(worker_app: Celery, provisioner: FlakyP
     assert result.failed()
     assert isinstance(result.result, PermanentJobError)
     assert provisioner.calls == 1
+
+
+@pytest.fixture(autouse=True)
+def _clear_deployment_log_memory() -> Iterator[None]:
+    clear_memory_log_lines()
+    yield
+    clear_memory_log_lines()
+
+
+@pytest.mark.asyncio
+async def test_provision_with_deployment_id_publishes_progress(
+    worker_app: Celery, provisioner: FlakyProvisioner, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Log store uses the in-memory fallback when redis_url is unset; the Celery
+    # app still uses its own memory broker from the worker_app fixture.
+    monkeypatch.setattr(tasks, "get_settings", lambda: make_settings(database_url=None, redis_url=None))
+    deployment_id = uuid4()
+
+    result = worker_app.tasks[tasks.PROVISION_TASK].apply(
+        kwargs={"project_id": "p", "environment_id": "e", "deployment_id": str(deployment_id)}
+    )
+
+    assert result.successful()
+    lines = await published_lines(None, deployment_id)
+    assert lines is not None
+    assert lines[0] == "Starting environment provision..."
+    assert lines[-1] == DONE_LINE
+    assert "done" in lines[-2]
+
+
+@pytest.mark.asyncio
+async def test_provision_failure_publishes_safe_line_then_done(
+    worker_app: Celery, provisioner: FlakyProvisioner, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(tasks, "get_settings", lambda: make_settings(database_url=None, redis_url=None))
+    provisioner.failures = 99
+    provisioner.error = PermanentJobError
+    deployment_id = uuid4()
+
+    result = worker_app.tasks[tasks.PROVISION_TASK].apply(
+        kwargs={
+            "project_id": "p",
+            "environment_id": "e",
+            "deployment_id": str(deployment_id),
+            # Must not appear in published failure text.
+            "region": "ams3",
+        }
+    )
+
+    assert result.failed()
+    lines = await published_lines(None, deployment_id)
+    assert lines is not None
+    assert lines[0] == "Starting environment provision..."
+    assert lines[-1] == DONE_LINE
+    assert lines[-2].startswith("Provision failed: PermanentJobError:")
+    assert "dop_v1" not in lines[-2]
+    assert "SECRET" not in lines[-2]
+
+
+@pytest.mark.asyncio
+async def test_provision_without_deployment_id_publishes_nothing(
+    worker_app: Celery, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(tasks, "get_settings", lambda: make_settings(database_url=None, redis_url=None))
+    deployment_id = uuid4()
+
+    result = worker_app.tasks[tasks.PROVISION_TASK].apply(kwargs={"project_id": "p", "environment_id": "e"})
+
+    assert result.successful()
+    assert await published_lines(None, deployment_id) is None
