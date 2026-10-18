@@ -18,16 +18,18 @@ posts to `/api/mock/v1/auth/login`. When the console client is set, that
 route checks `POST /api/v1/console-users/login` and sets `aerodeck_session`
 from the stored user and opens `POST /api/v1/console-sessions`. The cookie
 holds that token. A later read uses `POST /api/v1/console-sessions/resolve`,
-so a dashboard restart keeps the operator signed in. Sign-out posts
+so a dashboard restart keeps the operator signed in. Sign-out of a control-plane session posts
 `POST /api/v1/console-sessions/logout` and clears the cookie only after that
-revoke succeeds. A failed revoke leaves the cookie in place. A resolve
+revoke succeeds. A mock-store cookie (mock Google) clears locally and does
+not call revoke. A failed revoke leaves the cookie in place. A resolve
 failure other than a missing session returns 502 and leaves the operator on
 the console. A wrong password
 and an unknown email return the same error. Without the client, sign-in and
 the session stay in the mock store. A real Google callback
 links that verified email with `POST /api/v1/console-users/google` when the
 console client is also set. The mock Google profile stays in the dashboard
-process. Registration uses `POST /api/v1/console-users` through
+process, including when the console client is set. That cookie is read from
+the mock store first so a restart of Next.js still drops it. Registration uses `POST /api/v1/console-users` through
 `POST /api/console/register` when the console client is set, and stays on
 `/api/mock/v1/auth/register` when it is not. When `CONTROL_PLANE_URL` is
 unset, projects and sandboxes fall back to the local seed.

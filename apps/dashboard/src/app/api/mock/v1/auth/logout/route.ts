@@ -3,17 +3,19 @@ import { connection, NextResponse } from "next/server";
 
 import { ControlPlaneError, readControlPlaneConfig, revokeControlPlaneSession } from "@/lib/control-plane";
 import { jsonError } from "@/lib/mock-http";
-import { destroySession } from "@/lib/mock-store";
+import { destroySession, getUserBySessionToken } from "@/lib/mock-store";
 import { SESSION_COOKIE, clearSessionCookie } from "@/lib/session-cookie";
+import { controlPlaneSessionToRevoke } from "@/lib/session-lookup";
 
 export async function POST() {
   await connection();
 
   const token = (await cookies()).get(SESSION_COOKIE)?.value;
   const config = readControlPlaneConfig();
-  if (token && config) {
+  const revoke = controlPlaneSessionToRevoke(token, config, getUserBySessionToken(token));
+  if (revoke) {
     try {
-      await revokeControlPlaneSession(config, token);
+      await revokeControlPlaneSession(revoke.config, revoke.token);
     } catch (cause) {
       if (cause instanceof ControlPlaneError) {
         console.error("event=console_logout_failed detail=%s", cause.message);
