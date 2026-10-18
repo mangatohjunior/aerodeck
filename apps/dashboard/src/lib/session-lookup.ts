@@ -18,12 +18,23 @@ export function isMissingControlPlaneSession(cause: ControlPlaneError): boolean 
 }
 
 /** Revoke only a control-plane cookie. A mock-store token stays local. */
+export function controlPlaneSessionToRevoke(
+  token: string | undefined,
+  config: ControlPlaneConfig | null,
+  mockUser: PublicUser | undefined,
+): { token: string; config: ControlPlaneConfig } | null {
+  if (!token || !config || mockUser) {
+    return null;
+  }
+  return { token, config };
+}
+
 export function shouldRevokeControlPlaneSession(
   token: string | undefined,
   config: ControlPlaneConfig | null,
   mockUser: PublicUser | undefined,
 ): boolean {
-  return Boolean(token && config && !mockUser);
+  return controlPlaneSessionToRevoke(token, config, mockUser) !== null;
 }
 
 export async function lookupSession(lookup: SessionLookup): Promise<SessionRead> {

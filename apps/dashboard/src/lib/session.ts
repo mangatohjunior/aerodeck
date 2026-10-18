@@ -10,6 +10,7 @@ import type { PublicUser } from "@/lib/types";
 
 export type { SessionRead } from "@/lib/session-lookup";
 export {
+  controlPlaneSessionToRevoke,
   isMissingControlPlaneSession,
   lookupSession,
   shouldRevokeControlPlaneSession,

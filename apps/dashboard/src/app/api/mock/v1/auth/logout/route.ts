@@ -5,17 +5,17 @@ import { ControlPlaneError, readControlPlaneConfig, revokeControlPlaneSession } 
 import { jsonError } from "@/lib/mock-http";
 import { destroySession, getUserBySessionToken } from "@/lib/mock-store";
 import { SESSION_COOKIE, clearSessionCookie } from "@/lib/session-cookie";
-import { shouldRevokeControlPlaneSession } from "@/lib/session-lookup";
+import { controlPlaneSessionToRevoke } from "@/lib/session-lookup";
 
 export async function POST() {
   await connection();
 
   const token = (await cookies()).get(SESSION_COOKIE)?.value;
   const config = readControlPlaneConfig();
-  const mockUser = getUserBySessionToken(token);
-  if (shouldRevokeControlPlaneSession(token, config, mockUser)) {
+  const revoke = controlPlaneSessionToRevoke(token, config, getUserBySessionToken(token));
+  if (revoke) {
     try {
-      await revokeControlPlaneSession(config!, token!);
+      await revokeControlPlaneSession(revoke.config, revoke.token);
     } catch (cause) {
       if (cause instanceof ControlPlaneError) {
         console.error("event=console_logout_failed detail=%s", cause.message);

@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 
 import { ControlPlaneError, type ControlPlaneConfig } from "./control-plane";
 import {
+  controlPlaneSessionToRevoke,
   isMissingControlPlaneSession,
   lookupSession,
   shouldRevokeControlPlaneSession,
@@ -79,8 +80,11 @@ describe("lookupSession", () => {
   });
 
   it("revokes only a control-plane cookie when the console client is set", () => {
-    assert.equal(shouldRevokeControlPlaneSession("mock-google-token", config, mockUser), false);
-    assert.equal(shouldRevokeControlPlaneSession("control-plane-token", config, undefined), true);
+    assert.equal(controlPlaneSessionToRevoke("mock-google-token", config, mockUser), null);
+    assert.deepEqual(controlPlaneSessionToRevoke("control-plane-token", config, undefined), {
+      token: "control-plane-token",
+      config,
+    });
     assert.equal(shouldRevokeControlPlaneSession("mock-google-token", null, mockUser), false);
     assert.equal(shouldRevokeControlPlaneSession(undefined, config, undefined), false);
   });
