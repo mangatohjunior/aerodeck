@@ -1,0 +1,27 @@
+import uuid
+from collections.abc import Sequence
+
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.models.deployment import Deployment
+
+
+class DeploymentRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def add(self, deployment: Deployment) -> Deployment:
+        self._session.add(deployment)
+        await self._session.flush()
+        return deployment
+
+    async def get(self, deployment_id: uuid.UUID) -> Deployment | None:
+        return await self._session.get(Deployment, deployment_id)
+
+    async def list(self, *, limit: int, offset: int) -> tuple[Sequence[Deployment], int]:
+        total = await self._session.scalar(select(func.count()).select_from(Deployment))
+        rows = await self._session.scalars(
+            select(Deployment).order_by(Deployment.started_at.desc(), Deployment.id.desc()).limit(limit).offset(offset)
+        )
+        return rows.all(), int(total or 0)
