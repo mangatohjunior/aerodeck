@@ -7,7 +7,14 @@ import pytest
 from celery import Celery
 
 from app.core.queue import create_celery_app
-from app.services.deployment_logs import DONE_LINE, clear_memory_log_lines, memory_log_lines, published_lines
+from app.services.deployment_logs import (
+    DONE_LINE,
+    PROVISION_START_LINE,
+    PROVISION_SUCCESS_LINE,
+    clear_memory_log_lines,
+    memory_log_lines,
+    published_lines,
+)
 from app.services.provisioning import (
     JobKind,
     JobOutcome,
@@ -151,13 +158,13 @@ async def test_provision_with_deployment_id_publishes_progress(
     assert result.successful()
     lines = await published_lines(None, deployment_id)
     assert lines is not None
-    assert lines[0] == "Starting environment provision..."
-    assert lines[-2] == "Environment provision finished."
+    assert lines[0] == PROVISION_START_LINE
+    assert lines[-2] == PROVISION_SUCCESS_LINE
     assert lines[-1] == DONE_LINE
 
 
 @pytest.mark.asyncio
-async def test_provision_failure_publishes_safe_line_then_done(
+async def test_provision_failure_publishes_safe_line_without_done(
     worker_app: Celery, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(tasks, "get_settings", lambda: make_settings(database_url=None, redis_url=None))
@@ -183,9 +190,9 @@ async def test_provision_failure_publishes_safe_line_then_done(
     assert result.failed()
     lines = await published_lines(None, deployment_id)
     assert lines is not None
-    assert lines[0] == "Starting environment provision..."
-    assert lines[-1] == DONE_LINE
-    assert lines[-2] == "Provision failed: PermanentJobError"
+    assert lines[0] == PROVISION_START_LINE
+    assert lines[-1] == "Provision failed: PermanentJobError"
+    assert DONE_LINE not in lines
     assert secret_blob not in "".join(lines)
     assert "dop_v1" not in "".join(lines)
     assert "SECRETTOKEN" not in "".join(lines)
@@ -225,7 +232,7 @@ async def test_transient_retry_does_not_publish_done_until_success(
     assert result.successful()
     assert provisioner.calls == 2
     assert DONE_LINE not in mid_retry_lines
-    assert "Starting environment provision..." in mid_retry_lines
+    assert PROVISION_START_LINE in mid_retry_lines
     lines = await published_lines(None, deployment_id)
     assert lines is not None
     assert lines[-1] == DONE_LINE
@@ -233,7 +240,7 @@ async def test_transient_retry_does_not_publish_done_until_success(
 
 
 @pytest.mark.asyncio
-async def test_exhausted_transient_publishes_failure_and_done(
+async def test_exhausted_transient_publishes_failure_without_done(
     worker_app: Celery, provisioner: FlakyProvisioner, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(tasks, "get_settings", lambda: make_settings(database_url=None, redis_url=None))
@@ -249,10 +256,9 @@ async def test_exhausted_transient_publishes_failure_and_done(
     assert isinstance(result.result, TransientJobError)
     lines = await published_lines(None, deployment_id)
     assert lines is not None
-    assert lines[0] == "Starting environment provision..."
-    assert lines[-2] == "Provision failed: TransientJobError"
-    assert lines[-1] == DONE_LINE
-    assert lines.count(DONE_LINE) == 1
+    assert lines[0] == PROVISION_START_LINE
+    assert lines[-1] == "Provision failed: TransientJobError"
+    assert DONE_LINE not in lines
 
 
 @pytest.mark.asyncio

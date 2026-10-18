@@ -62,10 +62,14 @@ curl -s -X POST \
 ```
 
 The worker then publishes fixed lines onto
-`GET /api/v1/deployments/<deployment-id>/logs` (start, success or
-`Provision failed: <ExceptionClass>`, then `Done`). Those lines never include
-exception message text or provisioner `detail` (Terraform stdout/stderr can hold
-secrets). Mapping the Deploy form onto this call is a separate story.
+`GET /api/v1/deployments/<deployment-id>/logs`: start, then on success
+`Environment provision finished.` and `Done`, or on final failure only
+`Provision failed: <ExceptionClass>` (no `Done`). The console treats `Done` as
+deployment success, so failures must not emit it; the SSE follower ends on
+follow-idle instead. Those lines never include exception message text or
+provisioner `detail` (Terraform stdout/stderr can hold secrets). Mapping the
+Deploy form onto this call is a separate story. A `failed` deployment status is
+out of scope here.
 
 Dry-run detail contains `terraform plan only`. Apply detail contains
 `applied stored plan`. Locks retry (`TransientJobError`). Policy or bad

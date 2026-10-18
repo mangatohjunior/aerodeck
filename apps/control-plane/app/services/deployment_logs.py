@@ -36,6 +36,10 @@ from app.core.queue import ping_broker
 logger = get_logger("services.deployment_logs")
 
 DONE_LINE = "Done"
+# Console Terminal treats Done as success → markDeploymentSucceeded. Publish Done
+# only after a successful provision; failures publish the class-name line and stop.
+PROVISION_START_LINE = "Starting environment provision..."
+PROVISION_SUCCESS_LINE = "Environment provision finished."
 MAX_LINES = 10_000
 MAX_LINE_CHARS = 4_096
 DEFAULT_FOLLOW_IDLE_SECONDS = DEPLOYMENT_LOG_FOLLOW_IDLE_SECONDS_DEFAULT
@@ -168,7 +172,7 @@ def publish_provision_lines_sync(
 ) -> None:
     """Publish worker progress. Log-store failures must not fail the provision job.
 
-    Each line is attempted independently so a failed write still tries ``Done``.
+    Each line is attempted independently so a later ``Done`` still tries after a skip.
     """
     for line in lines:
         try:

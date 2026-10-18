@@ -5,7 +5,8 @@ outcome. ``TransientJobError`` (and plain connection trouble) is retried with
 exponential backoff; anything else fails the job immediately.
 
 When ``deployment_id`` is present in task meta (provision only), progress lines
-are published for the deployment log SSE route (#121).
+are published for the deployment log SSE route (#121). ``Done`` is published only
+on success so the console does not mark a failed deployment as succeeded.
 """
 
 import uuid
@@ -26,9 +27,6 @@ TASK_NAMES = (PROVISION_TASK, RECONCILE_TASK)
 _RETRY_ON = (TransientJobError, ConnectionError, TimeoutError)
 
 _provisioner: Provisioner = NoopProvisioner()
-
-_START_LINE = "Starting environment provision..."
-_SUCCESS_LINE = "Environment provision finished."
 
 
 def use_provisioner(provisioner: Provisioner) -> None:
@@ -64,6 +62,8 @@ def _run(
     # Lazy import: deployment_logs → queue → this module.
     from app.services.deployment_logs import (
         DONE_LINE,
+        PROVISION_START_LINE,
+        PROVISION_SUCCESS_LINE,
         publish_provision_lines_sync,
         provision_failure_line,
     )
@@ -75,7 +75,7 @@ def _run(
     redis_url = get_settings().redis_url if deployment_id is not None else None
     logger.info("%s environment=%s project=%s attempt=%d", kind.value, environment_id, project_id, attempt)
     if deployment_id is not None and attempt == 1:
-        publish_provision_lines_sync(redis_url, deployment_id, _START_LINE)
+        publish_provision_lines_sync(redis_url, deployment_id, PROVISION_START_LINE)
     operation = _provisioner.provision if kind is JobKind.provision else _provisioner.reconcile
     try:
         outcome = operation(project_id=project_id, environment_id=environment_id, **meta)
@@ -84,11 +84,12 @@ def _run(
             logger.error("event=iac_apply_failed environment=%s project=%s", environment_id, project_id)
             record_iac_apply_failure()
         if deployment_id is not None and not _will_retry(task, exc):
-            publish_provision_lines_sync(redis_url, deployment_id, provision_failure_line(exc), DONE_LINE)
+            # No Done: Terminal treats Done as success. Stream ends on follow-idle.
+            publish_provision_lines_sync(redis_url, deployment_id, provision_failure_line(exc))
         raise
     if deployment_id is not None:
         # Fixed success line only — never publish outcome.detail (may grow unsafe).
-        publish_provision_lines_sync(redis_url, deployment_id, _SUCCESS_LINE, DONE_LINE)
+        publish_provision_lines_sync(redis_url, deployment_id, PROVISION_SUCCESS_LINE, DONE_LINE)
     logger.info("%s environment=%s changed=%s", kind.value, environment_id, outcome.changed)
     return outcome.as_dict()
 
