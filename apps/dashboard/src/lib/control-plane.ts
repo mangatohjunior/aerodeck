@@ -206,6 +206,52 @@ export function linkControlPlaneGoogleUser(
   );
 }
 
+export async function createControlPlaneSession(
+  config: ControlPlaneConfig,
+  userId: string,
+  options: ListOptions = {},
+): Promise<{ token: string; user: ControlPlaneUser }> {
+  const response = await authorizedPost(config, "/api/v1/console-sessions", { user_id: userId }, options);
+  if (response.status === 404) {
+    throw new ControlPlaneError("control plane session user was not found (404)");
+  }
+  if (!response.ok) {
+    throw new ControlPlaneError(`control plane session request failed (${response.status})`);
+  }
+  const body = (await response.json()) as { token?: unknown; user?: unknown };
+  if (typeof body.token !== "string" || body.token.length === 0) {
+    throw new ControlPlaneError("control plane session response was not a session");
+  }
+  return { token: body.token, user: parseControlPlaneUser(body.user) };
+}
+
+export async function readControlPlaneSession(
+  config: ControlPlaneConfig,
+  token: string,
+  options: ListOptions = {},
+): Promise<ControlPlaneUser> {
+  const response = await authorizedPost(config, "/api/v1/console-sessions/resolve", { token }, options);
+  if (response.status === 404) {
+    throw new ControlPlaneError("control plane session was not found (404)");
+  }
+  if (!response.ok) {
+    throw new ControlPlaneError(`control plane session request failed (${response.status})`);
+  }
+  return parseControlPlaneUser(await response.json());
+}
+
+export async function revokeControlPlaneSession(
+  config: ControlPlaneConfig,
+  token: string,
+  options: ListOptions = {},
+): Promise<void> {
+  const response = await authorizedPost(config, "/api/v1/console-sessions/logout", { token }, options);
+  if (response.ok) {
+    return;
+  }
+  throw new ControlPlaneError(`control plane session logout failed (${response.status})`);
+}
+
 const DEPLOYMENT_PAGE_CAP = 20;
 const DEPLOYMENT_STATUSES = new Set<DeploymentStatus>(["queued", "running", "succeeded"]);
 
@@ -480,18 +526,16 @@ function parseSandboxPage(body: unknown): { items: Sandbox[]; total: number } {
   };
 }
 
-async function postControlPlaneUser(
+async function authorizedPost(
   config: ControlPlaneConfig,
   path: string,
   body: Record<string, string>,
-  failure: string,
   options: ListOptions,
-  reject: (response: Response) => void | Promise<void>,
-): Promise<ControlPlaneUser> {
+): Promise<Response> {
   const fetchImpl = options.fetch ?? fetch;
   const now = options.now ?? Date.now;
   const accessToken = await accessTokenFor(config, fetchImpl, now);
-  const response = await fetchImpl(`${config.baseUrl}${path}`, {
+  return fetchImpl(`${config.baseUrl}${path}`, {
     method: "POST",
     headers: {
       accept: "application/json",
@@ -501,6 +545,17 @@ async function postControlPlaneUser(
     body: JSON.stringify(body),
     cache: "no-store",
   });
+}
+
+async function postControlPlaneUser(
+  config: ControlPlaneConfig,
+  path: string,
+  body: Record<string, string>,
+  failure: string,
+  options: ListOptions,
+  reject: (response: Response) => void | Promise<void>,
+): Promise<ControlPlaneUser> {
+  const response = await authorizedPost(config, path, body, options);
   await reject(response);
   if (!response.ok) {
     throw new ControlPlaneError(`${failure} (${response.status})`);

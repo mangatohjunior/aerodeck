@@ -3,6 +3,7 @@ import { connection, NextResponse } from "next/server";
 
 import {
   ControlPlaneError,
+  createControlPlaneSession,
   linkControlPlaneGoogleUser,
   readControlPlaneConfig,
 } from "@/lib/control-plane";
@@ -13,7 +14,7 @@ import {
   isRealGoogleConfigured,
   statesMatch,
 } from "@/lib/google-oauth";
-import { loginGoogleUser, openControlPlaneSession } from "@/lib/mock-store";
+import { loginGoogleUser } from "@/lib/mock-store";
 import {
   OAUTH_STATE_COOKIE,
   OAUTH_VERIFIER_COOKIE,
@@ -52,9 +53,12 @@ export async function GET(request: Request) {
     const config = readControlPlaneConfig();
     const token =
       config && code && isRealGoogleConfigured()
-        ? openControlPlaneSession(
-            await linkControlPlaneGoogleUser(config, profile.email, profile.subject),
-          )
+        ? (
+            await createControlPlaneSession(
+              config,
+              (await linkControlPlaneGoogleUser(config, profile.email, profile.subject)).id,
+            )
+          ).token
         : loginGoogleUser(profile.email, profile.subject).token;
     const response = NextResponse.redirect(new URL("/", origin));
     persistSessionCookie(response, token);

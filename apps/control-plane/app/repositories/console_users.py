@@ -1,3 +1,5 @@
+import uuid
+
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -19,6 +21,9 @@ class ConsoleUserRepository:
             raise
         await self._session.refresh(user)
         return user
+
+    async def get(self, user_id: uuid.UUID) -> ConsoleUser | None:
+        return await self._session.get(ConsoleUser, user_id)
 
     async def get_by_email(self, email: str) -> ConsoleUser | None:
         result = await self._session.execute(select(ConsoleUser).where(ConsoleUser.email == email))
