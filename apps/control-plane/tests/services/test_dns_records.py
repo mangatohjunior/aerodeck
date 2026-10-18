@@ -4,12 +4,24 @@ import httpx
 import pytest
 
 from app.services.dns01 import address_record_name
-from app.services.dns_records import DigitalOceanDnsRecords, DnsRecordError, MemoryDnsRecords
+from app.services.dns_records import (
+    DigitalOceanDnsRecords,
+    DnsRecordError,
+    MemoryDnsRecords,
+    provider_record_data,
+)
 
 
 def test_address_record_name_uses_at_for_apex() -> None:
     assert address_record_name("payments.example.com") == ("example.com", "payments")
+    assert address_record_name("dev.app.aero-deck.app") == ("aero-deck.app", "dev.app")
     assert address_record_name("example.com") == ("example.com", "@")
+
+
+def test_cname_target_ends_with_a_dot() -> None:
+    assert provider_record_data("CNAME", "edge.aero-deck.app") == "edge.aero-deck.app."
+    assert provider_record_data("CNAME", "edge.aero-deck.app.") == "edge.aero-deck.app."
+    assert provider_record_data("A", "203.0.113.10") == "203.0.113.10"
 
 
 def test_memory_publisher_upserts_and_deletes() -> None:
@@ -44,7 +56,7 @@ def test_digitalocean_publisher_creates_and_deletes_cname() -> None:
     assert json.loads(calls[0].content) == {
         "type": "CNAME",
         "name": "payments",
-        "data": "edge.example.com",
+        "data": "edge.example.com.",
         "ttl": 300,
     }
     assert calls[1].method == "DELETE"
@@ -57,5 +69,5 @@ def test_digitalocean_publisher_maps_http_errors() -> None:
 
     client = httpx.Client(transport=httpx.MockTransport(handler), base_url="https://api.digitalocean.com")
     dns = DigitalOceanDnsRecords("bad", client=client)
-    with pytest.raises(DnsRecordError):
+    with pytest.raises(DnsRecordError, match="HTTP 401: unauthorized"):
         dns.upsert("app.example.com", "A", "203.0.113.10", 60)

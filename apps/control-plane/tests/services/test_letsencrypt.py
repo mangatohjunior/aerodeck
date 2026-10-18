@@ -66,7 +66,13 @@ def _acme_app(hostname: str, account_pem: str) -> httpx.MockTransport:
             return httpx.Response(201, headers={**headers, "Location": "https://acme.test/acct/1"}, json={"status": "valid"})
         if path == "/new-order":
             order["status"] = "pending"
-            return httpx.Response(201, headers=headers, json=order)
+            # Let's Encrypt returns the order URL in Location and omits "url" in the body.
+            body = {key: value for key, value in order.items() if key != "url"}
+            return httpx.Response(
+                201,
+                headers={**headers, "Location": "https://acme.test/order/1"},
+                json=body,
+            )
         if path == "/authz/1":
             return httpx.Response(
                 200,

@@ -108,6 +108,9 @@ class LetsEncryptIssuer:
             directory["newOrder"],
             {"identifiers": [{"type": "dns", "value": hostname}]},
         )
+        order_url = order.get("url")
+        if not isinstance(order_url, str) or not order_url:
+            raise IssuerError("ACME newOrder did not return an order URL")
         authz = self._signed_post(order["authorizations"][0], None)
         challenge = next(c for c in authz["challenges"] if c["type"] == "dns-01")
         digest = dns01_txt_value(challenge["token"], jwk_thumbprint(account_jwk(self._key)))
@@ -116,11 +119,11 @@ class LetsEncryptIssuer:
             if self._settle_seconds:
                 time.sleep(self._settle_seconds)
             self._signed_post(challenge["url"], {})
-            self._wait_status(order["url"], wanted="ready")
+            self._wait_status(order_url, wanted="ready")
             cert_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
             finalized = self._signed_post(order["finalize"], {"csr": _b64(_csr_der(hostname, cert_key))})
             if finalized.get("status") != "valid":
-                finalized = self._wait_status(order["url"], wanted="valid")
+                finalized = self._wait_status(order_url, wanted="valid")
             cert_url = finalized.get("certificate")
             if not cert_url:
                 raise IssuerError("ACME order had no certificate URL")
@@ -171,7 +174,13 @@ class LetsEncryptIssuer:
             return response.text
         if not response.content:
             return {}
-        return response.json()
+        body = response.json()
+        # RFC 8555 puts the new order URL in Location. Let's Encrypt omits "url" in the body.
+        if isinstance(body, dict):
+            location = response.headers.get("Location")
+            if location and not body.get("url"):
+                body = {**body, "url": location}
+        return body
 
     def _post_jws(self, url: str, payload: dict | None, *, kid: str | None) -> httpx.Response:
         if self._nonce is None:

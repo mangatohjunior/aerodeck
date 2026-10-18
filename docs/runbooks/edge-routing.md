@@ -131,7 +131,7 @@ same `{certificate-id}.key`.
 | `AERODECK_DNS01_PROVIDER=memory` | In-process TXT store. Laptop/CI. |
 | `AERODECK_DNS01_PROVIDER=digitalocean` | TXT via the DigitalOcean Domains API. Needs `AERODECK_DIGITALOCEAN_TOKEN`. |
 | `AERODECK_ACME_ISSUER=fake` (default) | Self-signed cert, issuer CN `AeroDeck Fake CA`. |
-| `AERODECK_ACME_ISSUER=letsencrypt` | RFC 8555 against `AERODECK_ACME_DIRECTORY_URL` (staging by default). Needs `AERODECK_ACME_ACCOUNT_EMAIL` and an RSA PEM in `AERODECK_ACME_ACCOUNT_KEY`. Missing either is `503 acme_unavailable`. |
+| `AERODECK_ACME_ISSUER=letsencrypt` | RFC 8555 against `AERODECK_ACME_DIRECTORY_URL`. `local` and `dev` default to Let's Encrypt staging. `staging` and `production` always use `https://acme-v02.api.letsencrypt.org/directory`. Needs `AERODECK_ACME_ACCOUNT_EMAIL` and an RSA PEM in `AERODECK_ACME_ACCOUNT_KEY`. Missing either is `503 acme_unavailable`. |
 
 Renew one route: `POST .../certificate/renew`. Renew everything due in the
 next 30 days (`AERODECK_CERTIFICATE_RENEW_BEFORE_DAYS`):
@@ -142,8 +142,11 @@ curl -s -X POST http://127.0.0.1:8000/api/v1/edge/certificates/renew-due \
 ```
 
 After issue, the Traefik snapshot puts the router on `websecure` and includes
-`tls.certificates`. Switch production LE by setting the directory URL to
-`https://acme-v02.api.letsencrypt.org/directory` after staging works.
+`tls.certificates`. `AERODECK_ENV=staging` and `AERODECK_ENV=production` (also
+`prod`) refuse the staging directory and a fake issuer, so those control
+planes only issue publicly trusted certificates. `dev` can still set
+`AERODECK_ACME_DIRECTORY_URL=https://acme-v02.api.letsencrypt.org/directory`
+when the browser must trust the certificate.
 
 ## Traefik Droplet
 

@@ -70,51 +70,23 @@ curl -fsS -o /dev/null -w '%{http_code}\n' http://127.0.0.1:3000/login
 laptop. `--network host` is what lets the server reach the API on
 `127.0.0.1:8000`.
 
-## 4. Publish app.aero-deck.app
+## 4. Publish dev.app.aero-deck.app
 
-The route backend is the control Droplet **private** IPv4
-(`terraform output -raw droplet_private_ipv4`), port 3000. From the Droplet,
-using the secret already in `/etc/aerodeck/dashboard.env`:
-
-```bash
-set -a
-source /etc/aerodeck/dashboard.env
-set +a
-TOKEN=$(curl -s -X POST http://127.0.0.1:8000/api/v1/auth/token \
-  -H 'content-type: application/json' \
-  -d "{\"client_id\":\"$CONTROL_PLANE_CLIENT_ID\",\"client_secret\":\"$CONTROL_PLANE_CLIENT_SECRET\"}" \
-  | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
-```
-
-Create a project and a `dev` environment in `ams3` if you do not have them,
-then:
+Operator scripts live in `/root/aerodeck` on the control Droplet. Copy
+`apps/control-plane/scripts/publish-console-route.py` there. It creates the
+console project, the dev environment, and the route to the control private
+IPv4 port 3000, then issues the certificate. The client secret stays in
+`/etc/aerodeck/dashboard.env`.
 
 ```bash
-curl -s -X POST "http://127.0.0.1:8000/api/v1/projects/<project-id>/routes" \
-  -H "authorization: Bearer $TOKEN" \
-  -H 'content-type: application/json' \
-  -d '{
-    "environment_id": "<environment-id>",
-    "hostname": "app.aero-deck.app",
-    "path_prefix": "/",
-    "backend_host": "<control private ipv4>",
-    "backend_port": 3000
-  }'
+mkdir -p /root/aerodeck
+python3 /root/aerodeck/publish-console-route.py
 ```
 
-That publishes the CNAME to `edge.aero-deck.app`. Issue the certificate:
-
-```bash
-curl -s -X POST \
-  "http://127.0.0.1:8000/api/v1/projects/<project-id>/routes/<route-id>/certificate/issue" \
-  -H "authorization: Bearer $TOKEN"
-```
-
-Open `https://app.aero-deck.app`. Let's Encrypt is still the staging
-directory, so the browser warns until you switch to the production directory
-([edge-routing.md](edge-routing.md)). Sign in there. Overview's project count
-is the live `GET /api/v1/projects` total. An empty control plane shows
-**No projects yet.**
-
-Unset `TOKEN` when you are done. The session cookie is `Secure` in this
-container, so sign-in is on HTTPS.
+That publishes a CNAME `dev.app` to `edge.aero-deck.app`. Open
+`https://dev.app.aero-deck.app`. `dev` uses a trusted certificate only when
+`AERODECK_ACME_DIRECTORY_URL` is the Let's Encrypt production directory.
+`AERODECK_ENV=staging` and `AERODECK_ENV=production` always use that directory
+([edge-routing.md](edge-routing.md)). Sign in there. The session cookie is
+`Secure` in this container, so sign-in is on HTTPS. `app.aero-deck.app` stays
+unused until the production console exists.

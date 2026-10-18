@@ -15,7 +15,7 @@ in configuration::
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import Field, SecretStr, field_validator
+from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 SHA256_HEX_LENGTH = 64
@@ -70,6 +70,8 @@ class Settings(BaseSettings):
     dns01_provider: Literal["memory", "digitalocean"] = "memory"
     digitalocean_token: SecretStr | None = None
     # Fake ACME until AERODECK_ACME_ISSUER=letsencrypt and an account key exist.
+    # local and dev default to the Let's Encrypt staging directory. staging and
+    # production are rewritten onto the production directory below.
     acme_issuer: Literal["fake", "letsencrypt"] = "fake"
     acme_directory_url: str = "https://acme-staging-v02.api.letsencrypt.org/directory"
     acme_account_email: str | None = None
@@ -109,6 +111,35 @@ class Settings(BaseSettings):
                     f"auth_clients[{client_id!r}] must be the SHA-256 hex digest of the client secret"
                 )
         return {client_id: digest.lower() for client_id, digest in clients.items()}
+
+    @field_validator("env", mode="before")
+    @classmethod
+    def _prod_alias(cls, value: object) -> object:
+        if value == "prod":
+            return "production"
+        return value
+
+    @model_validator(mode="after")
+    def _public_environments_use_trusted_certs(self) -> "Settings":
+        """Staging and production must not serve the untrusted Let's Encrypt staging CA."""
+        if self.env not in {"staging", "production"}:
+            return self
+        if self.acme_issuer != "letsencrypt":
+            raise ValueError(
+                "AERODECK_ENV staging and production require AERODECK_ACME_ISSUER=letsencrypt"
+            )
+        directory = self.acme_directory_url.rstrip("/")
+        staging = "https://acme-staging-v02.api.letsencrypt.org/directory"
+        production = "https://acme-v02.api.letsencrypt.org/directory"
+        if directory == staging:
+            self.acme_directory_url = production
+            return self
+        if directory != production:
+            raise ValueError(
+                "AERODECK_ENV staging and production require "
+                f"AERODECK_ACME_DIRECTORY_URL={production}"
+            )
+        return self
 
     @property
     def docs_enabled(self) -> bool:

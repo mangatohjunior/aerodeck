@@ -82,7 +82,7 @@ fi
 mkdir -p /etc/aerodeck
 umask 077
 {
-  printf 'AERODECK_ENV=dev\n'
+  printf 'AERODECK_ENV=%q\n' "${AERODECK_ENV:-dev}"
   printf 'AERODECK_AUTH_SIGNING_KEY=%q\n' "${AERODECK_AUTH_SIGNING_KEY}"
   printf 'AERODECK_DATABASE_URL=%q\n' "${AERODECK_DATABASE_URL}"
   printf 'AERODECK_REDIS_URL=%q\n' "${REDIS_URL}"
