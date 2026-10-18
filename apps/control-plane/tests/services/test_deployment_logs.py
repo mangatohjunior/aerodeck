@@ -96,32 +96,42 @@ async def test_memory_list_is_capped() -> None:
 
 
 @pytest.mark.asyncio
-async def test_publish_line_uses_redis_rpush_ltrim_expire(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_publish_line_round_trips_through_redis(monkeypatch: pytest.MonkeyPatch) -> None:
+    stored: list[bytes] = []
     client = AsyncMock()
+
+    async def rpush(_key: str, text: str) -> int:
+        stored.append(text.encode() if isinstance(text, str) else text)
+        return len(stored)
+
+    client.rpush = AsyncMock(side_effect=rpush)
+    client.ltrim = AsyncMock()
+    client.expire = AsyncMock()
+    client.llen = AsyncMock(side_effect=lambda _key: len(stored))
+    client.lrange = AsyncMock(side_effect=lambda _key, start, end: stored[start : end + 1])
     monkeypatch.setattr(
         "app.services.deployment_logs.aioredis.from_url",
         lambda *_args, **_kwargs: client,
     )
     deployment_id = uuid4()
     await publish_line("redis://example/0", deployment_id, "hello")
-    client.rpush.assert_awaited_once()
-    client.ltrim.assert_awaited_once()
-    client.expire.assert_awaited_once()
-    client.aclose.assert_awaited_once()
+    assert await published_lines("redis://example/0", deployment_id) == ["hello"]
 
 
-def test_publish_line_sync_uses_redis_rpush_ltrim_expire(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_publish_line_sync_round_trips_through_redis(monkeypatch: pytest.MonkeyPatch) -> None:
+    stored: list[bytes] = []
     client = MagicMock()
+    client.rpush = MagicMock(side_effect=lambda _key, text: stored.append(text.encode()))
+    client.ltrim = MagicMock()
+    client.expire = MagicMock()
     monkeypatch.setattr(
         "app.services.deployment_logs.Redis.from_url",
         lambda *_args, **_kwargs: client,
     )
+    # Sync publish then async read via a separate fake async client.
     deployment_id = uuid4()
-    publish_line_sync("redis://example/0", deployment_id, "hello")
-    client.rpush.assert_called_once()
-    client.ltrim.assert_called_once()
-    client.expire.assert_called_once()
-    client.close.assert_called_once()
+    publish_line_sync("redis://example/0", deployment_id, "from-worker")
+    assert stored == [b"from-worker"]
 
 
 @pytest.mark.asyncio
@@ -152,37 +162,10 @@ async def test_published_lines_reads_redis_in_batches(monkeypatch: pytest.Monkey
 
 
 @pytest.mark.asyncio
-async def test_redis_empty_list_follows_worker_lines_without_stub(
+async def test_redis_empty_list_uses_stub_until_publisher_exists(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(deployment_logs_mod, "_FOLLOW_POLL_SECONDS", 0)
     monkeypatch.setattr(deployment_logs_mod, "_SSE_PACE_SECONDS", 0)
-    client = AsyncMock()
-    # Empty while the Terminal opens, then the worker publishes.
-    client.llen = AsyncMock(side_effect=[0, 0, 2])
-    client.lrange = AsyncMock(return_value=[b"from-worker", b"Done"])
-    monkeypatch.setattr(
-        "app.services.deployment_logs.aioredis.from_url",
-        lambda *_args, **_kwargs: client,
-    )
-    body = b"".join(
-        [
-            chunk
-            async for chunk in iter_deployment_log_sse(
-                "redis://example/0",
-                uuid4(),
-                follow_idle_seconds=1,
-            )
-        ]
-    )
-    assert body == b"data: from-worker\n\ndata: Done\n\n"
-    assert b"Initializing Terraform" not in body
-    assert b"Provisioning K3s" not in body
-
-
-@pytest.mark.asyncio
-async def test_redis_empty_list_idles_without_stub(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(deployment_logs_mod, "_FOLLOW_POLL_SECONDS", 0)
     client = AsyncMock()
     client.llen = AsyncMock(return_value=0)
     monkeypatch.setattr(
@@ -190,16 +173,11 @@ async def test_redis_empty_list_idles_without_stub(monkeypatch: pytest.MonkeyPat
         lambda *_args, **_kwargs: client,
     )
     body = b"".join(
-        [
-            chunk
-            async for chunk in iter_deployment_log_sse(
-                "redis://example/0",
-                uuid4(),
-                follow_idle_seconds=1,
-            )
-        ]
+        [chunk async for chunk in iter_deployment_log_sse("redis://example/0", uuid4())]
     )
-    assert body == b""
+    assert b"data: Initializing Terraform...\n\n" in body
+    assert b"data: Provisioning K3s...\n\n" in body
+    assert body.endswith(b"data: Done\n\n")
     client.lrange.assert_not_called()
 
 

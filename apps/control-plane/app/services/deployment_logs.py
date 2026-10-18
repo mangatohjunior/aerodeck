@@ -1,10 +1,10 @@
 """Deployment log lines for the SSE route.
 
 Workers (and tests) publish lines keyed by deployment id. With Redis,
-``GET .../logs`` follows the list from empty until the publisher writes
-``Done`` (or idle timeout). It does not emit the three-line stub when Redis
-is configured. Without Redis, the in-memory store is a snapshot, or the stub
-when empty.
+``GET .../logs`` follows published lines until ``Done`` (or idle). If the
+list is still empty (no publisher yet), it emits the three-line stub so the
+Terminal ``Done`` → succeeded path keeps working until a worker publishes.
+Without Redis, the in-memory store is a snapshot, or the stub when empty.
 """
 
 from __future__ import annotations
@@ -194,14 +194,21 @@ async def _sse_from_redis(
     *,
     follow_idle_seconds: int,
 ) -> AsyncIterator[bytes]:
-    """Follow the Redis list until Done, or idle out without inventing Done.
+    """Follow published Redis lines until Done, or idle without inventing Done.
 
-    An empty list waits for the first publish (or idle). The three-line stub is
-    only used when Redis is unset.
+    If the list is empty when the stream opens, emit the stub (until a worker
+    publisher exists). Once any line has been published, never fall back to the
+    stub mid-stream.
     """
     try:
         async with _async_redis(redis_url) as client:
             key = _key(deployment_id)
+            length = await client.llen(key)
+            if length == 0:
+                async for frame in _sse_from_sequence(STUB_LOG_LINES):
+                    yield frame
+                return
+
             start = 0
             idle_deadline = time.monotonic() + follow_idle_seconds
             while True:
@@ -239,8 +246,8 @@ async def iter_deployment_log_sse(
 ) -> AsyncIterator[bytes]:
     """Yield SSE frames for a stored deployment.
 
-    Does not invent ``Done`` after published lines. The local stub (only when
-    Redis is unset and memory is empty) still ends with ``Done`` by contract.
+    Does not invent ``Done`` after published lines. Empty Redis (and empty
+    memory) still use the stub, which ends with ``Done`` by contract.
     """
     if redis_url is None:
         lines = _memory.get(str(deployment_id))
