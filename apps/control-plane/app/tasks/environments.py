@@ -35,14 +35,23 @@ def use_provisioner(provisioner: Provisioner) -> None:
     _provisioner = provisioner
 
 
-def _deployment_id_from_meta(meta: dict[str, str]) -> uuid.UUID | None:
+def _deployment_id_from_meta(
+    meta: dict[str, str],
+    *,
+    project_id: str,
+    environment_id: str,
+) -> uuid.UUID | None:
     raw = meta.pop("deployment_id", None)
     if raw is None:
         return None
     try:
         return uuid.UUID(raw)
     except ValueError:
-        logger.warning("event=deployment_id_invalid error_type=ValueError")
+        logger.warning(
+            "event=deployment_id_invalid error_type=ValueError project=%s environment=%s",
+            project_id,
+            environment_id,
+        )
         return None
 
 
@@ -70,7 +79,7 @@ def _run(
 
     attempt = task.request.retries + 1
     # Always strip deployment_id so TerraformProvisioner never sees an unexpected kwarg.
-    linked = _deployment_id_from_meta(meta)
+    linked = _deployment_id_from_meta(meta, project_id=project_id, environment_id=environment_id)
     deployment_id = linked if kind is JobKind.provision else None
     redis_url = get_settings().redis_url if deployment_id is not None else None
     logger.info("%s environment=%s project=%s attempt=%d", kind.value, environment_id, project_id, attempt)

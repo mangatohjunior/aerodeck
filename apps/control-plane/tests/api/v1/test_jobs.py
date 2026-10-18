@@ -86,6 +86,56 @@ async def test_provision_rejects_unknown_deployment_id(
     assert response.json()["code"] == "not_found"
 
 
+async def test_provision_dispatch_failure_after_seed_publishes_queue_failed(
+    client: AsyncClient,
+    auth: dict[str, str],
+    environment: dict,
+    queued_app: FastAPI,
+    dispatcher: CeleryJobDispatcher,
+) -> None:
+    from app.api.deps import get_job_dispatcher
+    from app.services.deployment_logs import (
+        PROVISION_QUEUE_FAILED_LINE,
+        PROVISION_QUEUED_LINE,
+        clear_memory_log_lines,
+        published_lines,
+    )
+    from app.services.provisioning import JobKind
+
+    clear_memory_log_lines()
+
+    class BrokenDispatcher:
+        def dispatch(self, kind: JobKind, *, project_id: str, environment_id: str, **meta: str) -> str:
+            raise ConnectionError("broker down")
+
+        def state(self, job_id: str):  # pragma: no cover
+            raise AssertionError("state should not be called")
+
+    queued_app.dependency_overrides[get_job_dispatcher] = lambda: BrokenDispatcher()
+    try:
+        created = await client.post(
+            "/api/v1/deployments",
+            headers=auth,
+            json={"repo_url": "https://github.com/acme/payments"},
+        )
+        assert created.status_code == 201, created.text
+        deployment_id = created.json()["id"]
+
+        # Lifespan error middleware re-raises unhandled errors in tests.
+        with pytest.raises(ConnectionError, match="broker down"):
+            await client.post(
+                job_url(environment, "provision"),
+                headers=auth,
+                json={"deployment_id": deployment_id},
+            )
+
+        lines = await published_lines(None, uuid.UUID(deployment_id))
+        assert lines == [PROVISION_QUEUED_LINE, PROVISION_QUEUE_FAILED_LINE]
+    finally:
+        queued_app.dependency_overrides[get_job_dispatcher] = lambda: dispatcher
+        clear_memory_log_lines()
+
+
 async def test_provision_with_deployment_id_publishes_log_lines(
     client: AsyncClient, auth: dict[str, str], environment: dict, monkeypatch: pytest.MonkeyPatch
 ) -> None:

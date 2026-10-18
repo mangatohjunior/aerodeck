@@ -12,7 +12,11 @@ from starlette.concurrency import run_in_threadpool
 
 from app.core.logging import get_logger
 from app.repositories.jobs import JobState
-from app.services.deployment_logs import PROVISION_QUEUED_LINE, publish_line
+from app.services.deployment_logs import (
+    PROVISION_QUEUE_FAILED_LINE,
+    PROVISION_QUEUED_LINE,
+    publish_line,
+)
 from app.services.deployments import DeploymentService
 from app.services.environments import EnvironmentService
 from app.services.provisioning import JobKind
@@ -63,21 +67,35 @@ class JobService:
             "environment_kind": environment.kind.value,
             "region": environment.region,
         }
+        linked_deployment: uuid.UUID | None = None
         # Only provision publishes onto a deployment log stream (#121).
         if deployment_id is not None and kind is JobKind.provision:
             await self._deployments.get(deployment_id)
             meta["deployment_id"] = str(deployment_id)
+            linked_deployment = deployment_id
             # Seed a non-Done line before the worker runs so SSE cannot stub Done
             # while the job is still queued (Terminal would mark succeeded).
             await publish_line(self._redis_url, deployment_id, PROVISION_QUEUED_LINE)
-        # Publishing to the broker is blocking I/O; keep it off the event loop.
-        job_id = await run_in_threadpool(
-            self._dispatcher.dispatch,
-            kind,
-            project_id=str(environment.project_id),
-            environment_id=str(environment.id),
-            **meta,
-        )
+        try:
+            # Publishing to the broker is blocking I/O; keep it off the event loop.
+            job_id = await run_in_threadpool(
+                self._dispatcher.dispatch,
+                kind,
+                project_id=str(environment.project_id),
+                environment_id=str(environment.id),
+                **meta,
+            )
+        except Exception:
+            if linked_deployment is not None:
+                try:
+                    await publish_line(self._redis_url, linked_deployment, PROVISION_QUEUE_FAILED_LINE)
+                except Exception as publish_exc:
+                    logger.warning(
+                        "event=deployment_log_queue_failed_publish_skipped deployment=%s error_type=%s",
+                        linked_deployment,
+                        type(publish_exc).__name__,
+                    )
+            raise
         logger.info("queued %s job %s for environment %s", kind.value, job_id, environment.id)
         return JobTicket(job_id=job_id, kind=kind, project_id=environment.project_id, environment_id=environment.id)
 

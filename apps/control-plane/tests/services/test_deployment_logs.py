@@ -435,7 +435,7 @@ async def test_publish_provision_lines_sync_writes_all_lines() -> None:
 
 
 @pytest.mark.asyncio
-async def test_publish_provision_lines_sync_keeps_trying_after_error(
+async def test_publish_provision_lines_sync_keeps_trying_after_store_error(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     deployment_id = uuid4()
@@ -444,8 +444,20 @@ async def test_publish_provision_lines_sync_keeps_trying_after_error(
     def flaky(_redis_url: str | None, _deployment_id: object, line: str) -> None:
         calls.append(line)
         if line == "boom":
-            raise RuntimeError("unexpected store failure")
+            raise QueueUnavailableError("Deployment log store is unavailable")
 
     monkeypatch.setattr(deployment_logs_mod, "publish_line_sync", flaky)
     publish_provision_lines_sync(None, deployment_id, "ok", "boom", DONE_LINE)
     assert calls == ["ok", "boom", DONE_LINE]
+
+
+@pytest.mark.asyncio
+async def test_publish_provision_lines_sync_propagates_unexpected_errors(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def boom(_redis_url: str | None, _deployment_id: object, line: str) -> None:
+        raise RuntimeError("bug")
+
+    monkeypatch.setattr(deployment_logs_mod, "publish_line_sync", boom)
+    with pytest.raises(RuntimeError, match="bug"):
+        publish_provision_lines_sync(None, uuid4(), "one")
