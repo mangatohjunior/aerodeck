@@ -6,9 +6,14 @@ browser never sees that client secret or the control-plane bearer.
 
 Overview and Projects read `GET /api/v1/projects`. Sandboxes read
 `GET /api/v1/projects/{id}/sandboxes` through `GET /api/console/sandboxes`.
-Deployments and sign-in stay on the mock API
-([dashboard-mock.md](dashboard-mock.md)). When `CONTROL_PLANE_URL` is unset,
-projects and sandboxes fall back to the local seed.
+Creating a deployment stays on the mock API
+([dashboard-mock.md](dashboard-mock.md)). The terminal reads
+`GET /api/v1/deployments/{id}/logs` through
+`GET /api/console/deployments/{id}/logs` when the console client is set, and
+stays on `/api/mock/v1/deployments/{id}/logs` when it is not. Sign-in stays on
+the mock API until console users live in the control plane. When
+`CONTROL_PLANE_URL` is unset, projects and sandboxes fall back to the local
+seed.
 
 Do not `terraform apply` from a laptop. Port 3000 stays VPC-only.
 

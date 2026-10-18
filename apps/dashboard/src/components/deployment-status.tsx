@@ -15,13 +15,14 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { deploymentLogsUrl } from "@/lib/api";
-import type { Deployment, DeploymentStatus } from "@/lib/types";
+import type { Deployment, DeploymentStatus, ProjectSource } from "@/lib/types";
 
 type DeploymentStatusViewProps = {
   deployment: Deployment;
+  logSource: ProjectSource;
 };
 
-export function DeploymentStatusView({ deployment }: DeploymentStatusViewProps) {
+export function DeploymentStatusView({ deployment, logSource }: DeploymentStatusViewProps) {
   const [status, setStatus] = useState<DeploymentStatus>(deployment.status);
   const running = status === "running" || status === "queued";
 
@@ -36,7 +37,7 @@ export function DeploymentStatusView({ deployment }: DeploymentStatusViewProps) 
             Deployment Status
           </h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            Mock SSE for{" "}
+            {logSource === "control-plane" ? "Control-plane SSE for " : "Mock SSE for "}
             <span className="font-mono text-foreground">
               {deployment.owner}/{deployment.repo}
             </span>
@@ -72,13 +73,17 @@ export function DeploymentStatusView({ deployment }: DeploymentStatusViewProps) 
           </div>
           <div>
             <p className="text-xs text-muted-foreground">Target</p>
-            <p className="mt-0.5">DigitalOcean · mock provisioner</p>
+            <p className="mt-0.5">
+              {logSource === "control-plane"
+                ? "DigitalOcean · control plane"
+                : "DigitalOcean · mock provisioner"}
+            </p>
           </div>
         </CardContent>
       </Card>
 
       <Terminal
-        streamUrl={deploymentLogsUrl(deployment.id)}
+        streamUrl={deploymentLogsUrl(deployment.id, logSource)}
         onComplete={() => setStatus("succeeded")}
       />
     </div>

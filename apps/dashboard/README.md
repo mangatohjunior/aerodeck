@@ -3,7 +3,8 @@
 Next.js App Router operator console. The browser keeps the session cookie.
 Projects and sandboxes are loaded by the server from the control plane when
 `CONTROL_PLANE_URL` is set; otherwise Overview shows the local seed.
-Deployments and sign-in stay on `/api/mock/v1`.
+Creating a deployment stays on `/api/mock/v1`. The terminal uses the control
+plane log stream when `CONTROL_PLANE_URL` is set.
 
 Procedures: [docs/runbooks/dashboard-mock.md](../../docs/runbooks/dashboard-mock.md)
 and [docs/runbooks/dashboard-console.md](../../docs/runbooks/dashboard-console.md).
