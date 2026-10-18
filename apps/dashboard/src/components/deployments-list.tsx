@@ -61,9 +61,9 @@ export function DeploymentsList({ controlPlane = false }: { controlPlane?: boole
                         {row.owner}/{row.repo}
                       </Link>
                       <p className="font-mono text-xs text-muted-foreground">{row.id}</p>
-                      {row.environment_id ? (
+                      {row.project_id && row.environment_id ? (
                         <p className="font-mono text-xs text-muted-foreground">
-                          env {row.environment_id}
+                          {row.project_id} · {row.environment_id}
                         </p>
                       ) : null}
                     </div>

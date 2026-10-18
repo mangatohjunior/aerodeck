@@ -26,7 +26,7 @@ logger = get_logger("tasks.deployment_status")
 
 def _deployment_service(session: AsyncSession) -> DeploymentService:
     deployments = DeploymentRepository(session)
-    projects = ProjectService(ProjectRepository(session))
+    projects = ProjectService(ProjectRepository(session), deployments)
     environments = EnvironmentService(EnvironmentRepository(session), projects, deployments)
     return DeploymentService(deployments, environments)
 

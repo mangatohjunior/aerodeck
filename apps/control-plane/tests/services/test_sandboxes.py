@@ -5,6 +5,7 @@ from httpx import AsyncClient
 
 from app.core.db import SessionLocal
 from app.models.sandbox import Sandbox, SandboxStatus
+from app.repositories.deployments import DeploymentRepository
 from app.repositories.projects import ProjectRepository
 from app.repositories.sandbox_hosts import SandboxHostRepository
 from app.repositories.sandboxes import SandboxRepository
@@ -51,7 +52,7 @@ async def test_reap_continues_after_one_hypervisor_failure(client: AsyncClient, 
 
         service = SandboxService(
             SandboxRepository(session),
-            ProjectService(ProjectRepository(session)),
+            ProjectService(ProjectRepository(session), DeploymentRepository(session)),
             _FailOneHypervisor(fail_id.hex),
             SandboxHostService(SandboxHostRepository(session), SandboxRepository(session)),
             require_host=False,

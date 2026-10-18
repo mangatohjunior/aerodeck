@@ -329,6 +329,41 @@ async def test_deleting_environment_clears_both_link_ids(
     assert body["repo_url"] == REPO
 
 
+async def test_deleting_project_clears_both_link_ids(
+    client: AsyncClient, auth: dict[str, str]
+) -> None:
+    project = await client.post(
+        "/api/v1/projects", json={"slug": "payments", "name": "Payments"}, headers=auth
+    )
+    assert project.status_code == 201, project.text
+    project_id = project.json()["id"]
+    environment = await client.post(
+        f"/api/v1/projects/{project_id}/environments",
+        json={"slug": "prod", "name": "Prod", "kind": "prod"},
+        headers=auth,
+    )
+    assert environment.status_code == 201, environment.text
+    environment_id = environment.json()["id"]
+
+    created = await client.post(
+        DEPLOYMENTS,
+        json={"repo_url": REPO, "project_id": project_id, "environment_id": environment_id},
+        headers=auth,
+    )
+    assert created.status_code == 201, created.text
+    deployment_id = created.json()["id"]
+
+    deleted = await client.delete(f"/api/v1/projects/{project_id}", headers=auth)
+    assert deleted.status_code == 204, deleted.text
+
+    fetched = await client.get(f"{DEPLOYMENTS}/{deployment_id}", headers=auth)
+    assert fetched.status_code == 200, fetched.text
+    body = fetched.json()
+    assert body["project_id"] is None
+    assert body["environment_id"] is None
+    assert body["repo_url"] == REPO
+
+
 async def test_invalid_repository_url_stores_nothing(client: AsyncClient, auth: dict[str, str]) -> None:
     response = await client.post(DEPLOYMENTS, json={"repo_url": "https://gitlab.com/org/repo"}, headers=auth)
 

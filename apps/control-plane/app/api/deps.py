@@ -71,8 +71,17 @@ def get_pagination(
 PaginationDep = Annotated[PaginationParams, Depends(get_pagination)]
 
 
-def get_project_service(session: SessionDep) -> ProjectService:
-    return ProjectService(ProjectRepository(session))
+def get_deployment_repository(session: SessionDep) -> DeploymentRepository:
+    return DeploymentRepository(session)
+
+
+DeploymentRepositoryDep = Annotated[DeploymentRepository, Depends(get_deployment_repository)]
+
+
+def get_project_service(
+    session: SessionDep, deployments: DeploymentRepositoryDep
+) -> ProjectService:
+    return ProjectService(ProjectRepository(session), deployments)
 
 
 ProjectServiceDep = Annotated[ProjectService, Depends(get_project_service)]
@@ -130,21 +139,21 @@ def get_sandbox_service(
 SandboxServiceDep = Annotated[SandboxService, Depends(get_sandbox_service)]
 
 
-def get_environment_service(session: SessionDep, projects: ProjectServiceDep) -> EnvironmentService:
-    return EnvironmentService(
-        EnvironmentRepository(session),
-        projects,
-        DeploymentRepository(session),
-    )
+def get_environment_service(
+    session: SessionDep,
+    projects: ProjectServiceDep,
+    deployments: DeploymentRepositoryDep,
+) -> EnvironmentService:
+    return EnvironmentService(EnvironmentRepository(session), projects, deployments)
 
 
 EnvironmentServiceDep = Annotated[EnvironmentService, Depends(get_environment_service)]
 
 
 def get_deployment_service(
-    session: SessionDep, environments: EnvironmentServiceDep
+    deployments: DeploymentRepositoryDep, environments: EnvironmentServiceDep
 ) -> DeploymentService:
-    return DeploymentService(DeploymentRepository(session), environments)
+    return DeploymentService(deployments, environments)
 
 
 DeploymentServiceDep = Annotated[DeploymentService, Depends(get_deployment_service)]

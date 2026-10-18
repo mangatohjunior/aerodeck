@@ -1043,6 +1043,29 @@ describe("control plane deployments", () => {
     );
   });
 
+  it("rejects a one-sided environment link in a deployment response", async () => {
+    clearControlPlaneTokenCache();
+    const fetchImpl: typeof fetch = async (input) => {
+      const url = String(input);
+      if (url.endsWith("/api/v1/auth/token")) {
+        return jsonResponse({ access_token: "issued-bearer", expires_in: 900 });
+      }
+      return jsonResponse({
+        ...deploymentRow,
+        project_id: "11111111-1111-4111-8111-111111111111",
+        environment_id: null,
+      });
+    };
+    await assert.rejects(
+      () => getControlPlaneDeployment(config, deploymentRow.id, { fetch: fetchImpl }),
+      (cause: unknown) => {
+        assert.ok(cause instanceof ControlPlaneError);
+        assert.match(cause.message, /not a deployment/);
+        return true;
+      },
+    );
+  });
+
   it("does not include the upstream body when create fails", async () => {
     clearControlPlaneTokenCache();
     const fetchImpl: typeof fetch = async (input) => {

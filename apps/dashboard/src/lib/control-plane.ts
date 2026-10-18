@@ -912,8 +912,24 @@ function optionalUuidField(value: unknown): string | null | undefined {
   if (value === null) {
     return null;
   }
-  if (typeof value === "string") {
+  if (typeof value === "string" && isControlPlaneUuid(value)) {
     return value;
+  }
+  throw new ControlPlaneError("control plane deployment response was not a deployment");
+}
+
+function deploymentLinkFields(
+  projectId: string | null | undefined,
+  environmentId: string | null | undefined,
+): Pick<Deployment, "project_id" | "environment_id"> | Record<string, never> {
+  if (projectId === undefined && environmentId === undefined) {
+    return {};
+  }
+  if (projectId === null && environmentId === null) {
+    return { project_id: null, environment_id: null };
+  }
+  if (typeof projectId === "string" && typeof environmentId === "string") {
+    return { project_id: projectId, environment_id: environmentId };
   }
   throw new ControlPlaneError("control plane deployment response was not a deployment");
 }
@@ -934,15 +950,12 @@ function parseDeployment(value: unknown): Deployment {
   ) {
     throw new ControlPlaneError("control plane deployment response was not a deployment");
   }
-  const projectId = optionalUuidField(row.project_id);
-  const environmentId = optionalUuidField(row.environment_id);
   return {
     id: row.id,
     repo_url: row.repo_url,
     owner: row.owner,
     repo: row.repo,
-    ...(projectId !== undefined ? { project_id: projectId } : {}),
-    ...(environmentId !== undefined ? { environment_id: environmentId } : {}),
+    ...deploymentLinkFields(optionalUuidField(row.project_id), optionalUuidField(row.environment_id)),
     started_at: row.started_at,
     status: row.status as DeploymentStatus,
   };

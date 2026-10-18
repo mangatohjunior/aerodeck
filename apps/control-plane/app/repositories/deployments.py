@@ -32,6 +32,14 @@ class DeploymentRepository:
             .values(project_id=None, environment_id=None)
         )
 
+    async def clear_project_link(self, project_id: uuid.UUID) -> None:
+        """Null both link columns so the both-or-neither invariant survives project delete."""
+        await self._session.execute(
+            update(Deployment)
+            .where(Deployment.project_id == project_id)
+            .values(project_id=None, environment_id=None)
+        )
+
     async def list(self, *, limit: int, offset: int) -> tuple[Sequence[Deployment], int]:
         total = await self._session.scalar(select(func.count()).select_from(Deployment))
         rows = await self._session.scalars(
