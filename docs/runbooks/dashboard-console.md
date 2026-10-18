@@ -14,11 +14,12 @@ follow the same split. The terminal reads
 `GET /api/v1/deployments/{id}/logs` through
 `GET /api/console/deployments/{id}/logs` when the console client is set, and
 stays on `/api/mock/v1/deployments/{id}/logs` when it is not. An unknown
-deployment id does not stream. When Redis is set and `aerodeck:deployment-logs:{id}` already has lines, the
-control-plane stream follows until the publisher writes `Done`, or until
-`AERODECK_DEPLOYMENT_LOG_FOLLOW_IDLE_SECONDS` (default 1800) elapses with no
-new line (it does not invent `Done`). If that list is empty (no worker
-publisher yet), it emits the three-line stub so the Terminal still reaches
+deployment id does not stream. When Redis is set, the control-plane stream waits up to
+`AERODECK_DEPLOYMENT_LOG_FOLLOW_IDLE_SECONDS` (default 1800) for the first
+line on `aerodeck:deployment-logs:{id}`, then follows until `Done` (or idle
+again). It does not invent `Done`, and publishes do not left-trim the list
+(so a paced SSE cursor stays stable; TTL expires the key). If nothing is
+published in time, it emits the three-line stub so the Terminal still reaches
 `Done`. Without Redis, the in-memory store is a snapshot of lines present at
 open, or the stub when empty. When the stream emits `Done`, the dashboard
 server records `succeeded` with `POST /api/v1/deployments/{id}/succeeded`.

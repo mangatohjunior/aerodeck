@@ -1,10 +1,13 @@
 """Deployment log lines for the SSE route.
 
 Workers (and tests) publish lines keyed by deployment id. With Redis,
-``GET .../logs`` follows published lines until ``Done`` (or idle). If the
-list is still empty (no publisher yet), it emits the three-line stub so the
-Terminal ``Done`` → succeeded path keeps working until a worker publishes.
+``GET .../logs`` waits briefly for the first published line, then follows
+until ``Done`` (or idle). If nothing is published in time, it emits the
+three-line stub so the Terminal ``Done`` → succeeded path still works.
 Without Redis, the in-memory store is a snapshot, or the stub when empty.
+
+Redis lists are not left-trimmed while followers use an integer cursor; TTL
+expires the key. The in-memory store still caps at ``MAX_LINES``.
 """
 
 from __future__ import annotations
@@ -111,15 +114,18 @@ async def _async_redis(redis_url: str) -> AsyncIterator[aioredis.Redis]:
 
 
 def _write_redis_sync(client: Redis, key: str, text: str) -> None:
-    client.rpush(key, text)
-    client.ltrim(key, -MAX_LINES, -1)
-    client.expire(key, _TTL_SECONDS)
+    # No LTRIM: followers use a stable integer index; TTL cleans up the key.
+    pipe = client.pipeline()
+    pipe.rpush(key, text)
+    pipe.expire(key, _TTL_SECONDS)
+    pipe.execute()
 
 
 async def _write_redis_async(client: aioredis.Redis, key: str, text: str) -> None:
-    await client.rpush(key, text)
-    await client.ltrim(key, -MAX_LINES, -1)
-    await client.expire(key, _TTL_SECONDS)
+    pipe = client.pipeline()
+    pipe.rpush(key, text)
+    pipe.expire(key, _TTL_SECONDS)
+    await pipe.execute()
 
 
 def publish_line_sync(redis_url: str | None, deployment_id: uuid.UUID, line: str) -> None:
@@ -196,24 +202,20 @@ async def _sse_from_redis(
 ) -> AsyncIterator[bytes]:
     """Follow published Redis lines until Done, or idle without inventing Done.
 
-    If the list is empty when the stream opens, emit the stub (until a worker
-    publisher exists). Once any line has been published, never fall back to the
-    stub mid-stream.
+    Waits up to ``follow_idle_seconds`` for the first line, then stubs if none
+    arrive (no publisher yet). Once following, the cursor stays valid because
+    publishes never left-trim the list.
     """
     try:
         async with _async_redis(redis_url) as client:
             key = _key(deployment_id)
-            length = await client.llen(key)
-            if length == 0:
-                async for frame in _sse_from_sequence(STUB_LOG_LINES):
-                    yield frame
-                return
-
             start = 0
             idle_deadline = time.monotonic() + follow_idle_seconds
+            saw_publish = False
             while True:
                 length = await client.llen(key)
                 if start < length:
+                    saw_publish = True
                     idle_deadline = time.monotonic() + follow_idle_seconds
                     end = min(start + _READ_BATCH, length) - 1
                     raw = await client.lrange(key, start, end)
@@ -230,6 +232,9 @@ async def _sse_from_redis(
                     continue
 
                 if time.monotonic() >= idle_deadline:
+                    if not saw_publish:
+                        async for frame in _sse_from_sequence(STUB_LOG_LINES):
+                            yield frame
                     return
                 await asyncio.sleep(_FOLLOW_POLL_SECONDS)
     except RedisError as exc:
@@ -246,8 +251,9 @@ async def iter_deployment_log_sse(
 ) -> AsyncIterator[bytes]:
     """Yield SSE frames for a stored deployment.
 
-    Does not invent ``Done`` after published lines. Empty Redis (and empty
-    memory) still use the stub, which ends with ``Done`` by contract.
+    Does not invent ``Done`` after published lines. Empty Redis (after the
+    follow idle wait) and empty memory still use the stub, which ends with
+    ``Done`` by contract.
     """
     if redis_url is None:
         lines = _memory.get(str(deployment_id))
