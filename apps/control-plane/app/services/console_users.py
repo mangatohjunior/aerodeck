@@ -45,7 +45,10 @@ class ConsoleUserService:
             if by_email.google_subject == data.subject:
                 return by_email
             by_email.google_subject = data.subject
-            stored = await self._users.save(by_email)
+            try:
+                stored = await self._users.save(by_email)
+            except IntegrityError as exc:
+                raise ConflictError("Google account is already linked") from exc
             logger.info("linked google subject for console user %s", stored.id)
             return stored
         try:

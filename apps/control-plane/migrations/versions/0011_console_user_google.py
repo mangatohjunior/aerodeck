@@ -26,6 +26,8 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    # A Google-only account has no password. Remove it before the column is required again.
+    op.execute(sa.text("DELETE FROM console_users WHERE password_hash IS NULL"))
     with op.batch_alter_table("console_users") as batch:
         batch.drop_constraint(op.f("uq_console_users_google_subject"), type_="unique")
         batch.drop_column("google_subject")
