@@ -7,7 +7,7 @@ import { useEffect, useState } from "react";
 import { AppSidebar } from "@/components/app-sidebar";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { fetchMe, logoutAccount } from "@/lib/api";
+import { fetchMe, logoutAccount, SessionEnded } from "@/lib/api";
 import type { PublicUser } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -24,6 +24,7 @@ export function AppShell({
   const [mobileOpen, setMobileOpen] = useState(false);
   const [currentUser, setCurrentUser] = useState(user);
   const [signingOut, setSigningOut] = useState(false);
+  const [signOutError, setSignOutError] = useState<string | null>(null);
 
   useEffect(() => {
     setCurrentUser(user);
@@ -31,14 +32,14 @@ export function AppShell({
 
   useEffect(() => {
     let cancelled = false;
-    fetchMe().catch(async () => {
-      if (cancelled) {
+    fetchMe().catch(async (cause: unknown) => {
+      if (cancelled || !(cause instanceof SessionEnded)) {
         return;
       }
       try {
         await logoutAccount();
       } catch {
-        // Treat a 401 as signed out even if logout cannot run.
+        // The session is already gone. Leave the cookie for the next read.
       }
       router.replace("/login");
       router.refresh();
@@ -50,10 +51,13 @@ export function AppShell({
 
   async function handleSignOut() {
     setSigningOut(true);
+    setSignOutError(null);
     try {
       await logoutAccount();
     } catch {
-      // Cookie clear still happens on 204; treat any failure as signed out.
+      setSigningOut(false);
+      setSignOutError("Sign out did not finish. Try again.");
+      return;
     }
     router.push("/login");
     router.refresh();
@@ -94,6 +98,11 @@ export function AppShell({
               <LogOut data-icon="inline-start" />
               Sign out
             </Button>
+            {signOutError ? (
+              <p className="max-w-[12rem] text-xs text-destructive" role="alert">
+                {signOutError}
+              </p>
+            ) : null}
             <Badge variant="outline" className="border-runway/40 text-runway">
               local · mock
             </Badge>

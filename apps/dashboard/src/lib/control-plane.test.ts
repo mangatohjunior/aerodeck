@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
+import { isMissingControlPlaneSession } from "./session";
 import {
   clearControlPlaneTokenCache,
   ControlPlaneError,
@@ -11,8 +12,11 @@ import {
   authenticateControlPlaneUser,
   createControlPlaneDeployment,
   getControlPlaneDeployment,
+  createControlPlaneSession,
   linkControlPlaneGoogleUser,
   listControlPlaneDeployments,
+  readControlPlaneSession,
+  revokeControlPlaneSession,
   registerControlPlaneUser,
   type ControlPlaneConfig,
 } from "./control-plane";
@@ -29,6 +33,19 @@ function jsonResponse(body: unknown, status = 200): Response {
     headers: { "content-type": "application/json" },
   });
 }
+
+describe("isMissingControlPlaneSession", () => {
+  it("treats only a not-found resolve as signed out", () => {
+    assert.equal(
+      isMissingControlPlaneSession(new ControlPlaneError("control plane session was not found (404)")),
+      true,
+    );
+    assert.equal(
+      isMissingControlPlaneSession(new ControlPlaneError("control plane session request failed (502)")),
+      false,
+    );
+  });
+});
 
 describe("readControlPlaneConfig", () => {
   it("requires an origin and both client credentials", () => {
@@ -569,5 +586,69 @@ describe("linkControlPlaneGoogleUser", () => {
         return true;
       },
     );
+  });
+});
+
+describe("console sessions", () => {
+  it("stores the bearer call and returns the token once", async () => {
+    clearControlPlaneTokenCache();
+    const sessionToken = "session-token-value";
+    let authorization = "";
+    let posted = "";
+    const fetchImpl: typeof fetch = async (input, init) => {
+      const url = String(input);
+      if (url.endsWith("/api/v1/auth/token")) {
+        return jsonResponse({ access_token: "issued-bearer", expires_in: 900 });
+      }
+      authorization = new Headers(init?.headers).get("authorization") ?? "";
+      posted = typeof init?.body === "string" ? init.body : "";
+      return jsonResponse({
+        token: sessionToken,
+        user: {
+          id: "55555555-5555-4555-8555-555555555555",
+          email: "ada@example.com",
+          created_at: "2026-10-18T00:00:00.000Z",
+          password_hash: null,
+        },
+      });
+    };
+
+    const opened = await createControlPlaneSession(config, "55555555-5555-4555-8555-555555555555", {
+      fetch: fetchImpl,
+    });
+    assert.equal(authorization, "Bearer issued-bearer");
+    assert.match(posted, /55555555-5555-4555-8555-555555555555/);
+    assert.equal(opened.token, sessionToken);
+    assert.equal(JSON.stringify(opened.user).includes(sessionToken), false);
+    assert.equal(JSON.stringify(opened.user).includes("password_hash"), false);
+
+    const reader: typeof fetch = async (input) => {
+      const url = String(input);
+      if (url.endsWith("/api/v1/auth/token")) {
+        return jsonResponse({ access_token: "issued-bearer", expires_in: 900 });
+      }
+      return jsonResponse({ detail: "missing", token: sessionToken }, 404);
+    };
+    await assert.rejects(
+      () => readControlPlaneSession(config, sessionToken, { fetch: reader }),
+      (cause: unknown) => {
+        assert.ok(cause instanceof ControlPlaneError);
+        assert.equal(cause.message.includes(sessionToken), false);
+        assert.match(cause.message, /not found \(404\)/);
+        return true;
+      },
+    );
+
+    let revoked = false;
+    const revoker: typeof fetch = async (input) => {
+      const url = String(input);
+      if (url.endsWith("/api/v1/auth/token")) {
+        return jsonResponse({ access_token: "issued-bearer", expires_in: 900 });
+      }
+      revoked = url.endsWith("/api/v1/console-sessions/logout");
+      return new Response(null, { status: 204 });
+    };
+    await revokeControlPlaneSession(config, sessionToken, { fetch: revoker });
+    assert.equal(revoked, true);
   });
 });

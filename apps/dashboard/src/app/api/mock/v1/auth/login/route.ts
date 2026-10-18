@@ -4,10 +4,11 @@ import { INVALID_CREDENTIALS_DETAIL, isMockAuthError } from "@/lib/auth";
 import {
   authenticateControlPlaneUser,
   ControlPlaneError,
+  createControlPlaneSession,
   readControlPlaneConfig,
 } from "@/lib/control-plane";
 import { jsonError } from "@/lib/mock-http";
-import { loginUser, openControlPlaneSession } from "@/lib/mock-store";
+import { loginUser } from "@/lib/mock-store";
 import { persistSessionCookie } from "@/lib/session-cookie";
 
 export async function POST(request: Request) {
@@ -31,11 +32,12 @@ export async function POST(request: Request) {
   if (config) {
     try {
       const user = await authenticateControlPlaneUser(config, payload.email, payload.password);
+      const session = await createControlPlaneSession(config, user.id);
       const response = NextResponse.json(
-        { id: user.id, email: user.email, created_at: user.created_at },
+        { id: session.user.id, email: session.user.email, created_at: session.user.created_at },
         { status: 200 },
       );
-      persistSessionCookie(response, openControlPlaneSession(user));
+      persistSessionCookie(response, session.token);
       return response;
     } catch (cause) {
       if (cause instanceof ControlPlaneError && cause.message.includes("login rejected (401)")) {

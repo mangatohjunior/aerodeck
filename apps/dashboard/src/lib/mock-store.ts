@@ -177,24 +177,6 @@ export function loginUser(
   return { user: toPublicUser(user), token: createSession(user.id) };
 }
 
-export function openControlPlaneSession(user: PublicUser): string {
-  const store = getStore();
-  const existing = store.users.find((row) => row.id === user.id);
-  if (existing) {
-    existing.email = user.email;
-    existing.created_at = user.created_at;
-  } else {
-    store.users.push({
-      id: user.id,
-      email: user.email,
-      created_at: user.created_at,
-      password_hash: null,
-      google_subject: null,
-    });
-  }
-  return createSession(user.id);
-}
-
 export function loginGoogleUser(
   email: string,
   subject: string,

@@ -1,17 +1,13 @@
-import { cookies } from "next/headers";
 import { connection, NextResponse } from "next/server";
 
-import { jsonError } from "@/lib/mock-http";
-import { getUserBySessionToken } from "@/lib/mock-store";
-import { SESSION_COOKIE } from "@/lib/session-cookie";
+import { requireSessionUser } from "@/lib/session";
 
 export async function GET() {
   await connection();
 
-  const user = getUserBySessionToken((await cookies()).get(SESSION_COOKIE)?.value);
-  if (!user) {
-    return jsonError(401, "Not signed in.", "unauthenticated");
+  const session = await requireSessionUser();
+  if (session instanceof NextResponse) {
+    return session;
   }
-
-  return NextResponse.json(user);
+  return NextResponse.json(session);
 }
