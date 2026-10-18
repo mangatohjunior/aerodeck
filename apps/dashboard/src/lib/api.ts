@@ -1,5 +1,12 @@
 import { MOCK_API_PREFIX } from "@/lib/catalog";
-import type { ApiError, Deployment, ProjectPage, PublicUser, SandboxPage } from "@/lib/types";
+import type {
+  ApiError,
+  Deployment,
+  ProjectPage,
+  ProjectSource,
+  PublicUser,
+  SandboxPage,
+} from "@/lib/types";
 
 async function readJson<T>(response: Response): Promise<T> {
   const body = (await response.json()) as T | ApiError;
@@ -50,8 +57,21 @@ export async function createDeployment(repoUrl: string): Promise<Deployment> {
   return readJson(response);
 }
 
-export function deploymentLogsUrl(id: string): string {
-  return `${MOCK_API_PREFIX}/deployments/${id}/logs`;
+export async function fetchLogSource(): Promise<ProjectSource> {
+  const response = await fetch("/api/console/log-source", {
+    credentials: "same-origin",
+    cache: "no-store",
+  });
+  const body = await readJson<{ source: ProjectSource }>(response);
+  return body.source;
+}
+
+export function deploymentLogsUrl(id: string, source: ProjectSource): string {
+  const deploymentId = encodeURIComponent(id);
+  if (source === "control-plane") {
+    return `/api/console/deployments/${deploymentId}/logs`;
+  }
+  return `${MOCK_API_PREFIX}/deployments/${deploymentId}/logs`;
 }
 
 export async function registerAccount(

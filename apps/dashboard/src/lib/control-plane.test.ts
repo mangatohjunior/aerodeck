@@ -6,6 +6,7 @@ import {
   ControlPlaneError,
   listControlPlaneProjects,
   listControlPlaneSandboxes,
+  openControlPlaneDeploymentLogs,
   readControlPlaneConfig,
   type ControlPlaneConfig,
 } from "./control-plane";
@@ -228,6 +229,85 @@ describe("listControlPlaneSandboxes", () => {
         assert.ok(cause instanceof ControlPlaneError);
         assert.equal(cause.message.includes("super-secret"), false);
         assert.match(cause.message, /sandboxes request failed \(503\)/);
+        return true;
+      },
+    );
+  });
+});
+
+describe("openControlPlaneDeploymentLogs", () => {
+  it("streams the stub lines with one bearer", async () => {
+    clearControlPlaneTokenCache();
+    const deploymentId = "33333333-3333-4333-8333-333333333333";
+    let authorization = "";
+    let logsUrl = "";
+    const fetchImpl: typeof fetch = async (input, init) => {
+      const url = String(input);
+      if (url.endsWith("/api/v1/auth/token")) {
+        return jsonResponse({ access_token: "issued-bearer", expires_in: 900 });
+      }
+      logsUrl = url;
+      authorization = new Headers(init?.headers).get("authorization") ?? "";
+      return new Response(
+        "data: Initializing Terraform...\n\ndata: Provisioning K3s...\n\ndata: Done\n\n",
+        { status: 200, headers: { "content-type": "text/event-stream" } },
+      );
+    };
+
+    const body = await openControlPlaneDeploymentLogs(config, deploymentId, {
+      fetch: fetchImpl,
+    });
+    const text = await new Response(body).text();
+    assert.equal(authorization, "Bearer issued-bearer");
+    assert.equal(
+      logsUrl,
+      `http://127.0.0.1:8000/api/v1/deployments/${deploymentId}/logs`,
+    );
+    assert.match(text, /Initializing Terraform\.\.\./);
+    assert.match(text, /Provisioning K3s\.\.\./);
+    assert.match(text, /\n\ndata: Done\n\n/);
+    assert.equal(text.includes("super-secret"), false);
+    assert.equal(text.includes("issued-bearer"), false);
+  });
+
+  it("does not call upstream for a non-uuid id", async () => {
+    clearControlPlaneTokenCache();
+    let called = false;
+    const fetchImpl: typeof fetch = async () => {
+      called = true;
+      return jsonResponse({});
+    };
+    await assert.rejects(
+      () => openControlPlaneDeploymentLogs(config, "not-a-uuid", { fetch: fetchImpl }),
+      (cause: unknown) => {
+        assert.ok(cause instanceof ControlPlaneError);
+        assert.match(cause.message, /not a uuid/);
+        return true;
+      },
+    );
+    assert.equal(called, false);
+  });
+
+  it("does not include the upstream body when the log stream fails", async () => {
+    clearControlPlaneTokenCache();
+    const fetchImpl: typeof fetch = async (input) => {
+      const url = String(input);
+      if (url.endsWith("/api/v1/auth/token")) {
+        return jsonResponse({ access_token: "issued-bearer", expires_in: 900 });
+      }
+      return jsonResponse({ detail: "nope", client_secret: "super-secret" }, 502);
+    };
+    await assert.rejects(
+      () =>
+        openControlPlaneDeploymentLogs(
+          config,
+          "33333333-3333-4333-8333-333333333333",
+          { fetch: fetchImpl },
+        ),
+      (cause: unknown) => {
+        assert.ok(cause instanceof ControlPlaneError);
+        assert.equal(cause.message.includes("super-secret"), false);
+        assert.match(cause.message, /deployment logs request failed \(502\)/);
         return true;
       },
     );

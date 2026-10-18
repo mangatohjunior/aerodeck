@@ -15,15 +15,30 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { deploymentLogsUrl } from "@/lib/api";
-import type { Deployment, DeploymentStatus } from "@/lib/types";
+import type { Deployment, DeploymentStatus, ProjectSource } from "@/lib/types";
 
 type DeploymentStatusViewProps = {
   deployment: Deployment;
+  logSource: ProjectSource;
 };
 
-export function DeploymentStatusView({ deployment }: DeploymentStatusViewProps) {
+function logSourceCopy(source: ProjectSource): { sseLabel: string; targetLabel: string } {
+  if (source === "control-plane") {
+    return {
+      sseLabel: "Control-plane SSE for ",
+      targetLabel: "DigitalOcean · control plane",
+    };
+  }
+  return {
+    sseLabel: "Mock SSE for ",
+    targetLabel: "DigitalOcean · mock provisioner",
+  };
+}
+
+export function DeploymentStatusView({ deployment, logSource }: DeploymentStatusViewProps) {
   const [status, setStatus] = useState<DeploymentStatus>(deployment.status);
   const running = status === "running" || status === "queued";
+  const copy = logSourceCopy(logSource);
 
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
@@ -36,7 +51,7 @@ export function DeploymentStatusView({ deployment }: DeploymentStatusViewProps) 
             Deployment Status
           </h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            Mock SSE for{" "}
+            {copy.sseLabel}
             <span className="font-mono text-foreground">
               {deployment.owner}/{deployment.repo}
             </span>
@@ -72,13 +87,13 @@ export function DeploymentStatusView({ deployment }: DeploymentStatusViewProps) 
           </div>
           <div>
             <p className="text-xs text-muted-foreground">Target</p>
-            <p className="mt-0.5">DigitalOcean · mock provisioner</p>
+            <p className="mt-0.5">{copy.targetLabel}</p>
           </div>
         </CardContent>
       </Card>
 
       <Terminal
-        streamUrl={deploymentLogsUrl(deployment.id)}
+        streamUrl={deploymentLogsUrl(deployment.id, logSource)}
         onComplete={() => setStatus("succeeded")}
       />
     </div>

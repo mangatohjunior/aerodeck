@@ -3,8 +3,8 @@
 import { use, useEffect, useState } from "react";
 
 import { DeploymentStatusView } from "@/components/deployment-status";
-import { fetchDeployment } from "@/lib/api";
-import type { Deployment } from "@/lib/types";
+import { fetchDeployment, fetchLogSource } from "@/lib/api";
+import type { Deployment, ProjectSource } from "@/lib/types";
 
 export default function DeploymentDetailPage({
   params,
@@ -13,11 +13,15 @@ export default function DeploymentDetailPage({
 }) {
   const { id } = use(params);
   const [deployment, setDeployment] = useState<Deployment | null>(null);
+  const [logSource, setLogSource] = useState<ProjectSource | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchDeployment(id)
-      .then(setDeployment)
+    Promise.all([fetchDeployment(id), fetchLogSource()])
+      .then(([nextDeployment, source]) => {
+        setDeployment(nextDeployment);
+        setLogSource(source);
+      })
       .catch((cause: unknown) => {
         setError(cause instanceof Error ? cause.message : "Deployment not found.");
       });
@@ -31,9 +35,9 @@ export default function DeploymentDetailPage({
     );
   }
 
-  if (!deployment) {
+  if (!deployment || !logSource) {
     return <p className="text-sm text-muted-foreground">Loading deployment…</p>;
   }
 
-  return <DeploymentStatusView deployment={deployment} />;
+  return <DeploymentStatusView deployment={deployment} logSource={logSource} />;
 }
