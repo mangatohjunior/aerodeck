@@ -2,7 +2,7 @@ import { connection, NextResponse } from "next/server";
 
 import {
   getControlPlaneDeployment,
-  isDeploymentLogId,
+  isControlPlaneUuid,
   readControlPlaneConfig,
 } from "@/lib/control-plane";
 import { jsonControlPlaneError, jsonError } from "@/lib/mock-http";
@@ -25,7 +25,7 @@ export async function GET(
   }
 
   const { id } = await context.params;
-  if (!isDeploymentLogId(id)) {
+  if (!isControlPlaneUuid(id)) {
     return jsonError(400, "Deployment id must be a UUID.", "invalid_deployment_id");
   }
 

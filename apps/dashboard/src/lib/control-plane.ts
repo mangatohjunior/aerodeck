@@ -93,7 +93,7 @@ export async function listControlPlaneProjects(
   return parseProjectPage(await response.json());
 }
 
-const SANDBOX_PAGE_CAP = 20;
+const PAGE_CAP = 20;
 
 export async function listControlPlaneSandboxes(
   config: ControlPlaneConfig,
@@ -111,19 +111,22 @@ export async function listControlPlaneSandboxes(
   return { items, total: items.length };
 }
 
-const DEPLOYMENT_ID =
+const CONTROL_PLANE_UUID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-export function isDeploymentLogId(deploymentId: string): boolean {
-  return DEPLOYMENT_ID.test(deploymentId);
+export function isControlPlaneUuid(value: string): boolean {
+  return CONTROL_PLANE_UUID.test(value);
 }
+
+/** @deprecated Prefer {@link isControlPlaneUuid}. */
+export const isDeploymentLogId = isControlPlaneUuid;
 
 export async function openControlPlaneDeploymentLogs(
   config: ControlPlaneConfig,
   deploymentId: string,
   options: ListOptions = {},
 ): Promise<ReadableStream<Uint8Array>> {
-  if (!isDeploymentLogId(deploymentId)) {
+  if (!isControlPlaneUuid(deploymentId)) {
     throw new ControlPlaneError("control plane deployment id was not a uuid");
   }
   const fetchImpl = options.fetch ?? fetch;
@@ -156,7 +159,7 @@ export async function succeedControlPlaneDeployment(
   deploymentId: string,
   options: ListOptions = {},
 ): Promise<Deployment> {
-  if (!isDeploymentLogId(deploymentId)) {
+  if (!isControlPlaneUuid(deploymentId)) {
     throw new ControlPlaneError("control plane deployment id was not a uuid");
   }
   const fetchImpl = options.fetch ?? fetch;
@@ -381,7 +384,7 @@ export async function getControlPlaneEnvironment(
   environmentId: string,
   options: ListOptions = {},
 ): Promise<EnvironmentOption> {
-  if (!isDeploymentLogId(projectId) || !isDeploymentLogId(environmentId)) {
+  if (!isControlPlaneUuid(projectId) || !isControlPlaneUuid(environmentId)) {
     throw new ControlPlaneError("control plane environment ids were not uuids");
   }
   const fetchImpl = options.fetch ?? fetch;
@@ -421,9 +424,9 @@ export async function provisionControlPlaneEnvironment(
   options: ListOptions = {},
 ): Promise<void> {
   if (
-    !isDeploymentLogId(projectId) ||
-    !isDeploymentLogId(environmentId) ||
-    !isDeploymentLogId(deploymentId)
+    !isControlPlaneUuid(projectId) ||
+    !isControlPlaneUuid(environmentId) ||
+    !isControlPlaneUuid(deploymentId)
   ) {
     throw new ControlPlaneError("control plane provision ids were not uuids");
   }
@@ -485,7 +488,7 @@ export async function getControlPlaneDeployment(
   deploymentId: string,
   options: ListOptions = {},
 ): Promise<Deployment> {
-  if (!isDeploymentLogId(deploymentId)) {
+  if (!isControlPlaneUuid(deploymentId)) {
     throw new ControlPlaneError("control plane deployment id was not a uuid");
   }
   const fetchImpl = options.fetch ?? fetch;
@@ -516,40 +519,24 @@ async function listProjectEnvironments(
   accessToken: string,
   fetchImpl: typeof fetch,
 ): Promise<EnvironmentOption[]> {
-  const items: EnvironmentOption[] = [];
-  let offset = 0;
-  let total = 0;
-  for (let page = 0; page < SANDBOX_PAGE_CAP; page += 1) {
-    const response = await fetchImpl(
-      `${config.baseUrl}/api/v1/projects/${encodeURIComponent(project.id)}/environments?limit=${PAGE_LIMIT}&offset=${offset}`,
-      {
-        headers: {
-          accept: "application/json",
-          authorization: `Bearer ${accessToken}`,
-        },
-        cache: "no-store",
-      },
-    );
-    if (!response.ok) {
-      throw new ControlPlaneError(
-        `control plane environments request failed (${response.status})`,
-        response.status,
-      );
-    }
-    const body = await response.json();
-    if (!body || typeof body !== "object" || !Array.isArray((body as { items?: unknown }).items)) {
-      throw new ControlPlaneError("control plane environments response was not a page");
-    }
-    const record = body as { items: unknown[]; total?: unknown };
-    const pageItems = record.items.map((row) => parseEnvironmentOption(row, project));
-    items.push(...pageItems);
-    total = typeof record.total === "number" ? record.total : items.length;
-    if (pageItems.length === 0 || items.length >= total) {
-      break;
-    }
-    offset += pageItems.length;
-  }
-  return items;
+  return listPaginatedProjectCollection(
+    config,
+    project.id,
+    accessToken,
+    fetchImpl,
+    "environments",
+    (body) => {
+      if (!body || typeof body !== "object" || !Array.isArray((body as { items?: unknown }).items)) {
+        throw new ControlPlaneError("control plane environments response was not a page");
+      }
+      const record = body as { items: unknown[]; total?: unknown };
+      const pageItems = record.items.map((row) => parseEnvironmentOption(row, project));
+      return {
+        items: pageItems,
+        total: typeof record.total === "number" ? record.total : pageItems.length,
+      };
+    },
+  );
 }
 
 function parseEnvironmentOption(
@@ -591,12 +578,30 @@ async function listProjectSandboxes(
   accessToken: string,
   fetchImpl: typeof fetch,
 ): Promise<Sandbox[]> {
-  const items: Sandbox[] = [];
+  return listPaginatedProjectCollection(
+    config,
+    projectId,
+    accessToken,
+    fetchImpl,
+    "sandboxes",
+    parseSandboxPage,
+  );
+}
+
+async function listPaginatedProjectCollection<T>(
+  config: ControlPlaneConfig,
+  projectId: string,
+  accessToken: string,
+  fetchImpl: typeof fetch,
+  resource: "sandboxes" | "environments",
+  parsePage: (body: unknown) => { items: T[]; total: number },
+): Promise<T[]> {
+  const items: T[] = [];
   let offset = 0;
   let total = 0;
-  for (let page = 0; page < SANDBOX_PAGE_CAP; page += 1) {
+  for (let page = 0; page < PAGE_CAP; page += 1) {
     const response = await fetchImpl(
-      `${config.baseUrl}/api/v1/projects/${encodeURIComponent(projectId)}/sandboxes?limit=${PAGE_LIMIT}&offset=${offset}`,
+      `${config.baseUrl}/api/v1/projects/${encodeURIComponent(projectId)}/${resource}?limit=${PAGE_LIMIT}&offset=${offset}`,
       {
         headers: {
           accept: "application/json",
@@ -607,11 +612,11 @@ async function listProjectSandboxes(
     );
     if (!response.ok) {
       throw new ControlPlaneError(
-        `control plane sandboxes request failed (${response.status})`,
+        `control plane ${resource} request failed (${response.status})`,
         response.status,
       );
     }
-    const parsed = parseSandboxPage(await response.json());
+    const parsed = parsePage(await response.json());
     items.push(...parsed.items);
     total = parsed.total;
     if (parsed.items.length === 0 || items.length >= total) {

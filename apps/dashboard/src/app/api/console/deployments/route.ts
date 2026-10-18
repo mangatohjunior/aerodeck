@@ -2,9 +2,8 @@ import { connection, NextResponse } from "next/server";
 
 import {
   ControlPlaneError,
-  createControlPlaneDeployment,
   createControlPlaneDeploymentAndProvision,
-  isDeploymentLogId,
+  isControlPlaneUuid,
   listControlPlaneDeployments,
   readControlPlaneConfig,
 } from "@/lib/control-plane";
@@ -68,28 +67,24 @@ export async function POST(request: Request) {
   const projectId = typeof payload.project_id === "string" ? payload.project_id.trim() : "";
   const environmentId =
     typeof payload.environment_id === "string" ? payload.environment_id.trim() : "";
-  const wantsProvision = projectId.length > 0 || environmentId.length > 0;
-  if (wantsProvision && (projectId.length === 0 || environmentId.length === 0)) {
+  // Enrolled create always queues provision so empty-log stub Done cannot mark succeeded.
+  if (projectId.length === 0 || environmentId.length === 0) {
     return jsonError(
       400,
-      "project_id and environment_id are both required to queue provision.",
+      "project_id and environment_id are required.",
       "missing_environment",
     );
   }
-  if (wantsProvision && (!isDeploymentLogId(projectId) || !isDeploymentLogId(environmentId))) {
+  if (!isControlPlaneUuid(projectId) || !isControlPlaneUuid(environmentId)) {
     return jsonError(400, "project_id and environment_id must be UUIDs.", "invalid_environment_id");
   }
 
   try {
-    if (wantsProvision) {
-      const deployment = await createControlPlaneDeploymentAndProvision(config, {
-        repoUrl: payload.repo_url,
-        projectId,
-        environmentId,
-      });
-      return NextResponse.json(deployment, { status: 201 });
-    }
-    const deployment = await createControlPlaneDeployment(config, payload.repo_url);
+    const deployment = await createControlPlaneDeploymentAndProvision(config, {
+      repoUrl: payload.repo_url,
+      projectId,
+      environmentId,
+    });
     return NextResponse.json(deployment, { status: 201 });
   } catch (cause) {
     if (cause instanceof ControlPlaneError && cause.deploymentId) {
@@ -109,7 +104,11 @@ export async function POST(request: Request) {
         : "Environment was not found.";
       return jsonError(404, detail, "not_found");
     }
-    if (cause instanceof ControlPlaneError && cause.status === 503) {
+    if (
+      cause instanceof ControlPlaneError &&
+      cause.status === 503 &&
+      cause.message.includes("provision queue")
+    ) {
       return jsonError(503, "Provision queue is unavailable.", "queue_unavailable");
     }
     if (cause instanceof ControlPlaneError && cause.message.includes("rejected (422)")) {

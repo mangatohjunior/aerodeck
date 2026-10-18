@@ -28,6 +28,7 @@ export function NewDeploymentForm({ controlPlane = false }: { controlPlane?: boo
   const [environmentsError, setEnvironmentsError] = useState<string | null>(null);
   const [loadingEnvironments, setLoadingEnvironments] = useState(controlPlane);
   const [error, setError] = useState<string | null>(null);
+  const [repoInvalid, setRepoInvalid] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -66,8 +67,10 @@ export function NewDeploymentForm({ controlPlane = false }: { controlPlane?: boo
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
+    setRepoInvalid(false);
 
     if (!parseGithubRepo(repoUrl)) {
+      setRepoInvalid(true);
       setError("Enter a GitHub URL like https://github.com/org/repo");
       return;
     }
@@ -125,10 +128,13 @@ export function NewDeploymentForm({ controlPlane = false }: { controlPlane?: boo
               autoComplete="url"
               placeholder="https://github.com/mangatohjunior/aerodeck"
               value={repoUrl}
-              aria-invalid={error ? true : undefined}
+              aria-invalid={repoInvalid ? true : undefined}
               disabled={submitting}
               onValueChange={(value) => {
                 setRepoUrl(value);
+                if (repoInvalid) {
+                  setRepoInvalid(false);
+                }
                 if (error) {
                   setError(null);
                 }
