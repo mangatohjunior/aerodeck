@@ -91,6 +91,7 @@ async def test_provision_with_deployment_id_publishes_log_lines(
 ) -> None:
     from app.services.deployment_logs import (
         DONE_LINE,
+        PROVISION_QUEUED_LINE,
         PROVISION_START_LINE,
         PROVISION_SUCCESS_LINE,
         clear_memory_log_lines,
@@ -121,7 +122,8 @@ async def test_provision_with_deployment_id_publishes_log_lines(
 
     lines = await published_lines(None, uuid.UUID(deployment_id))
     assert lines is not None
-    assert lines[0] == PROVISION_START_LINE
+    assert lines[0] == PROVISION_QUEUED_LINE
+    assert lines[1] == PROVISION_START_LINE
     assert lines[-2] == PROVISION_SUCCESS_LINE
     assert lines[-1] == DONE_LINE
     clear_memory_log_lines()

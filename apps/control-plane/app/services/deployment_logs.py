@@ -38,6 +38,8 @@ logger = get_logger("services.deployment_logs")
 DONE_LINE = "Done"
 # Console Terminal treats Done as success → markDeploymentSucceeded. Publish Done
 # only after a successful provision; failures publish the class-name line and stop.
+# Enqueue seeds QUEUED before the worker runs so empty-stream stub Done cannot win the race.
+PROVISION_QUEUED_LINE = "Queued environment provision..."
 PROVISION_START_LINE = "Starting environment provision..."
 PROVISION_SUCCESS_LINE = "Environment provision finished."
 MAX_LINES = 10_000
@@ -182,7 +184,7 @@ def publish_provision_lines_sync(
     for line in lines:
         try:
             publish_line_sync(redis_url, deployment_id, line)
-        except (QueueUnavailableError, ValueError) as exc:
+        except Exception as exc:
             logger.warning(
                 "event=deployment_log_publish_skipped deployment=%s error_type=%s",
                 deployment_id,

@@ -254,8 +254,9 @@ def get_job_service(
     dispatcher: JobDispatcherDep,
     environments: EnvironmentServiceDep,
     deployments: DeploymentServiceDep,
+    settings: SettingsDep,
 ) -> JobService:
-    return JobService(dispatcher, environments, deployments)
+    return JobService(dispatcher, environments, deployments, redis_url=settings.redis_url)
 
 
 JobServiceDep = Annotated[JobService, Depends(get_job_service)]

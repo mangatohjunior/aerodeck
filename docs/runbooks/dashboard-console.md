@@ -25,8 +25,9 @@ line, then emits the three-line stub so the Terminal still reaches `Done`.
 Without Redis, the in-memory store is a snapshot of lines present at open, or
 the stub when empty. A provision job may publish those lines when queued with
 `{"deployment_id":"..."}` ([provision-environments.md](provision-environments.md)).
-Success ends with `Done`; final provision failure publishes a failure line
-without `Done`. When the stream emits `Done`, the dashboard server records
+Enqueue seeds a queued line first so the stub cannot emit `Done` before the
+worker. Success ends with `Done`; final provision failure publishes a failure
+line without `Done`. When the stream emits `Done`, the dashboard server records
 `succeeded` with `POST /api/v1/deployments/{id}/succeeded`. A down Redis broker
 returns `503` before the SSE body starts.
 The mock log route still marks its own row succeeded. Sign-in still

@@ -12,6 +12,7 @@ from starlette.concurrency import run_in_threadpool
 
 from app.core.logging import get_logger
 from app.repositories.jobs import JobState
+from app.services.deployment_logs import PROVISION_QUEUED_LINE, publish_line
 from app.services.deployments import DeploymentService
 from app.services.environments import EnvironmentService
 from app.services.provisioning import JobKind
@@ -39,10 +40,13 @@ class JobService:
         dispatcher: JobDispatcher,
         environments: EnvironmentService,
         deployments: DeploymentService,
+        *,
+        redis_url: str | None,
     ) -> None:
         self._dispatcher = dispatcher
         self._environments = environments
         self._deployments = deployments
+        self._redis_url = redis_url
 
     async def enqueue(
         self,
@@ -59,10 +63,13 @@ class JobService:
             "environment_kind": environment.kind.value,
             "region": environment.region,
         }
-        if deployment_id is not None:
-            # Reject unknown ids before the worker publishes into an empty key.
+        # Only provision publishes onto a deployment log stream (#121).
+        if deployment_id is not None and kind is JobKind.provision:
             await self._deployments.get(deployment_id)
             meta["deployment_id"] = str(deployment_id)
+            # Seed a non-Done line before the worker runs so SSE cannot stub Done
+            # while the job is still queued (Terminal would mark succeeded).
+            await publish_line(self._redis_url, deployment_id, PROVISION_QUEUED_LINE)
         # Publishing to the broker is blocking I/O; keep it off the event loop.
         job_id = await run_in_threadpool(
             self._dispatcher.dispatch,

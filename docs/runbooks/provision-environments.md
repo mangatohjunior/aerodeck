@@ -61,8 +61,9 @@ curl -s -X POST \
   -d '{"deployment_id":"<deployment-id>"}'
 ```
 
-The worker then publishes fixed lines onto
-`GET /api/v1/deployments/<deployment-id>/logs`: start, then on success
+Enqueue publishes `Queued environment provision...` before returning 202 so the
+log store is non-empty and the empty-stream stub (which ends in `Done`) cannot
+race the worker. The worker then adds start, then on success
 `Environment provision finished.` and `Done`, or on final failure only
 `Provision failed: <ExceptionClass>` (no `Done`). The console treats `Done` as
 deployment success, so failures must not emit it; the SSE follower ends on
