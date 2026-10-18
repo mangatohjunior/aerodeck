@@ -45,9 +45,18 @@ export function errorFromFailedCreate(body: ApiError, status: number): Error {
 async function readJson<T>(response: Response): Promise<T> {
   const body = (await response.json()) as T | ApiError;
   if (!response.ok) {
-    throw errorFromFailedCreate(body as ApiError, response.status);
+    const error = body as ApiError;
+    throw new Error(error.detail ?? `Request failed (${response.status})`);
   }
   return body as T;
+}
+
+async function readCreateDeploymentResponse(response: Response): Promise<Deployment> {
+  const body = (await response.json()) as Deployment | ApiError;
+  if (!response.ok) {
+    throw errorFromFailedCreate(body as ApiError, response.status);
+  }
+  return body as Deployment;
 }
 
 export async function fetchHealth(): Promise<{ status: string; mode: string }> {
@@ -96,9 +105,22 @@ export async function fetchEnvironments(): Promise<EnvironmentOptionPage> {
 
 export async function createDeployment(
   repoUrl: string,
+  controlPlane: true,
+  target: { projectId: string; environmentId: string },
+): Promise<Deployment>;
+export async function createDeployment(
+  repoUrl: string,
+  controlPlane?: false,
+  target?: undefined,
+): Promise<Deployment>;
+export async function createDeployment(
+  repoUrl: string,
   controlPlane = false,
   target?: { projectId: string; environmentId: string },
 ): Promise<Deployment> {
+  if (controlPlane && (!target?.projectId || !target?.environmentId)) {
+    throw new Error("Select an environment to provision.");
+  }
   const path = controlPlane ? "/api/console/deployments" : `${MOCK_API_PREFIX}/deployments`;
   const body: Record<string, string> = { repo_url: repoUrl };
   if (controlPlane && target) {
@@ -111,7 +133,7 @@ export async function createDeployment(
     credentials: "same-origin",
     body: JSON.stringify(body),
   });
-  return readJson<Deployment>(response);
+  return readCreateDeploymentResponse(response);
 }
 
 export async function fetchLogSource(): Promise<ProjectSource> {

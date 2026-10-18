@@ -476,7 +476,9 @@ export async function createControlPlaneDeploymentAndProvision(
     if (cause instanceof ControlPlaneError) {
       throw new ControlPlaneError(cause.message, cause.status, deployment.id);
     }
-    throw cause;
+    const message =
+      cause instanceof Error ? cause.message : "control plane provision request failed";
+    throw new ControlPlaneError(message, 502, deployment.id);
   }
   return deployment;
 }

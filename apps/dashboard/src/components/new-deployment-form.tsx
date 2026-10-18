@@ -57,7 +57,10 @@ export function NewDeploymentForm({ controlPlane = false }: { controlPlane?: boo
 
     setSubmitting(true);
     try {
-      const deployment = await createDeployment(repoUrl, controlPlane, target);
+      const deployment =
+        controlPlane && target
+          ? await createDeployment(repoUrl, true, target)
+          : await createDeployment(repoUrl, false);
       router.push(`/deployments/${deployment.id}`);
     } catch (cause) {
       if (cause instanceof ProvisionEnqueueFailed) {

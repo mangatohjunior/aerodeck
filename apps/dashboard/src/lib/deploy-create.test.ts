@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { errorFromFailedCreate, ProvisionEnqueueFailed } from "./api";
+import { createDeployment, errorFromFailedCreate, ProvisionEnqueueFailed } from "./api";
+import type { Deployment } from "./types";
 
 describe("errorFromFailedCreate", () => {
   it("throws ProvisionEnqueueFailed for provision_enqueue_failed", () => {
@@ -29,5 +30,24 @@ describe("errorFromFailedCreate", () => {
     );
     assert.equal(error instanceof ProvisionEnqueueFailed, false);
     assert.equal(error.message, "Control plane request failed.");
+  });
+});
+
+describe("createDeployment", () => {
+  it("requires target when controlPlane is true", async () => {
+    const create = createDeployment as (
+      repoUrl: string,
+      controlPlane?: boolean,
+      target?: { projectId: string; environmentId: string },
+    ) => Promise<Deployment>;
+
+    await assert.rejects(
+      () => create("https://github.com/acme/payments", true),
+      (cause: unknown) => {
+        assert.ok(cause instanceof Error);
+        assert.match(cause.message, /Select an environment/);
+        return true;
+      },
+    );
   });
 });

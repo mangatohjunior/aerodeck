@@ -641,6 +641,65 @@ describe("createControlPlaneDeploymentAndProvision", () => {
       },
     );
   });
+
+  it("attaches the deployment id when provision throws a non-ControlPlaneError", async () => {
+    clearControlPlaneTokenCache();
+    const projectId = "11111111-1111-4111-8111-111111111111";
+    const environmentId = "22222222-2222-4222-8222-222222222222";
+    const deploymentId = "33333333-3333-4333-8333-333333333333";
+    const fetchImpl: typeof fetch = async (input, init) => {
+      const url = String(input);
+      if (url.endsWith("/api/v1/auth/token")) {
+        return jsonResponse({ access_token: "issued-bearer", expires_in: 900 });
+      }
+      if (url.endsWith(`/environments/${environmentId}`) && (init?.method ?? "GET") === "GET") {
+        return jsonResponse({
+          id: environmentId,
+          project_id: projectId,
+          slug: "prod",
+          name: "Prod",
+          kind: "prod",
+          region: "ams3",
+          created_at: "2026-10-18T00:00:00.000Z",
+          updated_at: "2026-10-18T00:00:00.000Z",
+        });
+      }
+      if (url.endsWith("/api/v1/deployments") && init?.method === "POST") {
+        return jsonResponse({
+          id: deploymentId,
+          repo_url: "https://github.com/acme/payments",
+          owner: "acme",
+          repo: "payments",
+          status: "running",
+          started_at: "2026-10-18T00:00:00.000Z",
+        });
+      }
+      if (url.endsWith(`/environments/${environmentId}/provision`) && init?.method === "POST") {
+        throw new TypeError("network down");
+      }
+      return jsonResponse({ detail: "unexpected" }, 500);
+    };
+
+    await assert.rejects(
+      () =>
+        createControlPlaneDeploymentAndProvision(
+          config,
+          {
+            repoUrl: "https://github.com/acme/payments",
+            projectId,
+            environmentId,
+          },
+          { fetch: fetchImpl },
+        ),
+      (cause: unknown) => {
+        assert.ok(cause instanceof ControlPlaneError);
+        assert.equal(cause.status, 502);
+        assert.equal(cause.deploymentId, deploymentId);
+        assert.match(cause.message, /network down/);
+        return true;
+      },
+    );
+  });
 });
 
 describe("succeedControlPlaneDeployment", () => {
