@@ -22,7 +22,7 @@ import { loginAccount } from "@/lib/api";
 import { isValidEmail } from "@/lib/auth";
 import { POLICY_HREF } from "@/lib/public-nav";
 
-export function LoginForm() {
+export function LoginForm({ controlPlane = false }: { controlPlane?: boolean }) {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -80,8 +80,9 @@ export function LoginForm() {
       <CardHeader className="border-b">
         <CardTitle>Sign in</CardTitle>
         <CardDescription>
-          Email and password, or Continue with Google when an OAuth client
-          is configured. Nothing is stored in localStorage.
+          {controlPlane
+            ? "Email and password are checked against the control plane. The session cookie stays on this site."
+            : "Email and password, or Continue with Google when an OAuth client is configured. Nothing is stored in localStorage."}
         </CardDescription>
       </CardHeader>
       <form onSubmit={handleSubmit}>

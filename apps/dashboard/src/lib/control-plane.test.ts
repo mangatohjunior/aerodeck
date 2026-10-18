@@ -8,6 +8,7 @@ import {
   listControlPlaneSandboxes,
   openControlPlaneDeploymentLogs,
   readControlPlaneConfig,
+  authenticateControlPlaneUser,
   registerControlPlaneUser,
   type ControlPlaneConfig,
 } from "./control-plane";
@@ -363,6 +364,65 @@ describe("registerControlPlaneUser", () => {
         assert.ok(cause instanceof ControlPlaneError);
         assert.equal(cause.message.includes("correct-horse"), false);
         assert.match(cause.message, /conflict \(409\)/);
+        return true;
+      },
+    );
+  });
+});
+
+describe("authenticateControlPlaneUser", () => {
+  it("posts the password with the bearer and returns no secret", async () => {
+    clearControlPlaneTokenCache();
+    const password = "correct-horse";
+    let authorization = "";
+    let posted = "";
+    let loginUrl = "";
+    const fetchImpl: typeof fetch = async (input, init) => {
+      const url = String(input);
+      if (url.endsWith("/api/v1/auth/token")) {
+        return jsonResponse({ access_token: "issued-bearer", expires_in: 900 });
+      }
+      loginUrl = url;
+      authorization = new Headers(init?.headers).get("authorization") ?? "";
+      posted = typeof init?.body === "string" ? init.body : "";
+      return jsonResponse({
+        id: "55555555-5555-4555-8555-555555555555",
+        email: "ada@example.com",
+        created_at: "2026-10-18T00:00:00.000Z",
+        password_hash: "scrypt$hidden",
+      });
+    };
+
+    const user = await authenticateControlPlaneUser(config, "Ada@Example.com", password, {
+      fetch: fetchImpl,
+    });
+    assert.equal(authorization, "Bearer issued-bearer");
+    assert.equal(loginUrl.endsWith("/api/v1/console-users/login"), true);
+    assert.match(posted, /correct-horse/);
+    assert.equal(user.email, "ada@example.com");
+    assert.equal(JSON.stringify(user).includes("password_hash"), false);
+    assert.equal(JSON.stringify(user).includes("super-secret"), false);
+  });
+
+  it("uses one message for a rejected login and drops the upstream body", async () => {
+    clearControlPlaneTokenCache();
+    const fetchImpl: typeof fetch = async (input) => {
+      const url = String(input);
+      if (url.endsWith("/api/v1/auth/token")) {
+        return jsonResponse({ access_token: "issued-bearer", expires_in: 900 });
+      }
+      return jsonResponse(
+        { detail: "Invalid email or password", code: "invalid_credentials", password: "correct-horse" },
+        401,
+      );
+    };
+    await assert.rejects(
+      () => authenticateControlPlaneUser(config, "ada@example.com", "correct-horse", { fetch: fetchImpl }),
+      (cause: unknown) => {
+        assert.ok(cause instanceof ControlPlaneError);
+        assert.equal(cause.message.includes("correct-horse"), false);
+        assert.equal(cause.message.includes("ada@example.com"), false);
+        assert.match(cause.message, /login rejected \(401\)/);
         return true;
       },
     );

@@ -21,6 +21,13 @@ class AuthenticationError(AppError):
     headers = {"WWW-Authenticate": "Bearer"}
 
 
+class InvalidCredentialsError(AppError):
+    """Wrong password or unknown email. The detail must not say which."""
+
+    status_code = 401
+    code = "invalid_credentials"
+
+
 class InvalidClientError(AuthenticationError):
     code = "invalid_client"
 
