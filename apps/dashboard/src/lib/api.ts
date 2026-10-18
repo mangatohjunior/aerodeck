@@ -146,27 +146,38 @@ export async function fetchLogSource(): Promise<ProjectSource> {
   return body.source;
 }
 
-export async function markDeploymentSucceeded(id: string): Promise<Deployment> {
-  const response = await fetch(`/api/console/deployments/${encodeURIComponent(id)}/succeeded`, {
-    method: "POST",
-    credentials: "same-origin",
-    cache: "no-store",
-  });
+async function markDeploymentStatus(
+  id: string,
+  outcome: "succeeded" | "failed",
+): Promise<Deployment> {
+  const response = await fetch(
+    `/api/console/deployments/${encodeURIComponent(id)}/${outcome}`,
+    {
+      method: "POST",
+      credentials: "same-origin",
+      cache: "no-store",
+    },
+  );
   return readJson(response);
 }
 
-export async function markDeploymentFailed(id: string): Promise<Deployment> {
-  const response = await fetch(`/api/console/deployments/${encodeURIComponent(id)}/failed`, {
-    method: "POST",
-    credentials: "same-origin",
-    cache: "no-store",
-  });
-  return readJson(response);
+export function markDeploymentSucceeded(id: string): Promise<Deployment> {
+  return markDeploymentStatus(id, "succeeded");
 }
 
-/** Log lines that mean provision ended without Done (mirror control-plane constants). */
+export function markDeploymentFailed(id: string): Promise<Deployment> {
+  return markDeploymentStatus(id, "failed");
+}
+
+/** Must match control-plane `PROVISION_QUEUE_FAILED_LINE`. */
+export const PROVISION_QUEUE_FAILED_LINE = "Provision queue failed";
+
+/** Must match control-plane `provision_failure_line` prefix. */
+export const PROVISION_FAILED_LINE_PREFIX = "Provision failed:";
+
+/** Log lines that mean provision ended without Done. */
 export function isProvisionFailureLogLine(line: string): boolean {
-  return line === "Provision queue failed" || line.startsWith("Provision failed:");
+  return line === PROVISION_QUEUE_FAILED_LINE || line.startsWith(PROVISION_FAILED_LINE_PREFIX);
 }
 
 export function deploymentLogsUrl(id: string, source: ProjectSource): string {

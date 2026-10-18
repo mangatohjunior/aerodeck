@@ -77,7 +77,7 @@ export function NewDeploymentForm({ controlPlane = false }: { controlPlane?: boo
       if (cause instanceof ProvisionEnqueueFailed) {
         // Do not open the terminal or create another row; enqueue marks that row failed.
         setEnqueueBlocked(true);
-        setError(`${cause.message} That deployment was marked failed; do not Deploy again.`);
+        setError(`${cause.message} Do not Deploy again; that row may already be marked failed.`);
         return;
       }
       setError(cause instanceof Error ? cause.message : "Deploy failed.");

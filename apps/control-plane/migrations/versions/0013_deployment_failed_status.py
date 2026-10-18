@@ -4,13 +4,13 @@ Revision ID: 0013
 Revises: 0012
 Create Date: 2026-10-18 20:10:00 UTC
 
-``deployment_status`` is VARCHAR(16) (native_enum=False). Document ``failed``
-as an allowed value for Alembic/model parity; existing rows are unchanged.
+``deployment_status`` is VARCHAR(16) (native_enum=False). No DDL is required;
+the model enum now includes ``failed``. This revision keeps Alembic heads
+aligned with the app.
 """
 
 from collections.abc import Sequence
 
-import sqlalchemy as sa
 from alembic import op
 
 revision: str = "0013"
@@ -20,50 +20,10 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    op.alter_column(
-        "deployments",
-        "status",
-        existing_type=sa.Enum(
-            "queued",
-            "running",
-            "succeeded",
-            name="deployment_status",
-            native_enum=False,
-            length=16,
-        ),
-        type_=sa.Enum(
-            "queued",
-            "running",
-            "succeeded",
-            "failed",
-            name="deployment_status",
-            native_enum=False,
-            length=16,
-        ),
-        existing_nullable=False,
-    )
+    # native_enum=False → VARCHAR(16); ``failed`` fits without ALTER.
+    return
 
 
 def downgrade() -> None:
-    op.alter_column(
-        "deployments",
-        "status",
-        existing_type=sa.Enum(
-            "queued",
-            "running",
-            "succeeded",
-            "failed",
-            name="deployment_status",
-            native_enum=False,
-            length=16,
-        ),
-        type_=sa.Enum(
-            "queued",
-            "running",
-            "succeeded",
-            name="deployment_status",
-            native_enum=False,
-            length=16,
-        ),
-        existing_nullable=False,
-    )
+    # Rewrite failed rows so the app enum can drop the value; no ALTER on SQLite.
+    op.execute("UPDATE deployments SET status = 'running' WHERE status = 'failed'")

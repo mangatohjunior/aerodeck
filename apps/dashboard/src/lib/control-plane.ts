@@ -174,9 +174,10 @@ export async function openControlPlaneDeploymentLogs(
   return response.body;
 }
 
-export async function succeedControlPlaneDeployment(
+async function postDeploymentStatus(
   config: ControlPlaneConfig,
   deploymentId: string,
+  outcome: "succeeded" | "failed",
   options: ListOptions = {},
 ): Promise<Deployment> {
   if (!isControlPlaneUuid(deploymentId)) {
@@ -186,7 +187,7 @@ export async function succeedControlPlaneDeployment(
   const now = options.now ?? Date.now;
   const accessToken = await accessTokenFor(config, fetchImpl, now);
   const response = await fetchImpl(
-    `${config.baseUrl}/api/v1/deployments/${encodeURIComponent(deploymentId)}/succeeded`,
+    `${config.baseUrl}/api/v1/deployments/${encodeURIComponent(deploymentId)}/${outcome}`,
     {
       method: "POST",
       headers: {
@@ -205,35 +206,20 @@ export async function succeedControlPlaneDeployment(
   return parseDeployment(await response.json());
 }
 
-export async function failControlPlaneDeployment(
+export function succeedControlPlaneDeployment(
   config: ControlPlaneConfig,
   deploymentId: string,
   options: ListOptions = {},
 ): Promise<Deployment> {
-  if (!isControlPlaneUuid(deploymentId)) {
-    throw new ControlPlaneError("control plane deployment id was not a uuid");
-  }
-  const fetchImpl = options.fetch ?? fetch;
-  const now = options.now ?? Date.now;
-  const accessToken = await accessTokenFor(config, fetchImpl, now);
-  const response = await fetchImpl(
-    `${config.baseUrl}/api/v1/deployments/${encodeURIComponent(deploymentId)}/failed`,
-    {
-      method: "POST",
-      headers: {
-        accept: "application/json",
-        authorization: `Bearer ${accessToken}`,
-      },
-      cache: "no-store",
-    },
-  );
-  if (response.status === 404) {
-    throw new ControlPlaneError("control plane deployment was not found (404)", 404);
-  }
-  if (!response.ok) {
-    throw new ControlPlaneError(`control plane deployment request failed (${response.status})`, response.status);
-  }
-  return parseDeployment(await response.json());
+  return postDeploymentStatus(config, deploymentId, "succeeded", options);
+}
+
+export function failControlPlaneDeployment(
+  config: ControlPlaneConfig,
+  deploymentId: string,
+  options: ListOptions = {},
+): Promise<Deployment> {
+  return postDeploymentStatus(config, deploymentId, "failed", options);
 }
 
 export type ControlPlaneUser = {

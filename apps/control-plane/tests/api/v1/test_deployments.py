@@ -190,6 +190,10 @@ async def test_unknown_deployment_does_not_stream(client: AsyncClient, auth: dic
     assert finished.status_code == 404
     assert finished.json()["code"] == "not_found"
 
+    failed = await client.post(f"{DEPLOYMENTS}/{missing}/failed", headers=auth)
+    assert failed.status_code == 404
+    assert failed.json()["code"] == "not_found"
+
 
 async def test_create_stores_a_github_repository(client: AsyncClient, auth: dict[str, str]) -> None:
     response = await client.post(
@@ -237,7 +241,9 @@ async def test_deployment_routes_require_a_token(client: AsyncClient) -> None:
     created = await client.post(DEPLOYMENTS, json={"repo_url": REPO})
     listed = await client.get(DEPLOYMENTS)
     succeeded = await client.post(f"{DEPLOYMENTS}/{uuid4()}/succeeded")
+    failed = await client.post(f"{DEPLOYMENTS}/{uuid4()}/failed")
 
     assert created.status_code == 401
     assert listed.status_code == 401
     assert succeeded.status_code == 401
+    assert failed.status_code == 401

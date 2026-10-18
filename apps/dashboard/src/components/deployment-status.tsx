@@ -26,6 +26,8 @@ type DeploymentStatusViewProps = {
   logSource: ProjectSource;
 };
 
+type TerminalOutcome = "succeeded" | "failed";
+
 function logSourceCopy(source: ProjectSource): { sseLabel: string; targetLabel: string } {
   if (source === "control-plane") {
     return {
@@ -69,31 +71,17 @@ export function DeploymentStatusView({ deployment, logSource }: DeploymentStatus
   const [error, setError] = useState<string | null>(null);
   const copy = logSourceCopy(logSource);
 
-  function handleComplete() {
+  function recordOutcome(outcome: TerminalOutcome) {
     if (status === "succeeded" || status === "failed") {
       return;
     }
     if (logSource !== "control-plane") {
-      setStatus("succeeded");
+      setStatus(outcome);
       return;
     }
-    void markDeploymentSucceeded(deployment.id)
-      .then(() => setStatus("succeeded"))
-      .catch((cause: unknown) => {
-        setError(cause instanceof Error ? cause.message : "Could not record the deployment status.");
-      });
-  }
-
-  function handleFailed() {
-    if (status === "succeeded" || status === "failed") {
-      return;
-    }
-    if (logSource !== "control-plane") {
-      setStatus("failed");
-      return;
-    }
-    void markDeploymentFailed(deployment.id)
-      .then(() => setStatus("failed"))
+    const mark = outcome === "succeeded" ? markDeploymentSucceeded : markDeploymentFailed;
+    void mark(deployment.id)
+      .then(() => setStatus(outcome))
       .catch((cause: unknown) => {
         setError(cause instanceof Error ? cause.message : "Could not record the deployment status.");
       });
@@ -155,8 +143,8 @@ export function DeploymentStatusView({ deployment, logSource }: DeploymentStatus
       ) : null}
       <Terminal
         streamUrl={deploymentLogsUrl(deployment.id, logSource)}
-        onComplete={handleComplete}
-        onFailed={handleFailed}
+        onComplete={() => recordOutcome("succeeded")}
+        onFailed={() => recordOutcome("failed")}
       />
     </div>
   );

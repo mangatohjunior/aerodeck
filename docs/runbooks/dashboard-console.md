@@ -39,9 +39,10 @@ Enqueue seeds a queued line first so the stub cannot emit `Done` before the
 worker. Success ends with `Done`; final provision failure publishes a failure
 line without `Done` and sets status `failed`. When the stream emits `Done`, the
 dashboard server records `succeeded` with `POST /api/v1/deployments/{id}/succeeded`.
-A failure line triggers `POST /api/v1/deployments/{id}/failed` (idempotent if the
-worker already wrote it). A down Redis broker returns `503` before the SSE body
-starts.
+A failure line (`Provision queue failed` or `Provision failed:…`, matching the
+control-plane constants) triggers `POST /api/v1/deployments/{id}/failed`
+(idempotent if the worker already wrote it). A down Redis broker returns `503`
+before the SSE body starts.
 The mock log route still marks its own row succeeded. Sign-in still
 posts to `/api/mock/v1/auth/login`. When the console client is set, that
 route checks `POST /api/v1/console-users/login` and sets `aerodeck_session`

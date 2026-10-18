@@ -90,8 +90,8 @@ export function Terminal({ streamUrl, className, onComplete, onFailed }: Termina
             <span className="terminal-caret text-primary">█</span>
           </div>
         ) : null}
+        <div ref={bottomRef} />
       </pre>
-      <div ref={bottomRef} />
     </section>
   );
 }
