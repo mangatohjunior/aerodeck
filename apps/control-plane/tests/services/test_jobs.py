@@ -106,6 +106,30 @@ async def test_enqueue_returns_ticket_when_job_id_is_not_a_uuid() -> None:
 
 
 @pytest.mark.asyncio
+async def test_enqueue_returns_ticket_when_provision_job_id_persist_raises() -> None:
+    job_id = str(uuid.uuid4())
+    deployment = _deployment()
+    environment = _environment()
+    persist = AsyncMock(side_effect=RuntimeError("session boom"))
+    service, _ = _job_service(
+        job_id=job_id,
+        deployment=deployment,
+        environment=environment,
+        set_provision_job_id=persist,
+    )
+
+    ticket = await service.enqueue(
+        JobKind.provision,
+        environment.project_id,
+        environment.id,
+        deployment_id=deployment.id,
+    )
+
+    assert ticket.job_id == job_id
+    persist.assert_awaited_once()
+
+
+@pytest.mark.asyncio
 async def test_try_set_provision_job_id_isolated_swallows_errors(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

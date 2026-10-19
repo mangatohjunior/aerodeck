@@ -12,7 +12,6 @@ from typing import Protocol
 from starlette.concurrency import run_in_threadpool
 
 from app.core.logging import get_logger
-from app.models.deployment import Deployment
 from app.repositories.jobs import JobState
 from app.services.deployment_logs import (
     PROVISION_QUEUE_FAILED_LINE,
@@ -76,14 +75,15 @@ class JobService:
             "environment_kind": environment.kind.value,
             "region": environment.region,
         }
-        linked_deployment: Deployment | None = None
+        linked_deployment_id: uuid.UUID | None = None
         # Only provision publishes onto a deployment log stream (#121).
         if deployment_id is not None and kind is JobKind.provision:
-            linked_deployment = await self._deployments.get(deployment_id)
-            meta["deployment_id"] = str(linked_deployment.id)
+            linked = await self._deployments.get(deployment_id)
+            linked_deployment_id = linked.id
+            meta["deployment_id"] = str(linked_deployment_id)
             # Seed a non-Done line before the worker runs so SSE cannot stub Done
             # while the job is still queued (Terminal would mark succeeded).
-            await publish_line(self._redis_url, linked_deployment.id, PROVISION_QUEUED_LINE)
+            await publish_line(self._redis_url, linked_deployment_id, PROVISION_QUEUED_LINE)
         try:
             # Publishing to the broker is blocking I/O; keep it off the event loop.
             job_id = await run_in_threadpool(
@@ -94,35 +94,45 @@ class JobService:
                 **meta,
             )
         except Exception:
-            if linked_deployment is not None:
+            if linked_deployment_id is not None:
                 try:
                     await publish_line(
-                        self._redis_url, linked_deployment.id, PROVISION_QUEUE_FAILED_LINE
+                        self._redis_url, linked_deployment_id, PROVISION_QUEUE_FAILED_LINE
                     )
                 except Exception as publish_exc:
                     logger.warning(
                         "event=deployment_log_queue_failed_publish_skipped deployment=%s error_type=%s",
-                        linked_deployment.id,
+                        linked_deployment_id,
                         type(publish_exc).__name__,
                     )
                 # Own session+commit: the request that raised will roll back.
-                await self._mark_deployment_failed(linked_deployment.id)
+                await self._mark_deployment_failed(linked_deployment_id)
             raise
-        # Broker already accepted the task — persist on an isolated session so a
-        # flush failure cannot poison the request session and turn 202 into 500 (#139).
-        if linked_deployment is not None:
-            try:
-                job_uuid = uuid.UUID(job_id)
-            except ValueError:
-                logger.warning(
-                    "event=deployment_provision_job_id_skipped deployment=%s job_id=%s error_type=ValueError",
-                    linked_deployment.id,
-                    job_id,
-                )
-            else:
-                await self._set_provision_job_id(linked_deployment.id, job_uuid)
+        if linked_deployment_id is not None:
+            await self._remember_provision_job_id(linked_deployment_id, job_id)
         logger.info("queued %s job %s for environment %s", kind.value, job_id, environment.id)
         return JobTicket(job_id=job_id, kind=kind, project_id=environment.project_id, environment_id=environment.id)
+
+    async def _remember_provision_job_id(self, deployment_id: uuid.UUID, job_id: str) -> None:
+        """Best-effort: broker already accepted the task — never fail the ticket (#139)."""
+        try:
+            job_uuid = uuid.UUID(job_id)
+        except ValueError:
+            logger.warning(
+                "event=deployment_provision_job_id_skipped deployment=%s job_id=%s error_type=ValueError",
+                deployment_id,
+                job_id,
+            )
+            return
+        try:
+            await self._set_provision_job_id(deployment_id, job_uuid)
+        except Exception as persist_exc:
+            logger.warning(
+                "event=deployment_provision_job_id_skipped deployment=%s job_id=%s error_type=%s",
+                deployment_id,
+                job_id,
+                type(persist_exc).__name__,
+            )
 
     async def state(self, job_id: uuid.UUID) -> JobState:
         return await run_in_threadpool(self._dispatcher.state, str(job_id))

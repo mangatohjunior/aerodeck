@@ -41,3 +41,15 @@ class DeploymentTerminalService:
         stored = await self._deployments.save(deployment)
         logger.info("deployment %s %s", stored.id, status.value)
         return stored
+
+    async def set_provision_job_id(
+        self, deployment_id: uuid.UUID, job_id: uuid.UUID
+    ) -> Deployment | None:
+        """Remember the last successful provision enqueue. ``None`` if the row is missing."""
+        deployment = await self._deployments.get(deployment_id)
+        if deployment is None:
+            return None
+        deployment.provision_job_id = job_id
+        stored = await self._deployments.save(deployment)
+        logger.info("deployment %s provision_job_id=%s", stored.id, job_id)
+        return stored

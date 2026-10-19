@@ -51,12 +51,11 @@ async def set_provision_job_id_isolated(deployment_id: uuid.UUID, job_id: uuid.U
     """Commit provision_job_id on its own session so request-session errors stay isolated."""
     async with SessionLocal() as session:
         try:
-            repo = DeploymentRepository(session)
-            deployment = await repo.get(deployment_id)
-            if deployment is None:
+            stored = await DeploymentTerminalService(DeploymentRepository(session)).set_provision_job_id(
+                deployment_id, job_id
+            )
+            if stored is None:
                 raise LookupError(f"Deployment {deployment_id} not found")
-            deployment.provision_job_id = job_id
-            await repo.save(deployment)
             await session.commit()
         except Exception:
             await session.rollback()
