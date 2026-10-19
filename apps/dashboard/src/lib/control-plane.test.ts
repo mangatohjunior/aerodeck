@@ -1585,6 +1585,19 @@ describe("control plane deployments", () => {
     const found = await getControlPlaneDeployment(config, deploymentRow.id, { fetch: fetchImpl });
     assert.equal(found.provision_job_id, jobId);
   });
+
+  it("keeps an explicit null provision_job_id from list/get", async () => {
+    clearControlPlaneTokenCache();
+    const fetchImpl: typeof fetch = async (input) => {
+      const url = String(input);
+      if (url.endsWith("/api/v1/auth/token")) {
+        return jsonResponse({ access_token: "issued-bearer", expires_in: 900 });
+      }
+      return jsonResponse({ ...deploymentRow, provision_job_id: null });
+    };
+    const found = await getControlPlaneDeployment(config, deploymentRow.id, { fetch: fetchImpl });
+    assert.equal(found.provision_job_id, null);
+  });
 });
 
 describe("linkControlPlaneGoogleUser", () => {
