@@ -12,12 +12,15 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { fetchProvisionJob } from "@/lib/api";
-import type { ProvisionJob, ProvisionJobStatus } from "@/lib/types";
+import {
+  isTerminalDeploymentStatus,
+  nextProvisionJobPoll,
+  PROVISION_JOB_POLL_MS,
+  provisionJobPollStopMessage,
+} from "@/lib/provision-job-poll";
+import type { DeploymentStatus, ProvisionJob, ProvisionJobStatus } from "@/lib/types";
 
-/** Modest poll while the Celery job is still in flight (#140). */
-export const PROVISION_JOB_POLL_MS = 5_000;
-
-const ACTIVE_STATUSES = new Set<ProvisionJobStatus>(["queued", "running", "retrying"]);
+export { PROVISION_JOB_POLL_MS };
 
 const JOB_STATUS_BADGE: Record<
   ProvisionJobStatus,
@@ -40,25 +43,41 @@ function jobStatusBadge(status: ProvisionJobStatus) {
   );
 }
 
-function shouldKeepPolling(status: ProvisionJobStatus | null): boolean {
-  return status === null || ACTIVE_STATUSES.has(status);
-}
-
 type ProvisionJobPanelProps = {
   jobId: string;
+  /** When the parent deployment is already terminal, fetch once and do not poll. */
+  deploymentStatus: DeploymentStatus;
 };
 
-export function ProvisionJobPanel({ jobId }: ProvisionJobPanelProps) {
+export function ProvisionJobPanel({ jobId, deploymentStatus }: ProvisionJobPanelProps) {
   const [job, setJob] = useState<ProvisionJob | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const deploymentTerminal = isTerminalDeploymentStatus(deploymentStatus);
 
   useEffect(() => {
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
     let lastStatus: ProvisionJobStatus | null = null;
+    let attempts = 0;
+    let consecutiveErrors = 0;
+    let everLeftQueued = false;
 
     function scheduleNext() {
-      if (cancelled || !shouldKeepPolling(lastStatus)) {
+      if (cancelled) {
+        return;
+      }
+      const decision = nextProvisionJobPoll({
+        status: lastStatus,
+        attempts,
+        consecutiveErrors,
+        everLeftQueued,
+        deploymentTerminal,
+      });
+      if (!decision.keepPolling) {
+        // Terminal job / finished deployment: stop quietly. Stale/deadline/errors need a message.
+        if (decision.reason === "stale" || decision.reason === "deadline" || decision.reason === "errors") {
+          setError(provisionJobPollStopMessage(decision.reason));
+        }
         return;
       }
       timer = setTimeout(() => {
@@ -72,7 +91,12 @@ export function ProvisionJobPanel({ jobId }: ProvisionJobPanelProps) {
         if (cancelled) {
           return;
         }
+        attempts += 1;
+        consecutiveErrors = 0;
         lastStatus = next.status;
+        if (next.status !== "queued") {
+          everLeftQueued = true;
+        }
         setJob(next);
         setError(null);
         scheduleNext();
@@ -80,8 +104,9 @@ export function ProvisionJobPanel({ jobId }: ProvisionJobPanelProps) {
         if (cancelled) {
           return;
         }
+        attempts += 1;
+        consecutiveErrors += 1;
         setError(cause instanceof Error ? cause.message : "Could not load job status.");
-        // Keep polling through transient BFF/CP failures until a terminal status.
         scheduleNext();
       }
     }
@@ -93,7 +118,7 @@ export function ProvisionJobPanel({ jobId }: ProvisionJobPanelProps) {
         clearTimeout(timer);
       }
     };
-  }, [jobId]);
+  }, [jobId, deploymentTerminal]);
 
   return (
     <Card>

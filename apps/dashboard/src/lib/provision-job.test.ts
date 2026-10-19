@@ -3,6 +3,12 @@ import { describe, it } from "node:test";
 
 import { fetchProvisionJob } from "./api";
 import { clearControlPlaneTokenCache, ControlPlaneError, getControlPlaneJob } from "./control-plane";
+import {
+  nextProvisionJobPoll,
+  PROVISION_JOB_POLL_MAX_ATTEMPTS,
+  PROVISION_JOB_POLL_MAX_CONSECUTIVE_ERRORS,
+  PROVISION_JOB_POLL_MAX_QUEUED_ONLY,
+} from "./provision-job-poll";
 
 const config = {
   baseUrl: "https://cp.example",
@@ -84,6 +90,116 @@ describe("getControlPlaneJob", () => {
         assert.match(cause.message, /not a job/);
         return true;
       },
+    );
+  });
+
+  it("rejects a non-uuid job_id in the response body", async () => {
+    clearControlPlaneTokenCache();
+    const fetchImpl: typeof fetch = async (input) => {
+      const url = String(input);
+      if (url.endsWith("/api/v1/auth/token")) {
+        return jsonResponse({ access_token: "issued-bearer", expires_in: 900 });
+      }
+      return jsonResponse({
+        job_id: "not-a-uuid",
+        status: "queued",
+        result: null,
+        error: null,
+      });
+    };
+    await assert.rejects(
+      () => getControlPlaneJob(config, "44444444-4444-4444-8444-444444444444", { fetch: fetchImpl }),
+      (cause: unknown) => {
+        assert.ok(cause instanceof ControlPlaneError);
+        assert.match(cause.message, /not a job/);
+        return true;
+      },
+    );
+  });
+});
+
+describe("nextProvisionJobPoll", () => {
+  const base = {
+    status: null as null,
+    attempts: 0,
+    consecutiveErrors: 0,
+    everLeftQueued: false,
+    deploymentTerminal: false,
+  };
+
+  it("keeps polling while status is active or unknown", () => {
+    assert.deepEqual(nextProvisionJobPoll(base), { keepPolling: true });
+    assert.deepEqual(
+      nextProvisionJobPoll({ ...base, status: "queued", attempts: 1 }),
+      { keepPolling: true },
+    );
+    assert.deepEqual(
+      nextProvisionJobPoll({ ...base, status: "running", attempts: 2, everLeftQueued: true }),
+      { keepPolling: true },
+    );
+  });
+
+  it("stops on terminal job status", () => {
+    assert.deepEqual(
+      nextProvisionJobPoll({ ...base, status: "succeeded", attempts: 3, everLeftQueued: true }),
+      { keepPolling: false, reason: "terminal" },
+    );
+    assert.deepEqual(
+      nextProvisionJobPoll({ ...base, status: "failed", attempts: 1, everLeftQueued: true }),
+      { keepPolling: false, reason: "terminal" },
+    );
+  });
+
+  it("stops when the parent deployment is already terminal", () => {
+    assert.deepEqual(
+      nextProvisionJobPoll({ ...base, status: "queued", attempts: 1, deploymentTerminal: true }),
+      { keepPolling: false, reason: "deployment_terminal" },
+    );
+  });
+
+  it("stops forever-queued unknown/expired jobs as stale", () => {
+    assert.deepEqual(
+      nextProvisionJobPoll({
+        ...base,
+        status: "queued",
+        attempts: PROVISION_JOB_POLL_MAX_QUEUED_ONLY,
+        everLeftQueued: false,
+      }),
+      { keepPolling: false, reason: "stale" },
+    );
+    assert.deepEqual(
+      nextProvisionJobPoll({
+        ...base,
+        status: "queued",
+        attempts: PROVISION_JOB_POLL_MAX_QUEUED_ONLY,
+        everLeftQueued: true,
+      }),
+      { keepPolling: true },
+    );
+  });
+
+  it("stops after the hard attempt ceiling", () => {
+    assert.deepEqual(
+      nextProvisionJobPoll({
+        ...base,
+        status: "running",
+        attempts: PROVISION_JOB_POLL_MAX_ATTEMPTS,
+        everLeftQueued: true,
+      }),
+      { keepPolling: false, reason: "deadline" },
+    );
+  });
+
+  it("stops after consecutive fetch errors", () => {
+    assert.deepEqual(
+      nextProvisionJobPoll({
+        ...base,
+        status: "running",
+        attempts: 5,
+        consecutiveErrors: PROVISION_JOB_POLL_MAX_CONSECUTIVE_ERRORS,
+        everLeftQueued: true,
+      }),
+      { keepPolling: false, reason: "errors" },
     );
   });
 });

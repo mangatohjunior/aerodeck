@@ -8,6 +8,7 @@ import type {
   ProvisionJobStatus,
   Sandbox,
 } from "./types";
+import { PROVISION_JOB_STATUSES } from "./types";
 
 export { isControlPlaneUuid } from "./control-plane-uuid";
 
@@ -936,14 +937,6 @@ export async function getControlPlaneDeployment(
   return parseDeployment(await response.json());
 }
 
-const PROVISION_JOB_STATUSES = new Set<ProvisionJobStatus>([
-  "queued",
-  "running",
-  "retrying",
-  "succeeded",
-  "failed",
-]);
-
 export async function getControlPlaneJob(
   config: ControlPlaneConfig,
   jobId: string,
@@ -983,6 +976,7 @@ function parseProvisionJob(value: unknown): ProvisionJob {
   const row = value as Record<string, unknown>;
   if (
     typeof row.job_id !== "string" ||
+    !isControlPlaneUuid(row.job_id) ||
     typeof row.status !== "string" ||
     !PROVISION_JOB_STATUSES.has(row.status as ProvisionJobStatus)
   ) {
