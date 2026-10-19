@@ -9,7 +9,10 @@ type DeploymentEnvironmentLinkProps = {
   className?: string;
 };
 
-/** Always links to Projects; shows slug when the catalog matches. */
+/**
+ * Always links into the Projects console page (no per-project route yet).
+ * Shows `project_slug/environment_slug` when the catalog still has the row.
+ */
 export function DeploymentEnvironmentLink({
   deployment,
   environments,

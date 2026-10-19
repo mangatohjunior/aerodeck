@@ -1,7 +1,7 @@
 """Isolated commits for deployment ``failed`` outside the request session.
 
 Enqueue failure must mark the row even though the request then raises and rolls
-back. Status updates go through ``DeploymentRepository`` only (no EnvironmentLookup).
+back. Uses ``DeploymentTerminalService`` (no ``EnvironmentLookup``).
 """
 
 import asyncio
@@ -12,6 +12,7 @@ from app.core.db import SessionLocal, bind_engine, create_engine, unbind_engine
 from app.core.logging import get_logger
 from app.models.deployment import DeploymentStatus
 from app.repositories.deployments import DeploymentRepository
+from app.services.deployment_terminal import DeploymentTerminalService
 
 logger = get_logger("tasks.deployment_status")
 
@@ -20,7 +21,7 @@ async def mark_deployment_failed_isolated(deployment_id: uuid.UUID) -> None:
     """Commit failed on its own session so a later request rollback cannot undo it."""
     async with SessionLocal() as session:
         try:
-            stored = await DeploymentRepository(session).set_terminal_status(
+            stored = await DeploymentTerminalService(DeploymentRepository(session)).mark(
                 deployment_id, DeploymentStatus.failed
             )
             if stored is None:

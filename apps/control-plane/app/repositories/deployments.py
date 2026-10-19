@@ -1,13 +1,10 @@
 import uuid
 from collections.abc import Sequence
 
-from sqlalchemy import func, select, update
+from sqlalchemy import ColumnElement, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.logging import get_logger
-from app.models.deployment import Deployment, DeploymentStatus
-
-logger = get_logger("repositories.deployments")
+from app.models.deployment import Deployment
 
 
 class DeploymentRepository:
@@ -27,38 +24,20 @@ class DeploymentRepository:
         await self._session.refresh(deployment)
         return deployment
 
-    async def set_terminal_status(
-        self, deployment_id: uuid.UUID, status: DeploymentStatus
-    ) -> Deployment | None:
-        """Set succeeded/failed if not already terminal. ``None`` if the row is missing."""
-        deployment = await self.get(deployment_id)
-        if deployment is None:
-            return None
-        if deployment.status in (DeploymentStatus.succeeded, DeploymentStatus.failed):
-            logger.info(
-                "deployment %s already %s; leave unchanged",
-                deployment_id,
-                deployment.status.value,
-            )
-            return deployment
-        deployment.status = status
-        stored = await self.save(deployment)
-        logger.info("deployment %s %s", stored.id, status.value)
-        return stored
-
     async def clear_environment_link(self, environment_id: uuid.UUID) -> None:
         """Null both link columns so the both-or-neither invariant survives env delete."""
-        await self._session.execute(
-            update(Deployment)
-            .where(Deployment.environment_id == environment_id)
-            .values(project_id=None, environment_id=None)
-        )
+        await self._clear_link(Deployment.environment_id, environment_id)
 
     async def clear_project_link(self, project_id: uuid.UUID) -> None:
         """Null both link columns so the both-or-neither invariant survives project delete."""
+        await self._clear_link(Deployment.project_id, project_id)
+
+    async def _clear_link(
+        self, column: ColumnElement[uuid.UUID | None], value: uuid.UUID
+    ) -> None:
         await self._session.execute(
             update(Deployment)
-            .where(Deployment.project_id == project_id)
+            .where(column == value)
             .values(project_id=None, environment_id=None)
         )
 

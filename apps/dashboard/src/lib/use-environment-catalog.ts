@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-import { fetchEnvironments } from "@/lib/api";
+import { loadEnvironmentCatalog } from "@/lib/environment-catalog";
 import type { EnvironmentOption } from "@/lib/types";
 
 /** Best-effort environment catalog for deployment labels (warns, never throws). */
@@ -15,13 +15,16 @@ export function useEnvironmentCatalog(enabled: boolean): EnvironmentOption[] {
       return;
     }
     let cancelled = false;
-    fetchEnvironments()
-      .then((page) => {
+    loadEnvironmentCatalog()
+      .then((items) => {
         if (!cancelled) {
-          setEnvironments(page.items);
+          setEnvironments(items);
         }
       })
       .catch((cause: unknown) => {
+        if (cancelled) {
+          return;
+        }
         console.warn(
           "event=deployment_environment_catalog_failed detail=%s",
           cause instanceof Error ? cause.message : "request failed",
