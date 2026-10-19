@@ -3,6 +3,11 @@
 import { Loader2, Trash2 } from "lucide-react";
 import { useState, type FormEvent } from "react";
 
+import {
+  EnvironmentKindField,
+  EnvironmentRegionField,
+  withCurrentOption,
+} from "@/components/environment-form-fields";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -12,7 +17,6 @@ import {
   ENVIRONMENT_REGIONS,
   parseEnvironmentUpdateFields,
 } from "@/lib/environment-input";
-import { nativeSelectClassName } from "@/lib/native-select";
 import { PROJECT_NAME_MAX } from "@/lib/project-input";
 import type { EnvironmentOption } from "@/lib/types";
 
@@ -21,14 +25,6 @@ type EnvironmentEditRowProps = {
   onUpdated: (environment: EnvironmentOption) => void;
   onDeleted: (environmentId: string) => void;
 };
-
-/** Curated options plus the live wire value when CP has a valid but non-listed slug. */
-function withCurrentOption(options: readonly string[], current: string): string[] {
-  if (options.includes(current)) {
-    return [...options];
-  }
-  return [current, ...options];
-}
 
 export function EnvironmentEditRow({
   environment,
@@ -42,8 +38,13 @@ export function EnvironmentEditRow({
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
-  const kindOptions = withCurrentOption(ENVIRONMENT_KINDS, environment.kind);
-  const regionOptions = withCurrentOption(ENVIRONMENT_REGIONS, environment.region);
+  const idPrefix = `env-${environment.id}`;
+
+  function clearError() {
+    if (error) {
+      setError(null);
+    }
+  }
 
   async function handleSave(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -107,62 +108,34 @@ export function EnvironmentEditRow({
         <p className="font-mono text-xs text-primary">{environment.slug}</p>
       </div>
       <div className="grid gap-2">
-        <Label htmlFor={`env-name-${environment.id}`}>Name</Label>
+        <Label htmlFor={`${idPrefix}-name`}>Name</Label>
         <Input
-          id={`env-name-${environment.id}`}
+          id={`${idPrefix}-name`}
           value={name}
           maxLength={PROJECT_NAME_MAX}
           disabled={busy}
           onChange={(event) => {
             setName(event.currentTarget.value);
-            if (error) {
-              setError(null);
-            }
+            clearError();
           }}
         />
       </div>
-      <div className="grid gap-2">
-        <Label htmlFor={`env-kind-${environment.id}`}>Kind</Label>
-        <select
-          id={`env-kind-${environment.id}`}
-          className={nativeSelectClassName()}
-          value={kind}
-          disabled={busy}
-          onChange={(event) => {
-            setKind(event.target.value);
-            if (error) {
-              setError(null);
-            }
-          }}
-        >
-          {kindOptions.map((value) => (
-            <option key={value} value={value}>
-              {value}
-            </option>
-          ))}
-        </select>
-      </div>
-      <div className="grid gap-2">
-        <Label htmlFor={`env-region-${environment.id}`}>Region</Label>
-        <select
-          id={`env-region-${environment.id}`}
-          className={nativeSelectClassName()}
-          value={region}
-          disabled={busy}
-          onChange={(event) => {
-            setRegion(event.target.value);
-            if (error) {
-              setError(null);
-            }
-          }}
-        >
-          {regionOptions.map((value) => (
-            <option key={value} value={value}>
-              {value}
-            </option>
-          ))}
-        </select>
-      </div>
+      <EnvironmentKindField
+        idPrefix={idPrefix}
+        kind={kind}
+        options={withCurrentOption(ENVIRONMENT_KINDS, environment.kind)}
+        disabled={busy}
+        onKindChange={setKind}
+        onClearError={clearError}
+      />
+      <EnvironmentRegionField
+        idPrefix={idPrefix}
+        region={region}
+        options={withCurrentOption(ENVIRONMENT_REGIONS, environment.region)}
+        disabled={busy}
+        onRegionChange={setRegion}
+        onClearError={clearError}
+      />
       <div className="flex flex-wrap items-end gap-2">
         <Button type="submit" size="sm" disabled={busy}>
           {saving ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}

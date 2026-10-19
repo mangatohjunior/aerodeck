@@ -34,10 +34,15 @@ export function ProjectEditPanel({ project, onUpdated }: ProjectEditPanelProps) 
   async function handleSave(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
-    const parsed = parseProjectUpdateFields({
-      name,
-      description: normalizeProjectDescription(description),
-    });
+    const nextDescription = normalizeProjectDescription(description);
+    const fields: { name?: string; description?: string | null } = {};
+    if (name.trim() !== project.name) {
+      fields.name = name;
+    }
+    if (nextDescription !== (project.description ?? null)) {
+      fields.description = nextDescription;
+    }
+    const parsed = parseProjectUpdateFields(fields);
     if (!parsed.ok) {
       setError(parsed.error);
       return;

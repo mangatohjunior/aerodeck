@@ -145,13 +145,13 @@ export function NewEnvironmentForm({ projects, onCreated }: NewEnvironmentFormPr
           <EnvironmentKindField
             kind={kind}
             disabled={submitting}
-            onKindChange={setKind}
+            onKindChange={(value) => setKind(value as EnvironmentKind)}
             onClearError={clearError}
           />
           <EnvironmentRegionField
             region={region}
             disabled={submitting}
-            onRegionChange={setRegion}
+            onRegionChange={(value) => setRegion(value as EnvironmentRegion)}
             onClearError={clearError}
           />
           {error ? (

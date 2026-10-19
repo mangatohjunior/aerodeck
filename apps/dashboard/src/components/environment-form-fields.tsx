@@ -2,12 +2,7 @@
 
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  ENVIRONMENT_KINDS,
-  ENVIRONMENT_REGIONS,
-  type EnvironmentKind,
-  type EnvironmentRegion,
-} from "@/lib/environment-input";
+import { ENVIRONMENT_KINDS, ENVIRONMENT_REGIONS } from "@/lib/environment-input";
 import { nativeSelectClassName } from "@/lib/native-select";
 import { PROJECT_NAME_MAX, PROJECT_SLUG_MAX } from "@/lib/project-input";
 import type { Project } from "@/lib/types";
@@ -113,31 +108,44 @@ export function EnvironmentNameSlugFields({
   );
 }
 
+/** Curated options plus a live wire value when CP has a valid but non-listed slug. */
+export function withCurrentOption(options: readonly string[], current: string): string[] {
+  if (options.includes(current)) {
+    return [...options];
+  }
+  return [current, ...options];
+}
+
 export function EnvironmentKindField({
   kind,
   disabled,
   onKindChange,
   onClearError,
+  idPrefix = "environment",
+  options = ENVIRONMENT_KINDS,
 }: {
-  kind: EnvironmentKind;
+  kind: string;
   disabled: boolean;
-  onKindChange: (kind: EnvironmentKind) => void;
+  onKindChange: (kind: string) => void;
   onClearError: ClearError;
+  idPrefix?: string;
+  options?: readonly string[];
 }) {
+  const id = `${idPrefix}-kind`;
   return (
     <div className="grid gap-2">
-      <Label htmlFor="environment-kind">Kind</Label>
+      <Label htmlFor={id}>Kind</Label>
       <select
-        id="environment-kind"
+        id={id}
         className={nativeSelectClassName()}
         value={kind}
         disabled={disabled}
         onChange={(event) => {
-          onKindChange(event.target.value as EnvironmentKind);
+          onKindChange(event.target.value);
           onClearError();
         }}
       >
-        {ENVIRONMENT_KINDS.map((value) => (
+        {options.map((value) => (
           <option key={value} value={value}>
             {value}
           </option>
@@ -152,26 +160,31 @@ export function EnvironmentRegionField({
   disabled,
   onRegionChange,
   onClearError,
+  idPrefix = "environment",
+  options = ENVIRONMENT_REGIONS,
 }: {
-  region: EnvironmentRegion;
+  region: string;
   disabled: boolean;
-  onRegionChange: (region: EnvironmentRegion) => void;
+  onRegionChange: (region: string) => void;
   onClearError: ClearError;
+  idPrefix?: string;
+  options?: readonly string[];
 }) {
+  const id = `${idPrefix}-region`;
   return (
     <div className="grid gap-2">
-      <Label htmlFor="environment-region">Region</Label>
+      <Label htmlFor={id}>Region</Label>
       <select
-        id="environment-region"
+        id={id}
         className={nativeSelectClassName()}
         value={region}
         disabled={disabled}
         onChange={(event) => {
-          onRegionChange(event.target.value as EnvironmentRegion);
+          onRegionChange(event.target.value);
           onClearError();
         }}
       >
-        {ENVIRONMENT_REGIONS.map((value) => (
+        {options.map((value) => (
           <option key={value} value={value}>
             {value}
           </option>
