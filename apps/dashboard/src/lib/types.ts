@@ -67,6 +67,12 @@ export type EnvironmentOptionPage = {
   source: ProjectSource;
 };
 
+export type ProjectDetail = {
+  project: Project;
+  environments: EnvironmentOption[];
+  source: ProjectSource;
+};
+
 export type ApiError = {
   detail: string;
   code: string;

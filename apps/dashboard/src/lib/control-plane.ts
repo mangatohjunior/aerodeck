@@ -571,6 +571,24 @@ export async function listControlPlaneEnvironments(
   return items;
 }
 
+export type ControlPlaneProjectDetail = {
+  project: Project;
+  environments: EnvironmentOption[];
+};
+
+export async function getControlPlaneProjectDetail(
+  config: ControlPlaneConfig,
+  projectId: string,
+  options: ListOptions = {},
+): Promise<ControlPlaneProjectDetail> {
+  const project = await getControlPlaneProject(config, projectId, options);
+  const fetchImpl = options.fetch ?? fetch;
+  const now = options.now ?? Date.now;
+  const accessToken = await accessTokenFor(config, fetchImpl, now);
+  const environments = await listProjectEnvironments(config, project, accessToken, fetchImpl);
+  return { project, environments };
+}
+
 async function discardResponseBody(response: Response): Promise<void> {
   await response.body?.cancel();
 }

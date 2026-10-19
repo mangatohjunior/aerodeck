@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { NewEnvironmentForm } from "@/components/new-environment-form";
@@ -8,6 +9,7 @@ import { PageHeader } from "@/components/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { fetchEnvironments, fetchProjectPage } from "@/lib/api";
 import { environmentsForProject, mergeEnvironmentsById } from "@/lib/environment-list";
+import { projectDetailPath } from "@/lib/project-detail-path";
 import type { EnvironmentOption, Project, ProjectPage } from "@/lib/types";
 
 export default function ProjectsPage() {
@@ -113,7 +115,14 @@ export default function ProjectsPage() {
                 const envs = environmentsForProject(environments, row.id);
                 return (
                   <div key={row.id} className="py-4 first:pt-4">
-                    <p className="font-medium">{row.name}</p>
+                    <p className="font-medium">
+                      <Link
+                        href={projectDetailPath(row.id)}
+                        className="text-foreground hover:text-primary hover:underline"
+                      >
+                        {row.name}
+                      </Link>
+                    </p>
                     <p className="font-mono text-xs text-primary">{row.slug}</p>
                     {row.description ? (
                       <p className="mt-1 text-sm text-muted-foreground">{row.description}</p>
@@ -122,7 +131,12 @@ export default function ProjectsPage() {
                       <ul className="mt-2 space-y-1 text-sm text-muted-foreground">
                         {envs.map((env) => (
                           <li key={env.id} className="font-mono text-xs">
-                            {env.slug} ({env.kind}, {env.region})
+                            <Link
+                              href={projectDetailPath(row.id, "environments")}
+                              className="hover:text-primary hover:underline"
+                            >
+                              {env.slug} ({env.kind}, {env.region})
+                            </Link>
                           </li>
                         ))}
                       </ul>

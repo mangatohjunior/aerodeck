@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { deploymentEnvironmentLabel } from "@/lib/deployment-environment-label";
+import { projectDetailPath } from "@/lib/project-detail-path";
 import type { Deployment, EnvironmentOption } from "@/lib/types";
 
 type DeploymentEnvironmentLinkProps = {
@@ -9,10 +10,7 @@ type DeploymentEnvironmentLinkProps = {
   className?: string;
 };
 
-/**
- * Always links into the Projects console page (no per-project route yet).
- * Shows `project_slug/environment_slug` when the catalog still has the row.
- */
+/** Links to the project detail environments section when a deployment is linked. */
 export function DeploymentEnvironmentLink({
   deployment,
   environments,
@@ -24,7 +22,10 @@ export function DeploymentEnvironmentLink({
   const label = deploymentEnvironmentLabel(deployment, environments);
   return (
     <p className={className}>
-      <Link href="/projects" className="text-primary hover:underline">
+      <Link
+        href={projectDetailPath(deployment.project_id, "environments")}
+        className="text-primary hover:underline"
+      >
         {label ?? "Linked environment"}
       </Link>
     </p>
