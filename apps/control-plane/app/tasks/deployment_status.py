@@ -1,7 +1,9 @@
-"""Isolated commits for deployment ``failed`` outside the request session.
+"""Isolated commits for deployment fields outside the request session.
 
 Enqueue failure must mark the row even though the request then raises and rolls
-back. Uses ``DeploymentTerminalService`` (no ``EnvironmentLookup``).
+back. Successful provision enqueue persists ``provision_job_id`` on its own
+session so a flush failure cannot poison the request session and turn 202 into
+500 (#139). Uses ``DeploymentTerminalService`` / repository (no ``EnvironmentLookup``).
 """
 
 import asyncio
@@ -42,6 +44,36 @@ async def try_mark_deployment_failed_isolated(deployment_id: uuid.UUID) -> None:
             deployment_id,
             type(status_exc).__name__,
             exc_info=status_exc,
+        )
+
+
+async def set_provision_job_id_isolated(deployment_id: uuid.UUID, job_id: uuid.UUID) -> None:
+    """Commit provision_job_id on its own session so request-session errors stay isolated."""
+    async with SessionLocal() as session:
+        try:
+            repo = DeploymentRepository(session)
+            deployment = await repo.get(deployment_id)
+            if deployment is None:
+                raise LookupError(f"Deployment {deployment_id} not found")
+            deployment.provision_job_id = job_id
+            await repo.save(deployment)
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            raise
+
+
+async def try_set_provision_job_id_isolated(deployment_id: uuid.UUID, job_id: uuid.UUID) -> None:
+    """Best-effort isolated persist; log and continue on failure."""
+    try:
+        await set_provision_job_id_isolated(deployment_id, job_id)
+    except Exception as persist_exc:
+        logger.warning(
+            "event=deployment_provision_job_id_skipped deployment=%s job_id=%s error_type=%s",
+            deployment_id,
+            job_id,
+            type(persist_exc).__name__,
+            exc_info=persist_exc,
         )
 
 

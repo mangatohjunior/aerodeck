@@ -1,4 +1,4 @@
-"""JobService enqueue: persist failures after broker accept must not fail the ticket."""
+"""JobService enqueue: provision_job_id persist must not fail a broker-accepted ticket."""
 
 import uuid
 from datetime import UTC, datetime
@@ -9,6 +9,7 @@ import pytest
 from app.models.deployment import Deployment, DeploymentStatus
 from app.services.jobs import JobService
 from app.services.provisioning import JobKind
+from app.tasks.deployment_status import try_set_provision_job_id_isolated
 
 
 def _deployment() -> Deployment:
@@ -22,10 +23,7 @@ def _deployment() -> Deployment:
     )
 
 
-@pytest.mark.asyncio
-async def test_enqueue_returns_ticket_when_provision_job_id_persist_fails() -> None:
-    job_id = str(uuid.uuid4())
-    deployment = _deployment()
+def _environment() -> MagicMock:
     environment = MagicMock()
     environment.project_id = uuid.uuid4()
     environment.id = uuid.uuid4()
@@ -33,23 +31,46 @@ async def test_enqueue_returns_ticket_when_provision_job_id_persist_fails() -> N
     environment.kind.value = "prod"
     environment.region = "nyc3"
     environment.project.slug = "payments"
+    return environment
 
+
+def _job_service(
+    *,
+    job_id: str,
+    deployment: Deployment,
+    environment: MagicMock,
+    set_provision_job_id: AsyncMock | None = None,
+) -> tuple[JobService, AsyncMock]:
     dispatcher = MagicMock()
     dispatcher.dispatch.return_value = job_id
 
     deployments = AsyncMock()
     deployments.get.return_value = deployment
-    deployments.set_provision_job_id.side_effect = RuntimeError("session boom")
 
     environments = AsyncMock()
     environments.get.return_value = environment
 
+    persist = set_provision_job_id if set_provision_job_id is not None else AsyncMock()
     service = JobService(
         dispatcher,
         environments,
         deployments,
         redis_url=None,
         mark_deployment_failed=AsyncMock(),
+        set_provision_job_id=persist,
+    )
+    return service, persist
+
+
+@pytest.mark.asyncio
+async def test_enqueue_persists_provision_job_id_via_injected_callback() -> None:
+    job_id = str(uuid.uuid4())
+    deployment = _deployment()
+    environment = _environment()
+    service, persist = _job_service(
+        job_id=job_id,
+        deployment=deployment,
+        environment=environment,
     )
 
     ticket = await service.enqueue(
@@ -60,35 +81,17 @@ async def test_enqueue_returns_ticket_when_provision_job_id_persist_fails() -> N
     )
 
     assert ticket.job_id == job_id
-    deployments.set_provision_job_id.assert_awaited_once()
+    persist.assert_awaited_once_with(deployment.id, uuid.UUID(job_id))
 
 
 @pytest.mark.asyncio
 async def test_enqueue_returns_ticket_when_job_id_is_not_a_uuid() -> None:
     deployment = _deployment()
-    environment = MagicMock()
-    environment.project_id = uuid.uuid4()
-    environment.id = uuid.uuid4()
-    environment.slug = "prod"
-    environment.kind.value = "prod"
-    environment.region = "nyc3"
-    environment.project.slug = "payments"
-
-    dispatcher = MagicMock()
-    dispatcher.dispatch.return_value = "not-a-uuid"
-
-    deployments = AsyncMock()
-    deployments.get.return_value = deployment
-
-    environments = AsyncMock()
-    environments.get.return_value = environment
-
-    service = JobService(
-        dispatcher,
-        environments,
-        deployments,
-        redis_url=None,
-        mark_deployment_failed=AsyncMock(),
+    environment = _environment()
+    service, persist = _job_service(
+        job_id="not-a-uuid",
+        deployment=deployment,
+        environment=environment,
     )
 
     ticket = await service.enqueue(
@@ -99,4 +102,18 @@ async def test_enqueue_returns_ticket_when_job_id_is_not_a_uuid() -> None:
     )
 
     assert ticket.job_id == "not-a-uuid"
-    deployments.set_provision_job_id.assert_not_awaited()
+    persist.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_try_set_provision_job_id_isolated_swallows_errors(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def boom(_deployment_id: uuid.UUID, _job_id: uuid.UUID) -> None:
+        raise RuntimeError("session boom")
+
+    monkeypatch.setattr(
+        "app.tasks.deployment_status.set_provision_job_id_isolated",
+        boom,
+    )
+    await try_set_provision_job_id_isolated(uuid.uuid4(), uuid.uuid4())

@@ -26,6 +26,7 @@ from app.services.provisioning import JobKind
 logger = get_logger("services.jobs")
 
 MarkDeploymentFailed = Callable[[uuid.UUID], Awaitable[None]]
+SetProvisionJobId = Callable[[uuid.UUID, uuid.UUID], Awaitable[None]]
 
 
 class JobDispatcher(Protocol):
@@ -51,12 +52,14 @@ class JobService:
         *,
         redis_url: str | None,
         mark_deployment_failed: MarkDeploymentFailed,
+        set_provision_job_id: SetProvisionJobId,
     ) -> None:
         self._dispatcher = dispatcher
         self._environments = environments
         self._deployments = deployments
         self._redis_url = redis_url
         self._mark_deployment_failed = mark_deployment_failed
+        self._set_provision_job_id = set_provision_job_id
 
     async def enqueue(
         self,
@@ -105,20 +108,19 @@ class JobService:
                 # Own session+commit: the request that raised will roll back.
                 await self._mark_deployment_failed(linked_deployment.id)
             raise
-        # Broker already accepted the task — never turn persistence failures into
-        # an enqueue error while work continues (#139).
+        # Broker already accepted the task — persist on an isolated session so a
+        # flush failure cannot poison the request session and turn 202 into 500 (#139).
         if linked_deployment is not None:
             try:
-                await self._deployments.set_provision_job_id(
-                    linked_deployment, uuid.UUID(job_id)
-                )
-            except Exception as persist_exc:
+                job_uuid = uuid.UUID(job_id)
+            except ValueError:
                 logger.warning(
-                    "event=deployment_provision_job_id_skipped deployment=%s job_id=%s error_type=%s",
+                    "event=deployment_provision_job_id_skipped deployment=%s job_id=%s error_type=ValueError",
                     linked_deployment.id,
                     job_id,
-                    type(persist_exc).__name__,
                 )
+            else:
+                await self._set_provision_job_id(linked_deployment.id, job_uuid)
         logger.info("queued %s job %s for environment %s", kind.value, job_id, environment.id)
         return JobTicket(job_id=job_id, kind=kind, project_id=environment.project_id, environment_id=environment.id)
 
