@@ -18,10 +18,16 @@ logger = get_logger("services.deployments")
 
 
 def _is_deployment_environment_fk_violation(exc: IntegrityError) -> bool:
+    """True when the failing constraint is the deployment↔environment composite FK.
+
+    Postgres includes ``DEPLOYMENT_ENVIRONMENT_FK`` in the error. SQLite only says
+    ``FOREIGN KEY constraint failed``; that fallback is safe only while
+    ``deployments`` has no other FKs (see model). Callers must already require both
+    link ids so unlinked creates never hit this path.
+    """
     detail = str(exc.orig if exc.orig is not None else exc).lower()
     if DEPLOYMENT_ENVIRONMENT_FK.lower() in detail:
         return True
-    # SQLite omits the constraint name; do not treat every dialect's FK text as a miss.
     orig = exc.orig
     if orig is not None and type(orig).__module__.startswith("sqlite3"):
         return "foreign key" in detail

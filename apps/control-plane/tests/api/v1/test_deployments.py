@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import TypedDict
 from unittest.mock import AsyncMock
 from uuid import UUID, uuid4
 
@@ -12,7 +13,40 @@ from app.services.deployment_logs import DONE_LINE, publish_line
 from tests.conftest import make_settings
 
 DEPLOYMENTS = "/api/v1/deployments"
+PROJECTS = "/api/v1/projects"
 REPO = "https://github.com/mangatohjunior/aerodeck"
+
+
+class LinkedDeployment(TypedDict):
+    project_id: str
+    environment_id: str
+    deployment_id: str
+
+
+async def create_linked_deployment(
+    client: AsyncClient, auth: dict[str, str], *, slug: str = "payments"
+) -> LinkedDeployment:
+    project = await client.post(PROJECTS, json={"slug": slug, "name": slug.title()}, headers=auth)
+    assert project.status_code == 201, project.text
+    project_id = project.json()["id"]
+    environment = await client.post(
+        f"{PROJECTS}/{project_id}/environments",
+        json={"slug": "prod", "name": "Prod", "kind": "prod"},
+        headers=auth,
+    )
+    assert environment.status_code == 201, environment.text
+    environment_id = environment.json()["id"]
+    created = await client.post(
+        DEPLOYMENTS,
+        json={"repo_url": REPO, "project_id": project_id, "environment_id": environment_id},
+        headers=auth,
+    )
+    assert created.status_code == 201, created.text
+    return {
+        "project_id": project_id,
+        "environment_id": environment_id,
+        "deployment_id": created.json()["id"],
+    }
 
 
 async def test_deployment_logs_require_a_token(client: AsyncClient) -> None:
@@ -228,30 +262,12 @@ async def test_create_stores_a_github_repository(client: AsyncClient, auth: dict
 
 
 async def test_create_persists_environment_link(client: AsyncClient, auth: dict[str, str]) -> None:
-    project = await client.post(
-        "/api/v1/projects", json={"slug": "payments", "name": "Payments"}, headers=auth
-    )
-    assert project.status_code == 201, project.text
-    project_id = project.json()["id"]
-    environment = await client.post(
-        f"/api/v1/projects/{project_id}/environments",
-        json={"slug": "prod", "name": "Prod", "kind": "prod"},
-        headers=auth,
-    )
-    assert environment.status_code == 201, environment.text
-    environment_id = environment.json()["id"]
+    linked = await create_linked_deployment(client, auth)
+    project_id = linked["project_id"]
+    environment_id = linked["environment_id"]
+    deployment_id = linked["deployment_id"]
 
-    created = await client.post(
-        DEPLOYMENTS,
-        json={"repo_url": REPO, "project_id": project_id, "environment_id": environment_id},
-        headers=auth,
-    )
-    assert created.status_code == 201, created.text
-    body = created.json()
-    assert body["project_id"] == project_id
-    assert body["environment_id"] == environment_id
-
-    fetched = await client.get(f"{DEPLOYMENTS}/{body['id']}", headers=auth)
+    fetched = await client.get(f"{DEPLOYMENTS}/{deployment_id}", headers=auth)
     assert fetched.status_code == 200, fetched.text
     assert fetched.json()["project_id"] == project_id
     assert fetched.json()["environment_id"] == environment_id
@@ -282,7 +298,7 @@ async def test_create_rejects_partial_environment_link(
 
 async def test_create_rejects_unknown_environment(client: AsyncClient, auth: dict[str, str]) -> None:
     project = await client.post(
-        "/api/v1/projects", json={"slug": "payments", "name": "Payments"}, headers=auth
+        PROJECTS, json={"slug": "payments", "name": "Payments"}, headers=auth
     )
     assert project.status_code == 201, project.text
     response = await client.post(
@@ -301,34 +317,15 @@ async def test_create_rejects_unknown_environment(client: AsyncClient, auth: dic
 async def test_deleting_environment_clears_both_link_ids(
     client: AsyncClient, auth: dict[str, str]
 ) -> None:
-    project = await client.post(
-        "/api/v1/projects", json={"slug": "payments", "name": "Payments"}, headers=auth
-    )
-    assert project.status_code == 201, project.text
-    project_id = project.json()["id"]
-    environment = await client.post(
-        f"/api/v1/projects/{project_id}/environments",
-        json={"slug": "prod", "name": "Prod", "kind": "prod"},
-        headers=auth,
-    )
-    assert environment.status_code == 201, environment.text
-    environment_id = environment.json()["id"]
-
-    created = await client.post(
-        DEPLOYMENTS,
-        json={"repo_url": REPO, "project_id": project_id, "environment_id": environment_id},
-        headers=auth,
-    )
-    assert created.status_code == 201, created.text
-    deployment_id = created.json()["id"]
+    linked = await create_linked_deployment(client, auth)
 
     deleted = await client.delete(
-        f"/api/v1/projects/{project_id}/environments/{environment_id}",
+        f"{PROJECTS}/{linked['project_id']}/environments/{linked['environment_id']}",
         headers=auth,
     )
     assert deleted.status_code == 204, deleted.text
 
-    fetched = await client.get(f"{DEPLOYMENTS}/{deployment_id}", headers=auth)
+    fetched = await client.get(f"{DEPLOYMENTS}/{linked['deployment_id']}", headers=auth)
     assert fetched.status_code == 200, fetched.text
     body = fetched.json()
     assert body["project_id"] is None
@@ -339,31 +336,12 @@ async def test_deleting_environment_clears_both_link_ids(
 async def test_deleting_project_clears_both_link_ids(
     client: AsyncClient, auth: dict[str, str]
 ) -> None:
-    project = await client.post(
-        "/api/v1/projects", json={"slug": "payments", "name": "Payments"}, headers=auth
-    )
-    assert project.status_code == 201, project.text
-    project_id = project.json()["id"]
-    environment = await client.post(
-        f"/api/v1/projects/{project_id}/environments",
-        json={"slug": "prod", "name": "Prod", "kind": "prod"},
-        headers=auth,
-    )
-    assert environment.status_code == 201, environment.text
-    environment_id = environment.json()["id"]
+    linked = await create_linked_deployment(client, auth)
 
-    created = await client.post(
-        DEPLOYMENTS,
-        json={"repo_url": REPO, "project_id": project_id, "environment_id": environment_id},
-        headers=auth,
-    )
-    assert created.status_code == 201, created.text
-    deployment_id = created.json()["id"]
-
-    deleted = await client.delete(f"/api/v1/projects/{project_id}", headers=auth)
+    deleted = await client.delete(f"{PROJECTS}/{linked['project_id']}", headers=auth)
     assert deleted.status_code == 204, deleted.text
 
-    fetched = await client.get(f"{DEPLOYMENTS}/{deployment_id}", headers=auth)
+    fetched = await client.get(f"{DEPLOYMENTS}/{linked['deployment_id']}", headers=auth)
     assert fetched.status_code == 200, fetched.text
     body = fetched.json()
     assert body["project_id"] is None
