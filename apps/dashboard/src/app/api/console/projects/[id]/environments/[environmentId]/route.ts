@@ -1,5 +1,6 @@
 import { connection, NextResponse } from "next/server";
 
+import { readJsonObject, readOptionalString } from "@/lib/console-json-body";
 import {
   ControlPlaneError,
   deleteControlPlaneEnvironment,
@@ -51,31 +52,24 @@ export async function PATCH(request: Request, context: RouteContext) {
     return jsonError(404, "Environments stay on the mock API.", "not_found");
   }
 
-  let payload: { name?: unknown; kind?: unknown; region?: unknown };
-  try {
-    payload = (await request.json()) as { name?: unknown; kind?: unknown; region?: unknown };
-  } catch {
-    return jsonError(400, "Request body must be JSON.", "invalid_json");
+  const body = await readJsonObject(request);
+  if (!body.ok) {
+    return body.response;
   }
 
   const fields: { name?: string; kind?: string; region?: string } = {};
-  if (payload.name !== undefined) {
-    if (typeof payload.name !== "string") {
-      return jsonError(400, "name must be a string.", "invalid_name");
+  for (const [key, code] of [
+    ["name", "invalid_name"],
+    ["kind", "invalid_kind"],
+    ["region", "invalid_region"],
+  ] as const) {
+    const field = readOptionalString(body.value, key, code);
+    if (!field.ok) {
+      return field.response;
     }
-    fields.name = payload.name;
-  }
-  if (payload.kind !== undefined) {
-    if (typeof payload.kind !== "string") {
-      return jsonError(400, "kind must be a string.", "invalid_kind");
+    if (field.value !== undefined) {
+      fields[key] = field.value;
     }
-    fields.kind = payload.kind;
-  }
-  if (payload.region !== undefined) {
-    if (typeof payload.region !== "string") {
-      return jsonError(400, "region must be a string.", "invalid_region");
-    }
-    fields.region = payload.region;
   }
 
   const parsed = parseEnvironmentUpdateFields(fields);

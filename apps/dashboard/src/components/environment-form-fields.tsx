@@ -2,7 +2,12 @@
 
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ENVIRONMENT_KINDS, ENVIRONMENT_REGIONS } from "@/lib/environment-input";
+import {
+  ENVIRONMENT_KINDS,
+  ENVIRONMENT_REGIONS,
+  type EnvironmentKind,
+  type EnvironmentRegion,
+} from "@/lib/environment-input";
 import { nativeSelectClassName } from "@/lib/native-select";
 import { PROJECT_NAME_MAX, PROJECT_SLUG_MAX } from "@/lib/project-input";
 import type { Project } from "@/lib/types";
@@ -108,7 +113,7 @@ export function EnvironmentNameSlugFields({
   );
 }
 
-/** Curated options plus a live wire value when CP has a valid but non-listed slug. */
+/** Curated select options plus the live CP value when it is not already in the list. */
 export function withCurrentOption(options: readonly string[], current: string): string[] {
   if (options.includes(current)) {
     return [...options];
@@ -116,38 +121,44 @@ export function withCurrentOption(options: readonly string[], current: string): 
   return [current, ...options];
 }
 
-export function EnvironmentKindField({
-  kind,
-  disabled,
-  onKindChange,
-  onClearError,
-  idPrefix = "environment",
-  options = ENVIRONMENT_KINDS,
-}: {
-  kind: string;
+type SelectFieldProps<T extends string> = {
+  value: T;
   disabled: boolean;
-  onKindChange: (kind: string) => void;
+  onChange: (value: T) => void;
   onClearError: ClearError;
   idPrefix?: string;
-  options?: readonly string[];
-}) {
-  const id = `${idPrefix}-kind`;
+  options: readonly T[];
+  label: string;
+  field: string;
+};
+
+function EnvironmentSelectField<T extends string>({
+  value,
+  disabled,
+  onChange,
+  onClearError,
+  idPrefix = "environment",
+  options,
+  label,
+  field,
+}: SelectFieldProps<T>) {
+  const id = `${idPrefix}-${field}`;
   return (
     <div className="grid gap-2">
-      <Label htmlFor={id}>Kind</Label>
+      <Label htmlFor={id}>{label}</Label>
       <select
         id={id}
         className={nativeSelectClassName()}
-        value={kind}
+        value={value}
         disabled={disabled}
         onChange={(event) => {
-          onKindChange(event.target.value);
+          onChange(event.target.value as T);
           onClearError();
         }}
       >
-        {options.map((value) => (
-          <option key={value} value={value}>
-            {value}
+        {options.map((option) => (
+          <option key={option} value={option}>
+            {option}
           </option>
         ))}
       </select>
@@ -155,41 +166,60 @@ export function EnvironmentKindField({
   );
 }
 
-export function EnvironmentRegionField({
+export function EnvironmentKindField<T extends string = EnvironmentKind>({
+  kind,
+  disabled,
+  onKindChange,
+  onClearError,
+  idPrefix = "environment",
+  options,
+}: {
+  kind: T;
+  disabled: boolean;
+  onKindChange: (kind: T) => void;
+  onClearError: ClearError;
+  idPrefix?: string;
+  options?: readonly T[];
+}) {
+  return (
+    <EnvironmentSelectField
+      value={kind}
+      disabled={disabled}
+      onChange={onKindChange}
+      onClearError={onClearError}
+      idPrefix={idPrefix}
+      options={options ?? (ENVIRONMENT_KINDS as unknown as readonly T[])}
+      label="Kind"
+      field="kind"
+    />
+  );
+}
+
+export function EnvironmentRegionField<T extends string = EnvironmentRegion>({
   region,
   disabled,
   onRegionChange,
   onClearError,
   idPrefix = "environment",
-  options = ENVIRONMENT_REGIONS,
+  options,
 }: {
-  region: string;
+  region: T;
   disabled: boolean;
-  onRegionChange: (region: string) => void;
+  onRegionChange: (region: T) => void;
   onClearError: ClearError;
   idPrefix?: string;
-  options?: readonly string[];
+  options?: readonly T[];
 }) {
-  const id = `${idPrefix}-region`;
   return (
-    <div className="grid gap-2">
-      <Label htmlFor={id}>Region</Label>
-      <select
-        id={id}
-        className={nativeSelectClassName()}
-        value={region}
-        disabled={disabled}
-        onChange={(event) => {
-          onRegionChange(event.target.value);
-          onClearError();
-        }}
-      >
-        {options.map((value) => (
-          <option key={value} value={value}>
-            {value}
-          </option>
-        ))}
-      </select>
-    </div>
+    <EnvironmentSelectField
+      value={region}
+      disabled={disabled}
+      onChange={onRegionChange}
+      onClearError={onClearError}
+      idPrefix={idPrefix}
+      options={options ?? (ENVIRONMENT_REGIONS as unknown as readonly T[])}
+      label="Region"
+      field="region"
+    />
   );
 }

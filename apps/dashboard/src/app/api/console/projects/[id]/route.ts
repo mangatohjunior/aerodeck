@@ -1,6 +1,11 @@
 import { connection, NextResponse } from "next/server";
 
 import {
+  readJsonObject,
+  readOptionalNullableString,
+  readOptionalString,
+} from "@/lib/console-json-body";
+import {
   ControlPlaneError,
   deleteControlPlaneProject,
   getControlPlaneProjectDetail,
@@ -98,25 +103,25 @@ export async function PATCH(request: Request, context: RouteContext) {
     return jsonError(404, "Projects stay on the mock API.", "not_found");
   }
 
-  let payload: { name?: unknown; description?: unknown };
-  try {
-    payload = (await request.json()) as { name?: unknown; description?: unknown };
-  } catch {
-    return jsonError(400, "Request body must be JSON.", "invalid_json");
+  const body = await readJsonObject(request);
+  if (!body.ok) {
+    return body.response;
   }
 
   const fields: { name?: string; description?: string | null } = {};
-  if (payload.name !== undefined) {
-    if (typeof payload.name !== "string") {
-      return jsonError(400, "name must be a string.", "invalid_name");
-    }
-    fields.name = payload.name;
+  const name = readOptionalString(body.value, "name", "invalid_name");
+  if (!name.ok) {
+    return name.response;
   }
-  if (payload.description !== undefined) {
-    if (payload.description !== null && typeof payload.description !== "string") {
-      return jsonError(400, "description must be a string.", "invalid_description");
-    }
-    fields.description = payload.description;
+  if (name.value !== undefined) {
+    fields.name = name.value;
+  }
+  const description = readOptionalNullableString(body.value, "description", "invalid_description");
+  if (!description.ok) {
+    return description.response;
+  }
+  if (description.value !== undefined) {
+    fields.description = description.value;
   }
 
   const parsed = parseProjectUpdateFields(fields);
