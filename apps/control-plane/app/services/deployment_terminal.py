@@ -5,16 +5,22 @@ bridge so repositories stay persistence-only.
 """
 
 import uuid
+from typing import Protocol
 
 from app.core.logging import get_logger
 from app.models.deployment import Deployment, DeploymentStatus
-from app.repositories.deployments import DeploymentRepository
 
 logger = get_logger("services.deployment_terminal")
 
 
+class DeploymentStore(Protocol):
+    async def get(self, deployment_id: uuid.UUID) -> Deployment | None: ...
+
+    async def save(self, deployment: Deployment) -> Deployment: ...
+
+
 class DeploymentTerminalService:
-    def __init__(self, deployments: DeploymentRepository) -> None:
+    def __init__(self, deployments: DeploymentStore) -> None:
         self._deployments = deployments
 
     async def mark(

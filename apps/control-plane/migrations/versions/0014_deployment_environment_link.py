@@ -24,7 +24,7 @@ depends_on: str | Sequence[str] | None = None
 def upgrade() -> None:
     with op.batch_alter_table("environments") as batch:
         batch.create_unique_constraint(
-            "uq_environments_project_id_id",
+            op.f("uq_environments_project_id_id"),
             ["project_id", "id"],
         )
 
@@ -41,14 +41,14 @@ def upgrade() -> None:
             ondelete="SET NULL",
         )
         batch.create_check_constraint(
-            "ck_deployments_project_environment_pair",
+            op.f("ck_deployments_project_environment_pair"),
             "(project_id IS NULL) = (environment_id IS NULL)",
         )
 
 
 def downgrade() -> None:
     with op.batch_alter_table("deployments") as batch:
-        batch.drop_constraint("ck_deployments_project_environment_pair", type_="check")
+        batch.drop_constraint(op.f("ck_deployments_project_environment_pair"), type_="check")
         batch.drop_constraint(op.f("fk_deployments_project_environment"), type_="foreignkey")
         batch.drop_index(op.f("ix_deployments_environment_id"))
         batch.drop_index(op.f("ix_deployments_project_id"))
@@ -56,4 +56,4 @@ def downgrade() -> None:
         batch.drop_column("project_id")
 
     with op.batch_alter_table("environments") as batch:
-        batch.drop_constraint("uq_environments_project_id_id", type_="unique")
+        batch.drop_constraint(op.f("uq_environments_project_id_id"), type_="unique")

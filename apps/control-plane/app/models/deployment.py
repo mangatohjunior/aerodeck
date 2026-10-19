@@ -7,6 +7,9 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
 
+# Shared with IntegrityError mapping on create (must match migration 0014).
+DEPLOYMENT_ENVIRONMENT_FK = "fk_deployments_project_environment"
+
 
 class DeploymentStatus(enum.StrEnum):
     queued = "queued"
@@ -23,7 +26,7 @@ class Deployment(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         ForeignKeyConstraint(
             ["project_id", "environment_id"],
             ["environments.project_id", "environments.id"],
-            name="fk_deployments_project_environment",
+            name=DEPLOYMENT_ENVIRONMENT_FK,
             ondelete="SET NULL",
         ),
         CheckConstraint(

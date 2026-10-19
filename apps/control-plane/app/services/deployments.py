@@ -8,7 +8,7 @@ from sqlalchemy.exc import IntegrityError
 from app.core.errors import NotFoundError
 from app.core.github import canonical_github_repo_url, parse_github_repo
 from app.core.logging import get_logger
-from app.models.deployment import Deployment, DeploymentStatus
+from app.models.deployment import DEPLOYMENT_ENVIRONMENT_FK, Deployment, DeploymentStatus
 from app.models.project import Environment
 from app.repositories.deployments import DeploymentRepository
 from app.schemas.deployment import DeploymentCreate
@@ -16,12 +16,10 @@ from app.services.deployment_terminal import DeploymentTerminalService
 
 logger = get_logger("services.deployments")
 
-_DEPLOYMENT_ENV_FK = "fk_deployments_project_environment"
-
 
 def _is_deployment_environment_fk_violation(exc: IntegrityError) -> bool:
     detail = str(exc.orig if exc.orig is not None else exc).lower()
-    if _DEPLOYMENT_ENV_FK in detail:
+    if DEPLOYMENT_ENVIRONMENT_FK.lower() in detail:
         return True
     # SQLite omits the constraint name; do not treat every dialect's FK text as a miss.
     orig = exc.orig
