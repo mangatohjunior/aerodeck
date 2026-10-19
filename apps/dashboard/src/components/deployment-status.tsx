@@ -1,9 +1,9 @@
 "use client";
 
-import Link from "next/link";
 import { CheckCircle2, Loader2, Rocket, XCircle } from "lucide-react";
 import { useEffect, useState } from "react";
 
+import { DeploymentEnvironmentLink } from "@/components/deployment-environment-link";
 import { LinkButton } from "@/components/link-button";
 import { Terminal } from "@/components/terminal";
 import { Badge } from "@/components/ui/badge";
@@ -21,7 +21,6 @@ import {
   markDeploymentFailed,
   markDeploymentSucceeded,
 } from "@/lib/api";
-import { deploymentEnvironmentLabel } from "@/lib/deployment-environment-label";
 import type {
   Deployment,
   DeploymentStatus,
@@ -79,7 +78,6 @@ export function DeploymentStatusView({ deployment, logSource }: DeploymentStatus
   const [error, setError] = useState<string | null>(null);
   const [environments, setEnvironments] = useState<EnvironmentOption[]>([]);
   const copy = logSourceCopy(logSource);
-  const envLabel = deploymentEnvironmentLabel(deployment, environments);
 
   useEffect(() => {
     if (logSource !== "control-plane" || !deployment.project_id || !deployment.environment_id) {
@@ -92,8 +90,11 @@ export function DeploymentStatusView({ deployment, logSource }: DeploymentStatus
           setEnvironments(page.items);
         }
       })
-      .catch(() => {
-        // Labels stay optional; detail still works without the catalog.
+      .catch((cause: unknown) => {
+        console.warn(
+          "event=deployment_environment_catalog_failed detail=%s",
+          cause instanceof Error ? cause.message : "request failed",
+        );
       });
     return () => {
       cancelled = true;
@@ -170,15 +171,11 @@ export function DeploymentStatusView({ deployment, logSource }: DeploymentStatus
           {deployment.project_id && deployment.environment_id ? (
             <div className="sm:col-span-2">
               <p className="text-xs text-muted-foreground">Environment</p>
-              <p className="mt-0.5 text-sm">
-                {envLabel ? (
-                  envLabel
-                ) : (
-                  <Link href="/projects" className="text-primary hover:underline">
-                    Linked environment
-                  </Link>
-                )}
-              </p>
+              <DeploymentEnvironmentLink
+                deployment={deployment}
+                environments={environments}
+                className="mt-0.5 text-sm text-muted-foreground"
+              />
             </div>
           ) : null}
         </CardContent>

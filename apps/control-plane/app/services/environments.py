@@ -6,9 +6,9 @@ from sqlalchemy.exc import IntegrityError
 from app.core.errors import ConflictError, NotFoundError
 from app.core.logging import get_logger
 from app.models.project import Environment
-from app.repositories.deployments import DeploymentRepository
 from app.repositories.environments import EnvironmentRepository
 from app.schemas.environment import EnvironmentCreate, EnvironmentUpdate
+from app.services.deployment_links import DeploymentEnvironmentLinkClearer
 from app.services.projects import ProjectService
 
 logger = get_logger("services.environments")
@@ -19,7 +19,7 @@ class EnvironmentService:
         self,
         environments: EnvironmentRepository,
         projects: ProjectService,
-        deployments: DeploymentRepository,
+        deployments: DeploymentEnvironmentLinkClearer,
     ) -> None:
         self._environments = environments
         self._projects = projects

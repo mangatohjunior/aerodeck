@@ -3,12 +3,12 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
+import { DeploymentEnvironmentLink } from "@/components/deployment-environment-link";
 import { PageHeader } from "@/components/page-header";
 import { LinkButton } from "@/components/link-button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { fetchDeployments, fetchEnvironments } from "@/lib/api";
-import { deploymentEnvironmentLabel } from "@/lib/deployment-environment-label";
 import { formatInstant } from "@/lib/format";
 import type { Deployment, EnvironmentOption } from "@/lib/types";
 
@@ -37,8 +37,11 @@ export function DeploymentsList({ controlPlane = false }: { controlPlane?: boole
             setEnvironments(page.items);
           }
         })
-        .catch(() => {
-          // Labels stay optional; list still works without the catalog.
+        .catch((cause: unknown) => {
+          console.warn(
+            "event=deployment_environment_catalog_failed detail=%s",
+            cause instanceof Error ? cause.message : "request failed",
+          );
         });
     }
     return () => {
@@ -74,35 +77,22 @@ export function DeploymentsList({ controlPlane = false }: { controlPlane?: boole
               </p>
             ) : (
               <ul className="divide-y divide-border">
-                {rows.map((row) => {
-                  const envLabel = deploymentEnvironmentLabel(row, environments);
-                  return (
-                    <li key={row.id} className="flex flex-wrap items-center gap-3 py-3">
-                      <div className="min-w-0 flex-1">
-                        <Link
-                          href={`/deployments/${row.id}`}
-                          className="font-medium text-primary hover:underline"
-                        >
-                          {row.owner}/{row.repo}
-                        </Link>
-                        <p className="font-mono text-xs text-muted-foreground">{row.id}</p>
-                        {row.project_id && row.environment_id ? (
-                          <p className="text-xs text-muted-foreground">
-                            {envLabel ? (
-                              envLabel
-                            ) : (
-                              <Link href="/projects" className="text-primary hover:underline">
-                                Linked environment
-                              </Link>
-                            )}
-                          </p>
-                        ) : null}
-                      </div>
-                      <p className="text-xs text-muted-foreground">{formatInstant(row.started_at)}</p>
-                      <Badge variant="secondary">{row.status}</Badge>
-                    </li>
-                  );
-                })}
+                {rows.map((row) => (
+                  <li key={row.id} className="flex flex-wrap items-center gap-3 py-3">
+                    <div className="min-w-0 flex-1">
+                      <Link
+                        href={`/deployments/${row.id}`}
+                        className="font-medium text-primary hover:underline"
+                      >
+                        {row.owner}/{row.repo}
+                      </Link>
+                      <p className="font-mono text-xs text-muted-foreground">{row.id}</p>
+                      <DeploymentEnvironmentLink deployment={row} environments={environments} />
+                    </div>
+                    <p className="text-xs text-muted-foreground">{formatInstant(row.started_at)}</p>
+                    <Badge variant="secondary">{row.status}</Badge>
+                  </li>
+                ))}
               </ul>
             )}
           </CardContent>

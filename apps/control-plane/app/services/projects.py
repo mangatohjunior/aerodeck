@@ -6,15 +6,17 @@ from sqlalchemy.exc import IntegrityError
 from app.core.errors import ConflictError, NotFoundError
 from app.core.logging import get_logger
 from app.models.project import Project
-from app.repositories.deployments import DeploymentRepository
 from app.repositories.projects import ProjectRepository
 from app.schemas.project import ProjectCreate, ProjectUpdate
+from app.services.deployment_links import DeploymentProjectLinkClearer
 
 logger = get_logger("services.projects")
 
 
 class ProjectService:
-    def __init__(self, projects: ProjectRepository, deployments: DeploymentRepository) -> None:
+    def __init__(
+        self, projects: ProjectRepository, deployments: DeploymentProjectLinkClearer
+    ) -> None:
         self._projects = projects
         self._deployments = deployments
 

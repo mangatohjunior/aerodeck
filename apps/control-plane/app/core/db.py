@@ -8,6 +8,7 @@ routes and services receive it through ``SessionDep`` in ``app/api/deps.py``.
 from collections.abc import AsyncIterator
 
 from sqlalchemy import event, text
+from sqlalchemy.engine.interfaces import DBAPIConnection
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
@@ -27,7 +28,9 @@ def create_engine(database_url: str) -> AsyncEngine:
         )
 
         @event.listens_for(engine.sync_engine, "connect")
-        def _enable_sqlite_foreign_keys(dbapi_connection, _connection_record) -> None:  # noqa: ANN001
+        def _enable_sqlite_foreign_keys(
+            dbapi_connection: DBAPIConnection, _connection_record: object
+        ) -> None:
             cursor = dbapi_connection.cursor()
             cursor.execute("PRAGMA foreign_keys=ON")
             cursor.close()
