@@ -15,6 +15,7 @@ import {
   authenticateControlPlaneUser,
   createControlPlaneDeployment,
   createControlPlaneDeploymentAndProvision,
+  createControlPlaneProject,
   getControlPlaneDeployment,
   createControlPlaneSession,
   linkControlPlaneGoogleUser,
@@ -552,6 +553,123 @@ describe("openControlPlaneDeploymentLogs", () => {
         assert.ok(cause instanceof ControlPlaneError);
         assert.equal(cause.message.includes("super-secret"), false);
         assert.match(cause.message, /not found \(404\)/);
+        return true;
+      },
+    );
+  });
+});
+
+describe("createControlPlaneProject", () => {
+  it("posts slug and name with the bearer and omits a blank description", async () => {
+    clearControlPlaneTokenCache();
+    let authorization = "";
+    let posted = "";
+    const fetchImpl: typeof fetch = async (input, init) => {
+      const url = String(input);
+      if (url.endsWith("/api/v1/auth/token")) {
+        return jsonResponse({ access_token: "issued-bearer", expires_in: 900 });
+      }
+      authorization = new Headers(init?.headers).get("authorization") ?? "";
+      posted = String(init?.body ?? "");
+      assert.equal(init?.method, "POST");
+      assert.ok(url.endsWith("/api/v1/projects"));
+      return jsonResponse({
+        id: "11111111-1111-4111-8111-111111111111",
+        slug: "payments",
+        name: "Payments",
+        description: null,
+        created_at: "2026-10-19T00:00:00.000Z",
+        updated_at: "2026-10-19T00:00:00.000Z",
+      }, 201);
+    };
+
+    const project = await createControlPlaneProject(
+      config,
+      { slug: "payments", name: "Payments", description: "  " },
+      { fetch: fetchImpl },
+    );
+    assert.equal(authorization, "Bearer issued-bearer");
+    assert.equal(posted, JSON.stringify({ slug: "payments", name: "Payments" }));
+    assert.equal(project.slug, "payments");
+    assert.equal(project.description, null);
+  });
+
+  it("includes a trimmed description when set", async () => {
+    clearControlPlaneTokenCache();
+    let posted = "";
+    const fetchImpl: typeof fetch = async (input, init) => {
+      const url = String(input);
+      if (url.endsWith("/api/v1/auth/token")) {
+        return jsonResponse({ access_token: "issued-bearer", expires_in: 900 });
+      }
+      posted = String(init?.body ?? "");
+      return jsonResponse({
+        id: "11111111-1111-4111-8111-111111111111",
+        slug: "billing",
+        name: "Billing",
+        description: "Card rails",
+        created_at: "2026-10-19T00:00:00.000Z",
+        updated_at: "2026-10-19T00:00:00.000Z",
+      }, 201);
+    };
+
+    const project = await createControlPlaneProject(
+      config,
+      { slug: "billing", name: "Billing", description: "  Card rails  " },
+      { fetch: fetchImpl },
+    );
+    assert.equal(
+      posted,
+      JSON.stringify({ slug: "billing", name: "Billing", description: "Card rails" }),
+    );
+    assert.equal(project.description, "Card rails");
+  });
+
+  it("maps conflict and validation failures without leaking upstream bodies", async () => {
+    clearControlPlaneTokenCache();
+    const conflictFetch: typeof fetch = async (input) => {
+      const url = String(input);
+      if (url.endsWith("/api/v1/auth/token")) {
+        return jsonResponse({ access_token: "issued-bearer", expires_in: 900 });
+      }
+      return jsonResponse({ detail: "taken", secret: "super-secret" }, 409);
+    };
+    await assert.rejects(
+      () =>
+        createControlPlaneProject(
+          config,
+          { slug: "payments", name: "Payments" },
+          { fetch: conflictFetch },
+        ),
+      (cause: unknown) => {
+        assert.ok(cause instanceof ControlPlaneError);
+        assert.equal(cause.status, 409);
+        assert.equal(cause.message.includes("super-secret"), false);
+        assert.match(cause.message, /conflict \(409\)/);
+        return true;
+      },
+    );
+
+    clearControlPlaneTokenCache();
+    const invalidFetch: typeof fetch = async (input) => {
+      const url = String(input);
+      if (url.endsWith("/api/v1/auth/token")) {
+        return jsonResponse({ access_token: "issued-bearer", expires_in: 900 });
+      }
+      return jsonResponse({ detail: "Payments!", secret: "super-secret" }, 422);
+    };
+    await assert.rejects(
+      () =>
+        createControlPlaneProject(
+          config,
+          { slug: "Payments!", name: "Payments" },
+          { fetch: invalidFetch },
+        ),
+      (cause: unknown) => {
+        assert.ok(cause instanceof ControlPlaneError);
+        assert.equal(cause.status, 422);
+        assert.equal(cause.message.includes("Payments!"), false);
+        assert.match(cause.message, /rejected \(422\)/);
         return true;
       },
     );

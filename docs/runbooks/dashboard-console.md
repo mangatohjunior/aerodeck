@@ -4,7 +4,10 @@ The Next.js app in `apps/dashboard`. The browser keeps the `aerodeck_session`
 cookie. The server calls the control plane with an enrolled client. The
 browser never sees that client secret or the control-plane bearer.
 
-Overview and Projects read `GET /api/v1/projects`. Sandboxes read
+Overview and Projects read `GET /api/v1/projects`. Creating a project uses
+`POST /api/v1/projects` through `POST /api/console/projects` when the console
+client is set; the Projects form is hidden and create returns 404 when it is
+not, so the seed list stays unchanged. Sandboxes read
 `GET /api/v1/projects/{id}/sandboxes` through `GET /api/console/sandboxes`.
 Creating a deployment uses `POST /api/v1/deployments` through
 `POST /api/console/deployments` when the console client is set, and stays on

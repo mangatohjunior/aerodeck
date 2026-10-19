@@ -4,6 +4,7 @@ import {
   type ApiError,
   type Deployment,
   type EnvironmentOptionPage,
+  type Project,
   type ProjectPage,
   type ProjectSource,
   type PublicUser,
@@ -69,6 +70,27 @@ export async function fetchProjectPage(): Promise<ProjectPage> {
   const response = await fetch("/api/console/projects", {
     credentials: "same-origin",
     cache: "no-store",
+  });
+  return readJson(response);
+}
+
+export async function createProject(input: {
+  slug: string;
+  name: string;
+  description?: string | null;
+}): Promise<Project> {
+  const body: Record<string, string> = {
+    slug: input.slug,
+    name: input.name,
+  };
+  if (input.description) {
+    body.description = input.description;
+  }
+  const response = await fetch("/api/console/projects", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "same-origin",
+    body: JSON.stringify(body),
   });
   return readJson(response);
 }
