@@ -9,7 +9,6 @@ import pytest
 from app.models.deployment import Deployment, DeploymentStatus
 from app.services.jobs import JobService
 from app.services.provisioning import JobKind
-from app.tasks.deployment_status import try_set_provision_job_id_isolated
 
 
 def _deployment() -> Deployment:
@@ -128,16 +127,3 @@ async def test_enqueue_returns_ticket_when_provision_job_id_persist_raises() -> 
     assert ticket.job_id == job_id
     persist.assert_awaited_once()
 
-
-@pytest.mark.asyncio
-async def test_try_set_provision_job_id_isolated_swallows_errors(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    async def boom(_deployment_id: uuid.UUID, _job_id: uuid.UUID) -> None:
-        raise RuntimeError("session boom")
-
-    monkeypatch.setattr(
-        "app.tasks.deployment_status.set_provision_job_id_isolated",
-        boom,
-    )
-    await try_set_provision_job_id_isolated(uuid.uuid4(), uuid.uuid4())

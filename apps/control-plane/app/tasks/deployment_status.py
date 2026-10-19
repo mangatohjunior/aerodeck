@@ -3,7 +3,8 @@
 Enqueue failure must mark the row even though the request then raises and rolls
 back. Successful provision enqueue persists ``provision_job_id`` on its own
 session so a flush failure cannot poison the request session and turn 202 into
-500 (#139). Uses ``DeploymentTerminalService`` / repository (no ``EnvironmentLookup``).
+500 (#139). Writers go through ``DeploymentTerminalService``; ``JobService`` owns
+best-effort handling when persisting the job id after broker accept.
 """
 
 import asyncio
@@ -60,20 +61,6 @@ async def set_provision_job_id_isolated(deployment_id: uuid.UUID, job_id: uuid.U
         except Exception:
             await session.rollback()
             raise
-
-
-async def try_set_provision_job_id_isolated(deployment_id: uuid.UUID, job_id: uuid.UUID) -> None:
-    """Best-effort isolated persist; log and continue on failure."""
-    try:
-        await set_provision_job_id_isolated(deployment_id, job_id)
-    except Exception as persist_exc:
-        logger.warning(
-            "event=deployment_provision_job_id_skipped deployment=%s job_id=%s error_type=%s",
-            deployment_id,
-            job_id,
-            type(persist_exc).__name__,
-            exc_info=persist_exc,
-        )
 
 
 def mark_deployment_failed_sync(deployment_id: uuid.UUID) -> None:

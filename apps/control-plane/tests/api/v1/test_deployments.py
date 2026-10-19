@@ -244,6 +244,7 @@ async def test_create_stores_a_github_repository(client: AsyncClient, auth: dict
     assert body["status"] == "running"
     assert body["project_id"] is None
     assert body["environment_id"] is None
+    assert body["provision_job_id"] is None
     assert "secret" not in response.text
     assert "token" not in response.text
 
@@ -252,6 +253,7 @@ async def test_create_stores_a_github_repository(client: AsyncClient, auth: dict
     assert fetched.json()["id"] == body["id"]
     assert fetched.json()["project_id"] is None
     assert fetched.json()["environment_id"] is None
+    assert fetched.json()["provision_job_id"] is None
 
     listed = await client.get(DEPLOYMENTS, headers=auth)
     assert listed.status_code == 200, listed.text
@@ -259,6 +261,7 @@ async def test_create_stores_a_github_repository(client: AsyncClient, auth: dict
     assert listed.json()["items"][0]["id"] == body["id"]
     assert listed.json()["items"][0]["project_id"] is None
     assert listed.json()["items"][0]["environment_id"] is None
+    assert listed.json()["items"][0]["provision_job_id"] is None
 
 
 async def test_create_persists_environment_link(client: AsyncClient, auth: dict[str, str]) -> None:
