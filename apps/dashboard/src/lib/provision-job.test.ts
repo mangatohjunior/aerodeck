@@ -11,6 +11,7 @@ import {
   PROVISION_JOB_POLL_MAX_CONSECUTIVE_ERRORS,
   PROVISION_JOB_POLL_MAX_QUEUED_ONLY,
   provisionJobPollStopMessage,
+  settledActiveBadgeReason,
   settledActiveJobBadgeLabel,
 } from "./provision-job-poll";
 
@@ -179,6 +180,19 @@ describe("nextProvisionJobPoll", () => {
     );
   });
 
+  it("prefers job terminal over deployment_terminal when both apply", () => {
+    assert.deepEqual(
+      nextProvisionJobPoll({
+        ...base,
+        status: "succeeded",
+        attempts: 2,
+        everLeftQueued: true,
+        deploymentTerminal: true,
+      }),
+      { keepPolling: false, reason: "terminal" },
+    );
+  });
+
   it("stops when the parent deployment is already terminal", () => {
     assert.deepEqual(
       nextProvisionJobPoll({ ...base, status: "queued", attempts: 1, deploymentTerminal: true }),
@@ -253,6 +267,12 @@ describe("isSettledActiveProvisionJob", () => {
     assert.equal(settledActiveJobBadgeLabel("deployment_terminal"), "Stale");
     assert.equal(settledActiveJobBadgeLabel("deadline"), "Stopped");
     assert.equal(settledActiveJobBadgeLabel("errors"), "Unavailable");
+  });
+
+  it("narrows settled badge reasons and rejects terminal", () => {
+    assert.equal(settledActiveBadgeReason("stale", "queued"), "stale");
+    assert.equal(settledActiveBadgeReason("terminal", "succeeded"), null);
+    assert.equal(settledActiveBadgeReason("deployment_terminal", "succeeded"), null);
   });
 });
 

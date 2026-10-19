@@ -93,11 +93,13 @@ export function provisionJobPollStopMessage(reason: ProvisionJobPollStopReason):
  * without mounting the panel (unknown job → forever `queued` on the CP).
  */
 export function nextProvisionJobPoll(state: ProvisionJobPollState): ProvisionJobPollDecision {
-  if (state.deploymentTerminal) {
-    return { keepPolling: false, reason: "deployment_terminal" };
-  }
+  // Prefer job terminal over deployment_terminal so a succeeded/failed job is labeled correctly
+  // even when the parent deployment already finished.
   if (state.status !== null && !isActiveProvisionJobStatus(state.status)) {
     return { keepPolling: false, reason: "terminal" };
+  }
+  if (state.deploymentTerminal) {
+    return { keepPolling: false, reason: "deployment_terminal" };
   }
   if (state.consecutiveErrors >= PROVISION_JOB_POLL_MAX_CONSECUTIVE_ERRORS) {
     return { keepPolling: false, reason: "errors" };
@@ -114,4 +116,15 @@ export function nextProvisionJobPoll(state: ProvisionJobPollState): ProvisionJob
   }
   // status is null (first schedule after error) or still active — keep going.
   return { keepPolling: true };
+}
+
+/** Narrow stop reason for settled-active badges (`settledActive` implies this shape). */
+export function settledActiveBadgeReason(
+  reason: ProvisionJobPollStopReason | null,
+  status: ProvisionJobStatus | null,
+): SettledActiveBadgeReason | null {
+  if (!isSettledActiveProvisionJob(reason, status) || reason === null || reason === "terminal") {
+    return null;
+  }
+  return reason;
 }
