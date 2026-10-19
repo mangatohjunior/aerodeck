@@ -37,6 +37,8 @@ export function useProvisionJobPoll(
     let consecutiveErrors = 0;
     let everLeftQueued = false;
 
+    setJob(null);
+    setError(null);
     setStopReason(null);
 
     function applyStop(reason: ProvisionJobPollStopReason) {
@@ -48,7 +50,7 @@ export function useProvisionJobPoll(
       if (reason === "deployment_terminal" && lastStatus !== null && isActiveProvisionJobStatus(lastStatus)) {
         setError(provisionJobPollStopMessage(reason));
       }
-      // terminal / errors: stay quiet or keep the last BFF error.
+      // terminal: quiet. errors: keep the last BFF message (settledActive stops the spinner).
     }
 
     function scheduleNext() {

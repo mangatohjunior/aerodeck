@@ -64,6 +64,20 @@ describe("jsonControlPlaneError", () => {
       code: "control_plane_unavailable",
     });
   });
+
+  it("maps 503 to queue_unavailable when a queue detail is provided", async () => {
+    const unavailable = jsonControlPlaneError(
+      new ControlPlaneError("control plane job queue unavailable (503)", 503),
+      "console_job_read_failed",
+      "Job not found.",
+      "Job queue is unavailable.",
+    );
+    assert.equal(unavailable.status, 503);
+    assert.deepEqual(await unavailable.json(), {
+      detail: "Job queue is unavailable.",
+      code: "queue_unavailable",
+    });
+  });
 });
 
 describe("readControlPlaneConfig", () => {

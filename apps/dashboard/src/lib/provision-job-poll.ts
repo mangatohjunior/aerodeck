@@ -49,7 +49,12 @@ export function isSettledActiveProvisionJob(
   if (reason === null || status === null || !isActiveProvisionJobStatus(status)) {
     return false;
   }
-  return reason === "deployment_terminal" || reason === "stale" || reason === "deadline";
+  return (
+    reason === "deployment_terminal" ||
+    reason === "stale" ||
+    reason === "deadline" ||
+    reason === "errors"
+  );
 }
 
 export function provisionJobPollStopMessage(reason: ProvisionJobPollStopReason): string {

@@ -236,6 +236,7 @@ describe("isSettledActiveProvisionJob", () => {
     assert.equal(isSettledActiveProvisionJob("deployment_terminal", "queued"), true);
     assert.equal(isSettledActiveProvisionJob("stale", "queued"), true);
     assert.equal(isSettledActiveProvisionJob("deadline", "running"), true);
+    assert.equal(isSettledActiveProvisionJob("errors", "running"), true);
     assert.equal(isSettledActiveProvisionJob("terminal", "succeeded"), false);
     assert.equal(isSettledActiveProvisionJob("deployment_terminal", "succeeded"), false);
     assert.equal(isSettledActiveProvisionJob(null, "queued"), false);
