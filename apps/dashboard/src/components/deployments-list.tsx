@@ -16,7 +16,9 @@ import type { Deployment } from "@/lib/types";
 export function DeploymentsList({ controlPlane = false }: { controlPlane?: boolean }) {
   const [rows, setRows] = useState<Deployment[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const environments = useEnvironmentCatalog(controlPlane);
+  const needsCatalog =
+    controlPlane && rows.some((row) => Boolean(row.project_id && row.environment_id));
+  const environments = useEnvironmentCatalog(needsCatalog);
 
   useEffect(() => {
     let cancelled = false;

@@ -16,6 +16,16 @@ from app.services.deployment_terminal import DeploymentTerminalService
 
 logger = get_logger("services.deployments")
 
+_DEPLOYMENT_ENV_FK = "fk_deployments_project_environment"
+
+
+def _is_deployment_environment_fk_violation(exc: IntegrityError) -> bool:
+    detail = str(exc.orig if exc.orig is not None else exc).lower()
+    if _DEPLOYMENT_ENV_FK in detail:
+        return True
+    # SQLite often reports only "FOREIGN KEY constraint failed".
+    return "foreign key" in detail
+
 
 class EnvironmentLookup(Protocol):
     """Narrow create-time check that the linked environment exists."""
@@ -55,8 +65,12 @@ class DeploymentService:
                 )
             )
         except IntegrityError as exc:
-            # Env/project removed between lookup and insert (composite FK).
-            if project_id is not None and environment_id is not None:
+            # Env/project removed between lookup and insert (composite FK only).
+            if (
+                project_id is not None
+                and environment_id is not None
+                and _is_deployment_environment_fk_violation(exc)
+            ):
                 raise NotFoundError(
                     f"Environment {environment_id} not found in project {project_id}"
                 ) from exc

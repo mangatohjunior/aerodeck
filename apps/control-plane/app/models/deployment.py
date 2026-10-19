@@ -28,7 +28,8 @@ class Deployment(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         ),
         CheckConstraint(
             "(project_id IS NULL) = (environment_id IS NULL)",
-            name="ck_deployments_project_environment_pair",
+            # Naming convention expands to ck_deployments_project_environment_pair.
+            name="project_environment_pair",
         ),
     )
 
