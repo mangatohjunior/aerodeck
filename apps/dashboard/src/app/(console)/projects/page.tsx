@@ -45,7 +45,7 @@ export default function ProjectsPage() {
         title="Projects"
         description={
           page?.source === "control-plane"
-            ? "Live projects from GET /api/v1/projects. Create posts through POST /api/console/projects."
+            ? "Live projects through GET and POST /api/console/projects."
             : "Local seed. The server uses the control plane when CONTROL_PLANE_URL is set."
         }
       />

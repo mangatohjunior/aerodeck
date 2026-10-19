@@ -14,14 +14,19 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { createProject } from "@/lib/api";
 import {
   isValidProjectName,
   isValidProjectSlug,
   normalizeProjectDescription,
   PROJECT_DESCRIPTION_MAX,
+  PROJECT_DESCRIPTION_TOO_LONG,
+  PROJECT_NAME_INVALID,
   PROJECT_NAME_MAX,
+  PROJECT_SLUG_INVALID,
   PROJECT_SLUG_MAX,
+  slugFromName,
 } from "@/lib/project-input";
 import type { Project } from "@/lib/types";
 
@@ -62,13 +67,11 @@ export function NewProjectForm({ onCreated }: NewProjectFormProps) {
     const trimmedName = name.trim();
     const trimmedSlug = slug.trim().toLowerCase();
     if (!isValidProjectName(trimmedName)) {
-      setError("Enter a project name (1–120 characters).");
+      setError(PROJECT_NAME_INVALID);
       return;
     }
     if (!isValidProjectSlug(trimmedSlug)) {
-      setError(
-        "Use a lowercase slug with letters, digits, and hyphens (no leading or trailing hyphen).",
-      );
+      setError(PROJECT_SLUG_INVALID);
       return;
     }
     const normalizedDescription = normalizeProjectDescription(description);
@@ -76,7 +79,7 @@ export function NewProjectForm({ onCreated }: NewProjectFormProps) {
       normalizedDescription !== null &&
       normalizedDescription.length > PROJECT_DESCRIPTION_MAX
     ) {
-      setError("Description is too long.");
+      setError(PROJECT_DESCRIPTION_TOO_LONG);
       return;
     }
 
@@ -144,11 +147,12 @@ export function NewProjectForm({ onCreated }: NewProjectFormProps) {
           </div>
           <div className="grid gap-2 sm:col-span-2">
             <Label htmlFor="project-description">Description (optional)</Label>
-            <Input
+            <Textarea
               id="project-description"
               name="description"
               value={description}
               maxLength={PROJECT_DESCRIPTION_MAX}
+              rows={3}
               autoComplete="off"
               placeholder="Tenant for card processing"
               disabled={submitting}
@@ -179,14 +183,4 @@ export function NewProjectForm({ onCreated }: NewProjectFormProps) {
       </form>
     </Card>
   );
-}
-
-/** Lowercase slug suggestion from a display name; empty when nothing usable remains. */
-function slugFromName(name: string): string {
-  return name
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, PROJECT_SLUG_MAX);
 }

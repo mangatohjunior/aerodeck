@@ -8,6 +8,7 @@ import {
   PROJECT_DESCRIPTION_MAX,
   PROJECT_NAME_MAX,
   PROJECT_SLUG_MAX,
+  slugFromName,
 } from "./project-input";
 
 describe("isValidProjectSlug", () => {
@@ -51,5 +52,19 @@ describe("normalizeProjectDescription", () => {
       normalizeProjectDescription("x".repeat(PROJECT_DESCRIPTION_MAX))?.length,
       PROJECT_DESCRIPTION_MAX,
     );
+  });
+});
+
+describe("slugFromName", () => {
+  it("lowercases and replaces non-alphanumerics with hyphens", () => {
+    assert.equal(slugFromName("Payments"), "payments");
+    assert.equal(slugFromName("  Acme Billing  "), "acme-billing");
+    assert.equal(slugFromName("Card_Rails!"), "card-rails");
+  });
+
+  it("strips leading and trailing hyphens and caps length", () => {
+    assert.equal(slugFromName("---Payments---"), "payments");
+    assert.equal(slugFromName("!!!"), "");
+    assert.equal(slugFromName("A".repeat(PROJECT_SLUG_MAX + 5)).length, PROJECT_SLUG_MAX);
   });
 });
