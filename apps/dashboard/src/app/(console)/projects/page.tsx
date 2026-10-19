@@ -25,12 +25,12 @@ export default function ProjectsPage() {
       if (!current || current.source !== "control-plane") {
         return current;
       }
+      const alreadyListed = current.items.some((row) => row.id === project.id);
       const items = [project, ...current.items.filter((row) => row.id !== project.id)];
       return {
         ...current,
         items,
-        total: items.length,
-        limit: Math.max(items.length, current.limit),
+        total: alreadyListed ? current.total : current.total + 1,
       };
     });
   }

@@ -67,4 +67,11 @@ describe("slugFromName", () => {
     assert.equal(slugFromName("!!!"), "");
     assert.equal(slugFromName("A".repeat(PROJECT_SLUG_MAX + 5)).length, PROJECT_SLUG_MAX);
   });
+
+  it("does not leave a trailing hyphen when slice cuts mid-segment", () => {
+    const suggested = slugFromName(`${"a".repeat(PROJECT_SLUG_MAX - 1)} more text`);
+    assert.equal(suggested.endsWith("-"), false);
+    assert.equal(isValidProjectSlug(suggested), true);
+    assert.equal(suggested, "a".repeat(PROJECT_SLUG_MAX - 1));
+  });
 });
