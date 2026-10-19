@@ -8,11 +8,13 @@ import {
   ENVIRONMENT_PROJECT_REQUIRED,
   ENVIRONMENT_REGION_INVALID,
   ENVIRONMENT_SLUG_INVALID,
+  ENVIRONMENT_UPDATE_EMPTY,
   isValidEnvironmentKind,
   isValidEnvironmentName,
   isValidEnvironmentRegion,
   isValidEnvironmentSlug,
   parseEnvironmentCreateFields,
+  parseEnvironmentUpdateFields,
 } from "./environment-input";
 
 const VALID_PROJECT_ID = "11111111-1111-4111-8111-111111111111";
@@ -134,5 +136,40 @@ describe("parseEnvironmentCreateFields", () => {
       }),
       { ok: false, error: ENVIRONMENT_REGION_INVALID, code: "invalid_region" },
     );
+  });
+});
+
+describe("parseEnvironmentUpdateFields", () => {
+  it("accepts a partial update", () => {
+    assert.deepEqual(parseEnvironmentUpdateFields({ region: "ams3" }), {
+      ok: true,
+      value: { region: "ams3" },
+    });
+  });
+
+  it("rejects an empty update", () => {
+    assert.deepEqual(parseEnvironmentUpdateFields({}), {
+      ok: false,
+      error: ENVIRONMENT_UPDATE_EMPTY,
+      code: "empty_update",
+    });
+  });
+
+  it("returns stable codes for each validation failure", () => {
+    assert.deepEqual(parseEnvironmentUpdateFields({ name: "   " }), {
+      ok: false,
+      error: ENVIRONMENT_NAME_INVALID,
+      code: "invalid_name",
+    });
+    assert.deepEqual(parseEnvironmentUpdateFields({ kind: "qa" }), {
+      ok: false,
+      error: ENVIRONMENT_KIND_INVALID,
+      code: "invalid_kind",
+    });
+    assert.deepEqual(parseEnvironmentUpdateFields({ region: "NYC3" }), {
+      ok: false,
+      error: ENVIRONMENT_REGION_INVALID,
+      code: "invalid_region",
+    });
   });
 });

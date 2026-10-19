@@ -263,6 +263,123 @@ export async function createControlPlaneEnvironment(
   return parseEnvironmentOption(await response.json(), project);
 }
 
+export type UpdateControlPlaneProjectInput = {
+  projectId: string;
+  name?: string;
+  description?: string | null;
+};
+
+export async function updateControlPlaneProject(
+  config: ControlPlaneConfig,
+  input: UpdateControlPlaneProjectInput,
+  options: ListOptions = {},
+): Promise<Project> {
+  if (!isControlPlaneUuid(input.projectId)) {
+    throw new ControlPlaneError("control plane project id was not a uuid");
+  }
+  const body: Record<string, string | null> = {};
+  if (input.name !== undefined) {
+    body.name = input.name;
+  }
+  if (input.description !== undefined) {
+    body.description = input.description;
+  }
+  return controlPlaneRequest(
+    config,
+    {
+      method: "PATCH",
+      path: `/api/v1/projects/${encodeURIComponent(input.projectId)}`,
+      body,
+      resource: "project",
+      mapStatuses: { rejected: true },
+      parse: parseProject,
+    },
+    options,
+  );
+}
+
+export async function deleteControlPlaneProject(
+  config: ControlPlaneConfig,
+  projectId: string,
+  options: ListOptions = {},
+): Promise<void> {
+  if (!isControlPlaneUuid(projectId)) {
+    throw new ControlPlaneError("control plane project id was not a uuid");
+  }
+  await controlPlaneRequest(
+    config,
+    {
+      method: "DELETE",
+      path: `/api/v1/projects/${encodeURIComponent(projectId)}`,
+      resource: "project",
+      empty: true,
+    },
+    options,
+  );
+}
+
+export type UpdateControlPlaneEnvironmentInput = {
+  projectId: string;
+  environmentId: string;
+  name?: string;
+  kind?: string;
+  region?: string;
+};
+
+export async function updateControlPlaneEnvironment(
+  config: ControlPlaneConfig,
+  input: UpdateControlPlaneEnvironmentInput,
+  options: ListOptions = {},
+): Promise<EnvironmentOption> {
+  if (!isControlPlaneUuid(input.projectId) || !isControlPlaneUuid(input.environmentId)) {
+    throw new ControlPlaneError("control plane environment ids were not uuids");
+  }
+  const project = await getControlPlaneProject(config, input.projectId, options);
+  const body: Record<string, string> = {};
+  if (input.name !== undefined) {
+    body.name = input.name;
+  }
+  if (input.kind !== undefined) {
+    body.kind = input.kind;
+  }
+  if (input.region !== undefined) {
+    body.region = input.region;
+  }
+  return controlPlaneRequest(
+    config,
+    {
+      method: "PATCH",
+      path: `/api/v1/projects/${encodeURIComponent(input.projectId)}/environments/${encodeURIComponent(input.environmentId)}`,
+      body,
+      resource: "environment",
+      mapStatuses: { rejected: true },
+      parse: (json) => parseEnvironmentOption(json, project),
+    },
+    options,
+  );
+}
+
+export async function deleteControlPlaneEnvironment(
+  config: ControlPlaneConfig,
+  projectId: string,
+  environmentId: string,
+  options: ListOptions = {},
+): Promise<void> {
+  if (!isControlPlaneUuid(projectId) || !isControlPlaneUuid(environmentId)) {
+    throw new ControlPlaneError("control plane environment ids were not uuids");
+  }
+  await controlPlaneRequest(
+    config,
+    {
+      method: "DELETE",
+      path: `/api/v1/projects/${encodeURIComponent(projectId)}/environments/${encodeURIComponent(environmentId)}`,
+      resource: "environment",
+      empty: true,
+    },
+    options,
+  );
+}
+
 export async function listControlPlaneSandboxes(
   config: ControlPlaneConfig,
   options: ListOptions = {},
@@ -587,6 +704,79 @@ export async function getControlPlaneProjectDetail(
   const accessToken = await accessTokenFor(config, fetchImpl, now);
   const environments = await listProjectEnvironments(config, project, accessToken, fetchImpl);
   return { project, environments };
+}
+
+type ControlPlaneResource = "project" | "environment";
+
+type ControlPlaneRequestSpec<T> = {
+  method: "GET" | "POST" | "PATCH" | "DELETE";
+  path: string;
+  body?: unknown;
+  resource: ControlPlaneResource;
+  mapStatuses?: {
+    notFound?: boolean;
+    rejected?: boolean;
+    conflict?: boolean;
+  };
+  parse?: (body: unknown) => T;
+  /** Discard the body and resolve without parsing (DELETE / 204). */
+  empty?: boolean;
+};
+
+/** Shared bearer fetch + 404/422/conflict/!ok mapping for project/environment mutates. */
+async function controlPlaneRequest<T>(
+  config: ControlPlaneConfig,
+  spec: ControlPlaneRequestSpec<T>,
+  options: ListOptions = {},
+): Promise<T> {
+  const fetchImpl = options.fetch ?? fetch;
+  const now = options.now ?? Date.now;
+  const accessToken = await accessTokenFor(config, fetchImpl, now);
+  const headers: Record<string, string> = {
+    accept: "application/json",
+    authorization: `Bearer ${accessToken}`,
+  };
+  let body: string | undefined;
+  if (spec.body !== undefined) {
+    headers["content-type"] = "application/json";
+    body = JSON.stringify(spec.body);
+  }
+  const response = await fetchImpl(`${config.baseUrl}${spec.path}`, {
+    method: spec.method,
+    headers,
+    body,
+    cache: "no-store",
+  });
+  const map = {
+    notFound: true,
+    rejected: false,
+    conflict: false,
+    ...spec.mapStatuses,
+  };
+  if (map.notFound && response.status === 404) {
+    await discardResponseBody(response);
+    throw new ControlPlaneError(`control plane ${spec.resource} was not found (404)`, 404);
+  }
+  if (map.conflict && response.status === 409) {
+    await discardResponseBody(response);
+    throw new ControlPlaneError(`control plane ${spec.resource} conflict (409)`, 409);
+  }
+  if (map.rejected && response.status === 422) {
+    await discardResponseBody(response);
+    throw new ControlPlaneError(`control plane ${spec.resource} rejected (422)`, 422);
+  }
+  if (!response.ok) {
+    await discardResponseBody(response);
+    throw new ControlPlaneError(
+      `control plane ${spec.resource} request failed (${response.status})`,
+      response.status,
+    );
+  }
+  if (spec.empty || !spec.parse) {
+    await discardResponseBody(response);
+    return undefined as T;
+  }
+  return spec.parse(await response.json());
 }
 
 async function discardResponseBody(response: Response): Promise<void> {

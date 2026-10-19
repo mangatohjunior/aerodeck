@@ -14,7 +14,10 @@ list stays unchanged. Creating an environment uses
 `POST /api/v1/projects/{id}/environments` through
 `POST /api/console/environments` when the console client is set (slug, name,
 kind, DigitalOcean region); create returns 404 when the client is unset.
-Deployment environment labels link to `/projects/{id}#environments`.
+Deployment environment labels link to `/projects/{id}#environments`. Project detail
+can PATCH/DELETE the project (`/api/console/projects/{id}`) and its environments
+(`/api/console/projects/{id}/environments/{environmentId}`) when the console client
+is set; deletes clear deployment links on the control plane. Mock stays read-only.
 Sandboxes read `GET /api/v1/projects/{id}/sandboxes` through
 `GET /api/console/sandboxes`. Creating a deployment uses
 `POST /api/v1/deployments` through `POST /api/console/deployments` when the
