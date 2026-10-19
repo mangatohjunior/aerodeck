@@ -1560,6 +1560,7 @@ describe("control plane deployments", () => {
     };
     const found = await getControlPlaneDeployment(config, deploymentRow.id, { fetch: fetchImpl });
     assert.equal(found.repo, "aerodeck");
+    assert.equal(found.provision_job_id, undefined);
     await assert.rejects(
       () => getControlPlaneDeployment(config, "77777777-7777-4777-8777-777777777777", { fetch: fetchImpl }),
       (cause: unknown) => {
@@ -1569,6 +1570,33 @@ describe("control plane deployments", () => {
         return true;
       },
     );
+  });
+
+  it("keeps provision_job_id when the control plane returns it", async () => {
+    clearControlPlaneTokenCache();
+    const jobId = "44444444-4444-4444-8444-444444444444";
+    const fetchImpl: typeof fetch = async (input) => {
+      const url = String(input);
+      if (url.endsWith("/api/v1/auth/token")) {
+        return jsonResponse({ access_token: "issued-bearer", expires_in: 900 });
+      }
+      return jsonResponse({ ...deploymentRow, provision_job_id: jobId });
+    };
+    const found = await getControlPlaneDeployment(config, deploymentRow.id, { fetch: fetchImpl });
+    assert.equal(found.provision_job_id, jobId);
+  });
+
+  it("keeps an explicit null provision_job_id from list/get", async () => {
+    clearControlPlaneTokenCache();
+    const fetchImpl: typeof fetch = async (input) => {
+      const url = String(input);
+      if (url.endsWith("/api/v1/auth/token")) {
+        return jsonResponse({ access_token: "issued-bearer", expires_in: 900 });
+      }
+      return jsonResponse({ ...deploymentRow, provision_job_id: null });
+    };
+    const found = await getControlPlaneDeployment(config, deploymentRow.id, { fetch: fetchImpl });
+    assert.equal(found.provision_job_id, null);
   });
 });
 

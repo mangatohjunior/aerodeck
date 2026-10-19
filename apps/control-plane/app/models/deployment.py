@@ -2,7 +2,7 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import CheckConstraint, DateTime, Enum, ForeignKeyConstraint, String
+from sqlalchemy import CheckConstraint, DateTime, Enum, ForeignKeyConstraint, String, Uuid
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
@@ -41,6 +41,8 @@ class Deployment(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     repo: Mapped[str] = mapped_column(String(100), nullable=False)
     project_id: Mapped[uuid.UUID | None] = mapped_column(nullable=True, index=True)
     environment_id: Mapped[uuid.UUID | None] = mapped_column(nullable=True, index=True)
+    # Last Celery provision task id when enqueue succeeded with this deployment linked.
+    provision_job_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, nullable=True)
     status: Mapped[DeploymentStatus] = mapped_column(
         Enum(DeploymentStatus, name="deployment_status", native_enum=False, length=16),
         nullable=False,

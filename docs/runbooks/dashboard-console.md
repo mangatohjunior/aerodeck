@@ -26,9 +26,11 @@ console client is set, and stays on `/api/mock/v1/deployments` when it is not
 lists environments via `GET /api/console/environments` and, on submit, creates
 the deployment with that `project_id`/`environment_id` (so list/detail keep the
 link after a restart) then queues `POST .../environments/{id}/provision` with
-the new `deployment_id` so the terminal can follow worker lines. An empty
-Deploy select links operators to Projects to create an environment. Mock create
-stays unlinked. If provision cannot be queued after create,
+the new `deployment_id` so the terminal can follow worker lines. A successful
+provision enqueue also stores `provision_job_id` on the deployment so list/detail
+can reload that Celery job later; older rows and enqueue failures leave it null.
+An empty Deploy select links operators to Projects to create an environment. Mock
+create stays unlinked. If provision cannot be queued after create,
 the form stays put, disables Deploy, and shows a generic message so a retry
 does not create another orphan row; enqueue also marks that row `failed`. The
 JSON body still returns `deployment_id` for typed client handling and server

@@ -1280,6 +1280,15 @@ function deploymentLinkFields(
   throw new ControlPlaneError("control plane deployment response was not a deployment");
 }
 
+function deploymentProvisionJobField(
+  value: string | null | undefined,
+): Pick<Deployment, "provision_job_id"> | Record<string, never> {
+  if (value === undefined) {
+    return {};
+  }
+  return { provision_job_id: value };
+}
+
 function parseDeployment(value: unknown): Deployment {
   if (!value || typeof value !== "object") {
     throw new ControlPlaneError("control plane deployment response was not a deployment");
@@ -1302,6 +1311,7 @@ function parseDeployment(value: unknown): Deployment {
     owner: row.owner,
     repo: row.repo,
     ...deploymentLinkFields(optionalUuidField(row.project_id), optionalUuidField(row.environment_id)),
+    ...deploymentProvisionJobField(optionalUuidField(row.provision_job_id)),
     started_at: row.started_at,
     status: row.status as DeploymentStatus,
   };

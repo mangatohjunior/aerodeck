@@ -25,6 +25,7 @@ from app.services.provisioning import JobKind
 logger = get_logger("services.jobs")
 
 MarkDeploymentFailed = Callable[[uuid.UUID], Awaitable[None]]
+SetProvisionJobId = Callable[[uuid.UUID, uuid.UUID], Awaitable[None]]
 
 
 class JobDispatcher(Protocol):
@@ -41,6 +42,14 @@ class JobTicket:
     environment_id: uuid.UUID
 
 
+@dataclass(frozen=True, slots=True)
+class DeploymentEnqueueHooks:
+    """Isolated deployment side-effects for provision enqueue (fail mark + job id)."""
+
+    mark_failed: MarkDeploymentFailed
+    set_provision_job_id: SetProvisionJobId
+
+
 class JobService:
     def __init__(
         self,
@@ -49,13 +58,13 @@ class JobService:
         deployments: DeploymentService,
         *,
         redis_url: str | None,
-        mark_deployment_failed: MarkDeploymentFailed,
+        deployment_hooks: DeploymentEnqueueHooks,
     ) -> None:
         self._dispatcher = dispatcher
         self._environments = environments
         self._deployments = deployments
         self._redis_url = redis_url
-        self._mark_deployment_failed = mark_deployment_failed
+        self._deployment_hooks = deployment_hooks
 
     async def enqueue(
         self,
@@ -72,15 +81,15 @@ class JobService:
             "environment_kind": environment.kind.value,
             "region": environment.region,
         }
-        linked_deployment: uuid.UUID | None = None
+        linked_deployment_id: uuid.UUID | None = None
         # Only provision publishes onto a deployment log stream (#121).
         if deployment_id is not None and kind is JobKind.provision:
-            await self._deployments.get(deployment_id)
-            meta["deployment_id"] = str(deployment_id)
-            linked_deployment = deployment_id
+            linked = await self._deployments.get(deployment_id)
+            linked_deployment_id = linked.id
+            meta["deployment_id"] = str(linked_deployment_id)
             # Seed a non-Done line before the worker runs so SSE cannot stub Done
             # while the job is still queued (Terminal would mark succeeded).
-            await publish_line(self._redis_url, deployment_id, PROVISION_QUEUED_LINE)
+            await publish_line(self._redis_url, linked_deployment_id, PROVISION_QUEUED_LINE)
         try:
             # Publishing to the broker is blocking I/O; keep it off the event loop.
             job_id = await run_in_threadpool(
@@ -91,20 +100,37 @@ class JobService:
                 **meta,
             )
         except Exception:
-            if linked_deployment is not None:
+            if linked_deployment_id is not None:
                 try:
-                    await publish_line(self._redis_url, linked_deployment, PROVISION_QUEUE_FAILED_LINE)
+                    await publish_line(
+                        self._redis_url, linked_deployment_id, PROVISION_QUEUE_FAILED_LINE
+                    )
                 except Exception as publish_exc:
                     logger.warning(
                         "event=deployment_log_queue_failed_publish_skipped deployment=%s error_type=%s",
-                        linked_deployment,
+                        linked_deployment_id,
                         type(publish_exc).__name__,
                     )
                 # Own session+commit: the request that raised will roll back.
-                await self._mark_deployment_failed(linked_deployment)
+                await self._deployment_hooks.mark_failed(linked_deployment_id)
             raise
+        if linked_deployment_id is not None:
+            await self._remember_provision_job_id(linked_deployment_id, job_id)
         logger.info("queued %s job %s for environment %s", kind.value, job_id, environment.id)
         return JobTicket(job_id=job_id, kind=kind, project_id=environment.project_id, environment_id=environment.id)
+
+    async def _remember_provision_job_id(self, deployment_id: uuid.UUID, job_id: str) -> None:
+        """Parse job id then best-effort persist (hook is try_* and must not raise)."""
+        try:
+            job_uuid = uuid.UUID(job_id)
+        except ValueError:
+            logger.warning(
+                "event=deployment_provision_job_id_skipped deployment=%s job_id=%s error_type=ValueError",
+                deployment_id,
+                job_id,
+            )
+            return
+        await self._deployment_hooks.set_provision_job_id(deployment_id, job_uuid)
 
     async def state(self, job_id: uuid.UUID) -> JobState:
         return await run_in_threadpool(self._dispatcher.state, str(job_id))

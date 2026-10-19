@@ -40,6 +40,7 @@ class DeploymentRead(BaseModel):
     repo: str
     project_id: uuid.UUID | None
     environment_id: uuid.UUID | None
+    provision_job_id: uuid.UUID | None
     status: DeploymentStatus
     started_at: datetime
     created_at: datetime
