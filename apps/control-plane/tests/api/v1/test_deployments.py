@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import TypedDict
 from unittest.mock import AsyncMock
 from uuid import UUID, uuid4
 
@@ -12,7 +13,40 @@ from app.services.deployment_logs import DONE_LINE, publish_line
 from tests.conftest import make_settings
 
 DEPLOYMENTS = "/api/v1/deployments"
+PROJECTS = "/api/v1/projects"
 REPO = "https://github.com/mangatohjunior/aerodeck"
+
+
+class LinkedDeployment(TypedDict):
+    project_id: str
+    environment_id: str
+    deployment_id: str
+
+
+async def create_linked_deployment(
+    client: AsyncClient, auth: dict[str, str], *, slug: str = "payments"
+) -> LinkedDeployment:
+    project = await client.post(PROJECTS, json={"slug": slug, "name": slug.title()}, headers=auth)
+    assert project.status_code == 201, project.text
+    project_id = project.json()["id"]
+    environment = await client.post(
+        f"{PROJECTS}/{project_id}/environments",
+        json={"slug": "prod", "name": "Prod", "kind": "prod"},
+        headers=auth,
+    )
+    assert environment.status_code == 201, environment.text
+    environment_id = environment.json()["id"]
+    created = await client.post(
+        DEPLOYMENTS,
+        json={"repo_url": REPO, "project_id": project_id, "environment_id": environment_id},
+        headers=auth,
+    )
+    assert created.status_code == 201, created.text
+    return {
+        "project_id": project_id,
+        "environment_id": environment_id,
+        "deployment_id": created.json()["id"],
+    }
 
 
 async def test_deployment_logs_require_a_token(client: AsyncClient) -> None:
@@ -208,17 +242,111 @@ async def test_create_stores_a_github_repository(client: AsyncClient, auth: dict
     assert body["owner"] == "mangatohjunior"
     assert body["repo"] == "aerodeck"
     assert body["status"] == "running"
+    assert body["project_id"] is None
+    assert body["environment_id"] is None
     assert "secret" not in response.text
     assert "token" not in response.text
 
     fetched = await client.get(f"{DEPLOYMENTS}/{body['id']}", headers=auth)
     assert fetched.status_code == 200, fetched.text
     assert fetched.json()["id"] == body["id"]
+    assert fetched.json()["project_id"] is None
+    assert fetched.json()["environment_id"] is None
 
     listed = await client.get(DEPLOYMENTS, headers=auth)
     assert listed.status_code == 200, listed.text
     assert listed.json()["total"] == 1
     assert listed.json()["items"][0]["id"] == body["id"]
+    assert listed.json()["items"][0]["project_id"] is None
+    assert listed.json()["items"][0]["environment_id"] is None
+
+
+async def test_create_persists_environment_link(client: AsyncClient, auth: dict[str, str]) -> None:
+    linked = await create_linked_deployment(client, auth)
+    project_id = linked["project_id"]
+    environment_id = linked["environment_id"]
+    deployment_id = linked["deployment_id"]
+
+    fetched = await client.get(f"{DEPLOYMENTS}/{deployment_id}", headers=auth)
+    assert fetched.status_code == 200, fetched.text
+    assert fetched.json()["project_id"] == project_id
+    assert fetched.json()["environment_id"] == environment_id
+
+    listed = await client.get(DEPLOYMENTS, headers=auth)
+    assert listed.status_code == 200, listed.text
+    assert listed.json()["items"][0]["project_id"] == project_id
+    assert listed.json()["items"][0]["environment_id"] == environment_id
+
+
+async def test_create_rejects_partial_environment_link(
+    client: AsyncClient, auth: dict[str, str]
+) -> None:
+    project_only = await client.post(
+        DEPLOYMENTS,
+        json={"repo_url": REPO, "project_id": str(uuid4())},
+        headers=auth,
+    )
+    assert project_only.status_code == 422
+
+    environment_only = await client.post(
+        DEPLOYMENTS,
+        json={"repo_url": REPO, "environment_id": str(uuid4())},
+        headers=auth,
+    )
+    assert environment_only.status_code == 422
+
+
+async def test_create_rejects_unknown_environment(client: AsyncClient, auth: dict[str, str]) -> None:
+    project = await client.post(
+        PROJECTS, json={"slug": "payments", "name": "Payments"}, headers=auth
+    )
+    assert project.status_code == 201, project.text
+    response = await client.post(
+        DEPLOYMENTS,
+        json={
+            "repo_url": REPO,
+            "project_id": project.json()["id"],
+            "environment_id": str(uuid4()),
+        },
+        headers=auth,
+    )
+    assert response.status_code == 404
+    assert response.json()["code"] == "not_found"
+
+
+async def test_deleting_environment_clears_both_link_ids(
+    client: AsyncClient, auth: dict[str, str]
+) -> None:
+    linked = await create_linked_deployment(client, auth)
+
+    deleted = await client.delete(
+        f"{PROJECTS}/{linked['project_id']}/environments/{linked['environment_id']}",
+        headers=auth,
+    )
+    assert deleted.status_code == 204, deleted.text
+
+    fetched = await client.get(f"{DEPLOYMENTS}/{linked['deployment_id']}", headers=auth)
+    assert fetched.status_code == 200, fetched.text
+    body = fetched.json()
+    assert body["project_id"] is None
+    assert body["environment_id"] is None
+    assert body["repo_url"] == REPO
+
+
+async def test_deleting_project_clears_both_link_ids(
+    client: AsyncClient, auth: dict[str, str]
+) -> None:
+    linked = await create_linked_deployment(client, auth)
+
+    deleted = await client.delete(f"{PROJECTS}/{linked['project_id']}", headers=auth)
+    assert deleted.status_code == 204, deleted.text
+
+    fetched = await client.get(f"{DEPLOYMENTS}/{linked['deployment_id']}", headers=auth)
+    assert fetched.status_code == 200, fetched.text
+    body = fetched.json()
+    assert body["project_id"] is None
+    assert body["environment_id"] is None
+    assert body["repo_url"] == REPO
 
 
 async def test_invalid_repository_url_stores_nothing(client: AsyncClient, auth: dict[str, str]) -> None:

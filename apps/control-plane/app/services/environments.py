@@ -8,15 +8,22 @@ from app.core.logging import get_logger
 from app.models.project import Environment
 from app.repositories.environments import EnvironmentRepository
 from app.schemas.environment import EnvironmentCreate, EnvironmentUpdate
+from app.services.deployment_links import DeploymentEnvironmentLinkClearer
 from app.services.projects import ProjectService
 
 logger = get_logger("services.environments")
 
 
 class EnvironmentService:
-    def __init__(self, environments: EnvironmentRepository, projects: ProjectService) -> None:
+    def __init__(
+        self,
+        environments: EnvironmentRepository,
+        projects: ProjectService,
+        deployments: DeploymentEnvironmentLinkClearer,
+    ) -> None:
         self._environments = environments
         self._projects = projects
+        self._deployments = deployments
 
     async def create(self, project_id: uuid.UUID, data: EnvironmentCreate) -> Environment:
         project = await self._projects.get(project_id)
@@ -48,5 +55,8 @@ class EnvironmentService:
 
     async def delete(self, project_id: uuid.UUID, environment_id: uuid.UUID) -> None:
         environment = await self.get(project_id, environment_id)
+        # Clear both columns before the row goes away so the pair invariant holds
+        # even when the DB composite SET NULL is incomplete (e.g. SQLite quirks).
+        await self._deployments.clear_environment_link(environment.id)
         await self._environments.delete(environment)
         logger.info("deleted environment %s (%s)", environment.slug, environment.id)

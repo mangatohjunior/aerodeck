@@ -1,9 +1,7 @@
 """Isolated commits for deployment ``failed`` outside the request session.
 
 Enqueue failure must mark the row even though the request then raises and rolls
-back. ``DeploymentService`` stays constructor-injected; this module owns the
-extra session (task bridge, not ``app.services``). Sync Celery entry points live
-here too.
+back. Uses ``DeploymentTerminalService`` (no ``EnvironmentLookup``).
 """
 
 import asyncio
@@ -12,8 +10,9 @@ import uuid
 from app.core.config import get_settings
 from app.core.db import SessionLocal, bind_engine, create_engine, unbind_engine
 from app.core.logging import get_logger
+from app.models.deployment import DeploymentStatus
 from app.repositories.deployments import DeploymentRepository
-from app.services.deployments import DeploymentService
+from app.services.deployment_terminal import DeploymentTerminalService
 
 logger = get_logger("tasks.deployment_status")
 
@@ -22,8 +21,11 @@ async def mark_deployment_failed_isolated(deployment_id: uuid.UUID) -> None:
     """Commit failed on its own session so a later request rollback cannot undo it."""
     async with SessionLocal() as session:
         try:
-            service = DeploymentService(DeploymentRepository(session))
-            await service.mark_failed(deployment_id)
+            stored = await DeploymentTerminalService(DeploymentRepository(session)).mark(
+                deployment_id, DeploymentStatus.failed
+            )
+            if stored is None:
+                raise LookupError(f"Deployment {deployment_id} not found")
             await session.commit()
         except Exception:
             await session.rollback()

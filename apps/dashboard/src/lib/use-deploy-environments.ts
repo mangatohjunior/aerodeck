@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-import { fetchEnvironments } from "@/lib/api";
+import { loadEnvironmentCatalog } from "@/lib/environment-catalog";
 import { environmentOptionKey } from "@/lib/environment-option";
 import type { EnvironmentOption } from "@/lib/types";
 
@@ -24,17 +24,17 @@ export function useDeployEnvironments(enabled: boolean) {
     let cancelled = false;
     setLoadingEnvironments(true);
     setEnvironmentsError(null);
-    fetchEnvironments()
-      .then((page) => {
+    loadEnvironmentCatalog()
+      .then((items) => {
         if (cancelled) {
           return;
         }
-        setEnvironments(page.items);
-        if (page.items.length === 1) {
-          setEnvironmentKey(environmentOptionKey(page.items[0]));
+        setEnvironments(items);
+        if (items.length === 1) {
+          setEnvironmentKey(environmentOptionKey(items[0]));
           return;
         }
-        const keys = new Set(page.items.map(environmentOptionKey));
+        const keys = new Set(items.map(environmentOptionKey));
         setEnvironmentKey((current) => (keys.has(current) ? current : ""));
       })
       .catch((cause) => {

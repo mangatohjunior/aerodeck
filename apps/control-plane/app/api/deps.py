@@ -32,6 +32,7 @@ from app.services.certificate_keys import FileCertificateKeyStore
 from app.services.certificates import CertificateService
 from app.services.console_sessions import ConsoleSessionService
 from app.services.console_users import ConsoleUserService
+from app.services.deployment_terminal import DeploymentTerminalService
 from app.services.deployments import DeploymentService
 from app.services.dns01 import DigitalOceanDns01, Dns01Provider, Dns01UnavailableError, MemoryDns01
 from app.services.dns_records import (
@@ -71,8 +72,17 @@ def get_pagination(
 PaginationDep = Annotated[PaginationParams, Depends(get_pagination)]
 
 
-def get_project_service(session: SessionDep) -> ProjectService:
-    return ProjectService(ProjectRepository(session))
+def get_deployment_repository(session: SessionDep) -> DeploymentRepository:
+    return DeploymentRepository(session)
+
+
+DeploymentRepositoryDep = Annotated[DeploymentRepository, Depends(get_deployment_repository)]
+
+
+def get_project_service(
+    session: SessionDep, deployments: DeploymentRepositoryDep
+) -> ProjectService:
+    return ProjectService(ProjectRepository(session), deployments)
 
 
 ProjectServiceDep = Annotated[ProjectService, Depends(get_project_service)]
@@ -90,13 +100,6 @@ def get_console_session_service(session: SessionDep) -> ConsoleSessionService:
 
 
 ConsoleSessionServiceDep = Annotated[ConsoleSessionService, Depends(get_console_session_service)]
-
-
-def get_deployment_service(session: SessionDep) -> DeploymentService:
-    return DeploymentService(DeploymentRepository(session))
-
-
-DeploymentServiceDep = Annotated[DeploymentService, Depends(get_deployment_service)]
 
 
 def get_hypervisor(settings: SettingsDep) -> Hypervisor:
@@ -137,11 +140,37 @@ def get_sandbox_service(
 SandboxServiceDep = Annotated[SandboxService, Depends(get_sandbox_service)]
 
 
-def get_environment_service(session: SessionDep, projects: ProjectServiceDep) -> EnvironmentService:
-    return EnvironmentService(EnvironmentRepository(session), projects)
+def get_environment_service(
+    session: SessionDep,
+    projects: ProjectServiceDep,
+    deployments: DeploymentRepositoryDep,
+) -> EnvironmentService:
+    return EnvironmentService(EnvironmentRepository(session), projects, deployments)
 
 
 EnvironmentServiceDep = Annotated[EnvironmentService, Depends(get_environment_service)]
+
+
+def get_deployment_terminal_service(
+    deployments: DeploymentRepositoryDep,
+) -> DeploymentTerminalService:
+    return DeploymentTerminalService(deployments)
+
+
+DeploymentTerminalServiceDep = Annotated[
+    DeploymentTerminalService, Depends(get_deployment_terminal_service)
+]
+
+
+def get_deployment_service(
+    deployments: DeploymentRepositoryDep,
+    environments: EnvironmentServiceDep,
+    terminal: DeploymentTerminalServiceDep,
+) -> DeploymentService:
+    return DeploymentService(deployments, environments, terminal)
+
+
+DeploymentServiceDep = Annotated[DeploymentService, Depends(get_deployment_service)]
 
 
 def get_dns_record_publisher(settings: SettingsDep) -> DnsRecordPublisher:

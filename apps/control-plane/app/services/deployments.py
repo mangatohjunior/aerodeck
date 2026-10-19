@@ -1,35 +1,88 @@
 import uuid
 from collections.abc import Sequence
 from datetime import UTC, datetime
+from typing import Protocol
+
+from sqlalchemy.exc import IntegrityError
 
 from app.core.errors import NotFoundError
 from app.core.github import canonical_github_repo_url, parse_github_repo
 from app.core.logging import get_logger
-from app.models.deployment import Deployment, DeploymentStatus
+from app.models.deployment import DEPLOYMENT_ENVIRONMENT_FK, Deployment, DeploymentStatus
+from app.models.project import Environment
 from app.repositories.deployments import DeploymentRepository
 from app.schemas.deployment import DeploymentCreate
+from app.services.deployment_terminal import DeploymentTerminalService
 
 logger = get_logger("services.deployments")
 
 
+def _is_deployment_environment_fk_violation(exc: IntegrityError) -> bool:
+    """True when the failing constraint is the deployment↔environment composite FK.
+
+    Postgres includes ``DEPLOYMENT_ENVIRONMENT_FK`` in the error. SQLite only says
+    ``FOREIGN KEY constraint failed``; that fallback is safe only while
+    ``deployments`` has no other FKs (see model). Callers must already require both
+    link ids so unlinked creates never hit this path.
+    """
+    detail = str(exc.orig if exc.orig is not None else exc).lower()
+    if DEPLOYMENT_ENVIRONMENT_FK.lower() in detail:
+        return True
+    orig = exc.orig
+    if orig is not None and type(orig).__module__.startswith("sqlite3"):
+        return "foreign key" in detail
+    return False
+
+
+class EnvironmentLookup(Protocol):
+    """Narrow create-time check that the linked environment exists."""
+
+    async def get(self, project_id: uuid.UUID, environment_id: uuid.UUID) -> Environment: ...
+
+
 class DeploymentService:
-    def __init__(self, deployments: DeploymentRepository) -> None:
+    def __init__(
+        self,
+        deployments: DeploymentRepository,
+        environments: EnvironmentLookup,
+        terminal: DeploymentTerminalService,
+    ) -> None:
         self._deployments = deployments
+        self._environments = environments
+        self._terminal = terminal
 
     async def create(self, data: DeploymentCreate) -> Deployment:
         parsed = parse_github_repo(data.repo_url)
         if parsed is None:
             raise ValueError("repo_url must be a GitHub repository URL")
         owner, repo = parsed
-        stored = await self._deployments.add(
-            Deployment(
-                repo_url=canonical_github_repo_url(owner, repo),
-                owner=owner,
-                repo=repo,
-                status=DeploymentStatus.running,
-                started_at=datetime.now(UTC),
+        project_id = data.project_id
+        environment_id = data.environment_id
+        if project_id is not None and environment_id is not None:
+            await self._environments.get(project_id, environment_id)
+        try:
+            stored = await self._deployments.add(
+                Deployment(
+                    repo_url=canonical_github_repo_url(owner, repo),
+                    owner=owner,
+                    repo=repo,
+                    project_id=project_id,
+                    environment_id=environment_id,
+                    status=DeploymentStatus.running,
+                    started_at=datetime.now(UTC),
+                )
             )
-        )
+        except IntegrityError as exc:
+            # Env/project removed between lookup and insert (composite FK only).
+            if (
+                project_id is not None
+                and environment_id is not None
+                and _is_deployment_environment_fk_violation(exc)
+            ):
+                raise NotFoundError(
+                    f"Environment {environment_id} not found in project {project_id}"
+                ) from exc
+            raise
         logger.info("created deployment %s", stored.id)
         return stored
 
@@ -51,15 +104,7 @@ class DeploymentService:
     async def _mark_terminal(
         self, deployment_id: uuid.UUID, status: DeploymentStatus
     ) -> Deployment:
-        deployment = await self.get(deployment_id)
-        if deployment.status in (DeploymentStatus.succeeded, DeploymentStatus.failed):
-            logger.info(
-                "deployment %s already %s; leave unchanged",
-                deployment_id,
-                deployment.status.value,
-            )
-            return deployment
-        deployment.status = status
-        stored = await self._deployments.save(deployment)
-        logger.info("deployment %s %s", stored.id, status.value)
+        stored = await self._terminal.mark(deployment_id, status)
+        if stored is None:
+            raise NotFoundError(f"Deployment {deployment_id} not found")
         return stored

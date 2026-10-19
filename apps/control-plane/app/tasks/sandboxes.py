@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import Settings, get_settings
 from app.core.db import SessionLocal, bind_engine, create_engine, unbind_engine
 from app.core.logging import get_logger
+from app.repositories.deployments import DeploymentRepository
 from app.repositories.projects import ProjectRepository
 from app.repositories.sandbox_hosts import SandboxHostRepository
 from app.repositories.sandboxes import SandboxRepository
@@ -37,7 +38,7 @@ def _sandbox_service(session: AsyncSession, settings: Settings, hypervisor: Hype
     sandboxes = SandboxRepository(session)
     return SandboxService(
         sandboxes,
-        ProjectService(ProjectRepository(session)),
+        ProjectService(ProjectRepository(session), DeploymentRepository(session)),
         hypervisor,
         SandboxHostService(SandboxHostRepository(session), sandboxes),
         require_host=settings.sandbox_hypervisor == "firecracker",

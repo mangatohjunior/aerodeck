@@ -379,11 +379,25 @@ export async function listControlPlaneDeployments(
 export async function createControlPlaneDeployment(
   config: ControlPlaneConfig,
   repoUrl: string,
-  options: ListOptions = {},
+  options: ListOptions & { projectId?: string; environmentId?: string } = {},
 ): Promise<Deployment> {
   const fetchImpl = options.fetch ?? fetch;
   const now = options.now ?? Date.now;
+  const projectId = options.projectId;
+  const environmentId = options.environmentId;
+  const hasProject = typeof projectId === "string" && projectId.length > 0;
+  const hasEnvironment = typeof environmentId === "string" && environmentId.length > 0;
+  if (hasProject !== hasEnvironment) {
+    throw new ControlPlaneError(
+      "projectId and environmentId must both be set or both omitted",
+    );
+  }
   const accessToken = await accessTokenFor(config, fetchImpl, now);
+  const body: Record<string, string> = { repo_url: repoUrl };
+  if (hasProject && hasEnvironment) {
+    body.project_id = projectId;
+    body.environment_id = environmentId;
+  }
   const response = await fetchImpl(`${config.baseUrl}/api/v1/deployments`, {
     method: "POST",
     headers: {
@@ -391,7 +405,7 @@ export async function createControlPlaneDeployment(
       authorization: `Bearer ${accessToken}`,
       "content-type": "application/json",
     },
-    body: JSON.stringify({ repo_url: repoUrl }),
+    body: JSON.stringify(body),
     cache: "no-store",
   });
   if (response.status === 422) {
@@ -512,7 +526,11 @@ export async function createControlPlaneDeploymentAndProvision(
 ): Promise<Deployment> {
   // Resolve the environment first so a bad target never creates a deployment row.
   await getControlPlaneEnvironment(config, input.projectId, input.environmentId, options);
-  const deployment = await createControlPlaneDeployment(config, input.repoUrl, options);
+  const deployment = await createControlPlaneDeployment(config, input.repoUrl, {
+    ...options,
+    projectId: input.projectId,
+    environmentId: input.environmentId,
+  });
   try {
     await provisionControlPlaneEnvironment(
       config,
@@ -887,6 +905,35 @@ function parseDeploymentPage(body: unknown): { items: Deployment[]; total: numbe
   };
 }
 
+function optionalUuidField(value: unknown): string | null | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (value === null) {
+    return null;
+  }
+  if (typeof value === "string" && isControlPlaneUuid(value)) {
+    return value;
+  }
+  throw new ControlPlaneError("control plane deployment response was not a deployment");
+}
+
+function deploymentLinkFields(
+  projectId: string | null | undefined,
+  environmentId: string | null | undefined,
+): Pick<Deployment, "project_id" | "environment_id"> | Record<string, never> {
+  if (projectId === undefined && environmentId === undefined) {
+    return {};
+  }
+  if (projectId === null && environmentId === null) {
+    return { project_id: null, environment_id: null };
+  }
+  if (typeof projectId === "string" && typeof environmentId === "string") {
+    return { project_id: projectId, environment_id: environmentId };
+  }
+  throw new ControlPlaneError("control plane deployment response was not a deployment");
+}
+
 function parseDeployment(value: unknown): Deployment {
   if (!value || typeof value !== "object") {
     throw new ControlPlaneError("control plane deployment response was not a deployment");
@@ -908,6 +955,7 @@ function parseDeployment(value: unknown): Deployment {
     repo_url: row.repo_url,
     owner: row.owner,
     repo: row.repo,
+    ...deploymentLinkFields(optionalUuidField(row.project_id), optionalUuidField(row.environment_id)),
     started_at: row.started_at,
     status: row.status as DeploymentStatus,
   };

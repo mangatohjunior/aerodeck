@@ -3,6 +3,7 @@
 import { CheckCircle2, Loader2, Rocket, XCircle } from "lucide-react";
 import { useState } from "react";
 
+import { DeploymentEnvironmentLink } from "@/components/deployment-environment-link";
 import { LinkButton } from "@/components/link-button";
 import { Terminal } from "@/components/terminal";
 import { Badge } from "@/components/ui/badge";
@@ -19,6 +20,7 @@ import {
   markDeploymentFailed,
   markDeploymentSucceeded,
 } from "@/lib/api";
+import { useEnvironmentCatalog } from "@/lib/use-environment-catalog";
 import type { Deployment, DeploymentStatus, ProjectSource } from "@/lib/types";
 
 type DeploymentStatusViewProps = {
@@ -69,6 +71,9 @@ function statusBadge(status: DeploymentStatus) {
 export function DeploymentStatusView({ deployment, logSource }: DeploymentStatusViewProps) {
   const [status, setStatus] = useState<DeploymentStatus>(deployment.status);
   const [error, setError] = useState<string | null>(null);
+  const environments = useEnvironmentCatalog(
+    logSource === "control-plane" && Boolean(deployment.project_id && deployment.environment_id),
+  );
   const copy = logSourceCopy(logSource);
 
   function recordOutcome(outcome: TerminalOutcome) {
@@ -138,6 +143,16 @@ export function DeploymentStatusView({ deployment, logSource }: DeploymentStatus
             <p className="text-xs text-muted-foreground">Target</p>
             <p className="mt-0.5">{copy.targetLabel}</p>
           </div>
+          {deployment.project_id && deployment.environment_id ? (
+            <div className="sm:col-span-2">
+              <p className="text-xs text-muted-foreground">Environment</p>
+              <DeploymentEnvironmentLink
+                deployment={deployment}
+                environments={environments}
+                className="mt-0.5 text-sm text-muted-foreground"
+              />
+            </div>
+          ) : null}
         </CardContent>
       </Card>
 

@@ -8,13 +8,17 @@ from app.core.logging import get_logger
 from app.models.project import Project
 from app.repositories.projects import ProjectRepository
 from app.schemas.project import ProjectCreate, ProjectUpdate
+from app.services.deployment_links import DeploymentProjectLinkClearer
 
 logger = get_logger("services.projects")
 
 
 class ProjectService:
-    def __init__(self, projects: ProjectRepository) -> None:
+    def __init__(
+        self, projects: ProjectRepository, deployments: DeploymentProjectLinkClearer
+    ) -> None:
         self._projects = projects
+        self._deployments = deployments
 
     async def create(self, data: ProjectCreate) -> Project:
         if await self._projects.get_by_slug(data.slug) is not None:
@@ -44,5 +48,8 @@ class ProjectService:
 
     async def delete(self, project_id: uuid.UUID) -> None:
         project = await self.get(project_id)
+        # Clear both columns before cascade removes environments so the pair
+        # invariant holds without relying on composite ON DELETE SET NULL alone.
+        await self._deployments.clear_project_link(project.id)
         await self._projects.delete(project)
         logger.info("deleted project %s (%s)", project.slug, project.id)

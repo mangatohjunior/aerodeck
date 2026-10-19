@@ -3,24 +3,39 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
+import { DeploymentEnvironmentLink } from "@/components/deployment-environment-link";
 import { PageHeader } from "@/components/page-header";
 import { LinkButton } from "@/components/link-button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { fetchDeployments } from "@/lib/api";
 import { formatInstant } from "@/lib/format";
+import { useEnvironmentCatalog } from "@/lib/use-environment-catalog";
 import type { Deployment } from "@/lib/types";
 
 export function DeploymentsList({ controlPlane = false }: { controlPlane?: boolean }) {
   const [rows, setRows] = useState<Deployment[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const needsCatalog =
+    controlPlane && rows.some((row) => Boolean(row.project_id && row.environment_id));
+  const environments = useEnvironmentCatalog(needsCatalog);
 
   useEffect(() => {
+    let cancelled = false;
     fetchDeployments(controlPlane)
-      .then(setRows)
+      .then((items) => {
+        if (!cancelled) {
+          setRows(items);
+        }
+      })
       .catch((cause: unknown) => {
-        setError(cause instanceof Error ? cause.message : "Failed to load deployments.");
+        if (!cancelled) {
+          setError(cause instanceof Error ? cause.message : "Failed to load deployments.");
+        }
       });
+    return () => {
+      cancelled = true;
+    };
   }, [controlPlane]);
 
   return (
@@ -61,6 +76,7 @@ export function DeploymentsList({ controlPlane = false }: { controlPlane?: boole
                         {row.owner}/{row.repo}
                       </Link>
                       <p className="font-mono text-xs text-muted-foreground">{row.id}</p>
+                      <DeploymentEnvironmentLink deployment={row} environments={environments} />
                     </div>
                     <p className="text-xs text-muted-foreground">{formatInstant(row.started_at)}</p>
                     <Badge variant="secondary">{row.status}</Badge>

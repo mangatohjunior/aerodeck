@@ -584,11 +584,21 @@ describe("createControlPlaneDeploymentAndProvision", () => {
         });
       }
       if (url.endsWith("/api/v1/deployments") && init?.method === "POST") {
+        assert.equal(
+          init.body,
+          JSON.stringify({
+            repo_url: "https://github.com/acme/payments",
+            project_id: projectId,
+            environment_id: environmentId,
+          }),
+        );
         return jsonResponse({
           id: deploymentId,
           repo_url: "https://github.com/acme/payments",
           owner: "acme",
           repo: "payments",
+          project_id: projectId,
+          environment_id: environmentId,
           status: "running",
           started_at: "2026-10-18T00:00:00.000Z",
         });
@@ -616,6 +626,8 @@ describe("createControlPlaneDeploymentAndProvision", () => {
       { fetch: fetchImpl },
     );
     assert.equal(deployment.id, deploymentId);
+    assert.equal(deployment.project_id, projectId);
+    assert.equal(deployment.environment_id, environmentId);
     assert.ok(calls.some((call) => call.includes(`/environments/${environmentId}`) && call.startsWith("GET")));
     assert.ok(calls.some((call) => call.includes("/api/v1/deployments") && call.startsWith("POST")));
     assert.ok(calls.some((call) => call.includes("/provision") && call.startsWith("POST")));
@@ -1011,6 +1023,47 @@ describe("control plane deployments", () => {
     assert.equal(JSON.stringify(created).includes("secret"), false);
     assert.equal(JSON.stringify(created).includes("super-secret"), false);
     assert.equal(listed[0]?.id, deploymentRow.id);
+  });
+
+  it("rejects a partial environment link on create", async () => {
+    clearControlPlaneTokenCache();
+    await assert.rejects(
+      () =>
+        createControlPlaneDeployment(config, "https://github.com/mangatohjunior/aerodeck", {
+          projectId: "11111111-1111-4111-8111-111111111111",
+          fetch: async () => {
+            throw new Error("must not call fetch");
+          },
+        }),
+      (cause: unknown) => {
+        assert.ok(cause instanceof ControlPlaneError);
+        assert.match(cause.message, /both be set or both omitted/);
+        return true;
+      },
+    );
+  });
+
+  it("rejects a one-sided environment link in a deployment response", async () => {
+    clearControlPlaneTokenCache();
+    const fetchImpl: typeof fetch = async (input) => {
+      const url = String(input);
+      if (url.endsWith("/api/v1/auth/token")) {
+        return jsonResponse({ access_token: "issued-bearer", expires_in: 900 });
+      }
+      return jsonResponse({
+        ...deploymentRow,
+        project_id: "11111111-1111-4111-8111-111111111111",
+        environment_id: null,
+      });
+    };
+    await assert.rejects(
+      () => getControlPlaneDeployment(config, deploymentRow.id, { fetch: fetchImpl }),
+      (cause: unknown) => {
+        assert.ok(cause instanceof ControlPlaneError);
+        assert.match(cause.message, /not a deployment/);
+        return true;
+      },
+    );
   });
 
   it("does not include the upstream body when create fails", async () => {
