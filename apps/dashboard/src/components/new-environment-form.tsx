@@ -17,17 +17,9 @@ import { Label } from "@/components/ui/label";
 import { createEnvironment } from "@/lib/api";
 import {
   DEFAULT_ENVIRONMENT_REGION,
-  ENVIRONMENT_KIND_INVALID,
   ENVIRONMENT_KINDS,
-  ENVIRONMENT_NAME_INVALID,
-  ENVIRONMENT_PROJECT_REQUIRED,
-  ENVIRONMENT_REGION_INVALID,
   ENVIRONMENT_REGIONS,
-  ENVIRONMENT_SLUG_INVALID,
-  isValidEnvironmentKind,
-  isValidEnvironmentName,
-  isValidEnvironmentRegion,
-  isValidEnvironmentSlug,
+  parseEnvironmentCreateFields,
   type EnvironmentKind,
   type EnvironmentRegion,
 } from "@/lib/environment-input";
@@ -74,38 +66,21 @@ export function NewEnvironmentForm({ projects, onCreated }: NewEnvironmentFormPr
     event.preventDefault();
     setError(null);
 
-    if (!projectId) {
-      setError(ENVIRONMENT_PROJECT_REQUIRED);
-      return;
-    }
-    const trimmedName = name.trim();
-    const trimmedSlug = slug.trim().toLowerCase();
-    if (!isValidEnvironmentName(trimmedName)) {
-      setError(ENVIRONMENT_NAME_INVALID);
-      return;
-    }
-    if (!isValidEnvironmentSlug(trimmedSlug)) {
-      setError(ENVIRONMENT_SLUG_INVALID);
-      return;
-    }
-    if (!isValidEnvironmentKind(kind)) {
-      setError(ENVIRONMENT_KIND_INVALID);
-      return;
-    }
-    if (!isValidEnvironmentRegion(region)) {
-      setError(ENVIRONMENT_REGION_INVALID);
+    const parsed = parseEnvironmentCreateFields({
+      projectId,
+      name,
+      slug,
+      kind,
+      region,
+    });
+    if (!parsed.ok) {
+      setError(parsed.error);
       return;
     }
 
     setSubmitting(true);
     try {
-      const environment = await createEnvironment({
-        projectId,
-        name: trimmedName,
-        slug: trimmedSlug,
-        kind,
-        region,
-      });
+      const environment = await createEnvironment(parsed.value);
       onCreated(environment);
       setName("");
       setSlug("");

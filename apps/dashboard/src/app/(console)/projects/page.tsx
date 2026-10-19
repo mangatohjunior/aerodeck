@@ -6,20 +6,40 @@ import { NewEnvironmentForm } from "@/components/new-environment-form";
 import { NewProjectForm } from "@/components/new-project-form";
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent } from "@/components/ui/card";
-import { fetchProjectPage } from "@/lib/api";
+import { fetchEnvironments, fetchProjectPage } from "@/lib/api";
+import { environmentsForProject, mergeEnvironmentsById } from "@/lib/environment-list";
 import type { EnvironmentOption, Project, ProjectPage } from "@/lib/types";
 
 export default function ProjectsPage() {
   const [page, setPage] = useState<ProjectPage | null>(null);
+  const [environments, setEnvironments] = useState<EnvironmentOption[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [createdEnvironments, setCreatedEnvironments] = useState<EnvironmentOption[]>([]);
 
   useEffect(() => {
+    let cancelled = false;
     fetchProjectPage()
-      .then(setPage)
+      .then(async (nextPage) => {
+        if (cancelled) {
+          return;
+        }
+        setPage(nextPage);
+        if (nextPage.source !== "control-plane") {
+          setEnvironments([]);
+          return;
+        }
+        const catalog = await fetchEnvironments();
+        if (!cancelled) {
+          setEnvironments(catalog.items);
+        }
+      })
       .catch((cause: unknown) => {
-        setError(cause instanceof Error ? cause.message : "Failed to load projects.");
+        if (!cancelled) {
+          setError(cause instanceof Error ? cause.message : "Failed to load projects.");
+        }
       });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   function handleProjectCreated(project: Project) {
@@ -38,12 +58,7 @@ export default function ProjectsPage() {
   }
 
   function handleEnvironmentCreated(environment: EnvironmentOption) {
-    setCreatedEnvironments((current) => {
-      if (current.some((row) => row.id === environment.id)) {
-        return current;
-      }
-      return [environment, ...current];
-    });
+    setEnvironments((current) => mergeEnvironmentsById([environment], current));
   }
 
   const rows = page?.items ?? [];
@@ -75,7 +90,7 @@ export default function ProjectsPage() {
               <p className="py-4 text-sm text-muted-foreground">No projects yet.</p>
             ) : null}
             {rows.map((row) => {
-              const envs = createdEnvironments.filter((env) => env.project_id === row.id);
+              const envs = environmentsForProject(environments, row.id);
               return (
                 <div key={row.id} className="py-4 first:pt-4">
                   <p className="font-medium">{row.name}</p>

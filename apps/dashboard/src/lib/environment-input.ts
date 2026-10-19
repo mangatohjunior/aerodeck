@@ -23,6 +23,7 @@ export type EnvironmentRegion = (typeof ENVIRONMENT_REGIONS)[number];
 
 export const DEFAULT_ENVIRONMENT_REGION: EnvironmentRegion = "nyc3";
 
+/** Same pattern as control-plane `Region` (fixed 4-char DO slug). */
 const REGION_PATTERN = /^[a-z]{3}[0-9]$/;
 
 export const ENVIRONMENT_SLUG_INVALID = PROJECT_SLUG_INVALID;
@@ -50,5 +51,52 @@ export function isValidEnvironmentKind(kind: string): kind is EnvironmentKind {
 }
 
 export function isValidEnvironmentRegion(region: string): boolean {
-  return region.length >= 4 && region.length <= 16 && REGION_PATTERN.test(region);
+  return REGION_PATTERN.test(region);
+}
+
+export type EnvironmentCreateFields = {
+  projectId: string;
+  name: string;
+  slug: string;
+  kind: string;
+  region: string;
+};
+
+export type EnvironmentCreateParsed = {
+  projectId: string;
+  name: string;
+  slug: string;
+  kind: EnvironmentKind;
+  region: string;
+};
+
+export type EnvironmentCreateParseResult =
+  | { ok: true; value: EnvironmentCreateParsed }
+  | { ok: false; error: string };
+
+/** Client/BFF-shared validation for environment create forms. */
+export function parseEnvironmentCreateFields(
+  input: EnvironmentCreateFields,
+): EnvironmentCreateParseResult {
+  const projectId = input.projectId.trim();
+  if (projectId.length === 0) {
+    return { ok: false, error: ENVIRONMENT_PROJECT_REQUIRED };
+  }
+  const name = input.name.trim();
+  const slug = input.slug.trim().toLowerCase();
+  const kind = input.kind.trim();
+  const region = input.region.trim();
+  if (!isValidEnvironmentName(name)) {
+    return { ok: false, error: ENVIRONMENT_NAME_INVALID };
+  }
+  if (!isValidEnvironmentSlug(slug)) {
+    return { ok: false, error: ENVIRONMENT_SLUG_INVALID };
+  }
+  if (!isValidEnvironmentKind(kind)) {
+    return { ok: false, error: ENVIRONMENT_KIND_INVALID };
+  }
+  if (!isValidEnvironmentRegion(region)) {
+    return { ok: false, error: ENVIRONMENT_REGION_INVALID };
+  }
+  return { ok: true, value: { projectId, name, slug, kind, region } };
 }

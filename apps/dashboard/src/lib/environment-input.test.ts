@@ -2,10 +2,13 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import {
+  ENVIRONMENT_NAME_INVALID,
+  ENVIRONMENT_PROJECT_REQUIRED,
   isValidEnvironmentKind,
   isValidEnvironmentName,
   isValidEnvironmentRegion,
   isValidEnvironmentSlug,
+  parseEnvironmentCreateFields,
 } from "./environment-input";
 
 describe("isValidEnvironmentSlug", () => {
@@ -40,5 +43,50 @@ describe("isValidEnvironmentRegion", () => {
     assert.equal(isValidEnvironmentRegion("nyc"), false);
     assert.equal(isValidEnvironmentRegion("NYC3"), false);
     assert.equal(isValidEnvironmentRegion("amsterdam"), false);
+  });
+});
+
+describe("parseEnvironmentCreateFields", () => {
+  it("returns trimmed fields when valid", () => {
+    const parsed = parseEnvironmentCreateFields({
+      projectId: " 11111111-1111-4111-8111-111111111111 ",
+      name: "  Production ",
+      slug: " Prod ",
+      kind: "prod",
+      region: "ams3",
+    });
+    assert.equal(parsed.ok, true);
+    if (parsed.ok) {
+      assert.deepEqual(parsed.value, {
+        projectId: "11111111-1111-4111-8111-111111111111",
+        name: "Production",
+        slug: "prod",
+        kind: "prod",
+        region: "ams3",
+      });
+    }
+  });
+
+  it("returns the first validation error", () => {
+    assert.deepEqual(
+      parseEnvironmentCreateFields({
+        projectId: "",
+        name: "Production",
+        slug: "prod",
+        kind: "prod",
+        region: "nyc3",
+      }),
+      { ok: false, error: ENVIRONMENT_PROJECT_REQUIRED },
+    );
+    assert.deepEqual(
+      parseEnvironmentCreateFields({
+        projectId: "11111111-1111-4111-8111-111111111111",
+        name: "   ",
+        slug: "prod",
+        kind: "prod",
+        region: "nyc3",
+      }),
+      { ok: false, error: ENVIRONMENT_NAME_INVALID },
+    );
   });
 });
