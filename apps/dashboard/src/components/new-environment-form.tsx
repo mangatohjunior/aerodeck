@@ -31,9 +31,9 @@ import {
   type EnvironmentKind,
   type EnvironmentRegion,
 } from "@/lib/environment-input";
+import { nativeSelectClassName } from "@/lib/native-select";
 import { PROJECT_NAME_MAX, PROJECT_SLUG_MAX, slugFromName } from "@/lib/project-input";
 import type { EnvironmentOption, Project } from "@/lib/types";
-import { cn } from "@/lib/utils";
 
 type NewEnvironmentFormProps = {
   projects: Project[];
@@ -126,12 +126,6 @@ export function NewEnvironmentForm({ projects, onCreated }: NewEnvironmentFormPr
     slug.trim().length > 0 &&
     projects.length > 0;
 
-  const selectClassName = cn(
-    "h-10 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none",
-    "focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50",
-    "disabled:cursor-not-allowed disabled:opacity-50",
-  );
-
   return (
     <Card className="mb-6 overflow-hidden ring-primary/15">
       <div className="h-1 bg-gradient-to-r from-primary via-runway to-primary/40" />
@@ -148,7 +142,7 @@ export function NewEnvironmentForm({ projects, onCreated }: NewEnvironmentFormPr
             <Label htmlFor="environment-project">Project</Label>
             <select
               id="environment-project"
-              className={selectClassName}
+              className={nativeSelectClassName()}
               value={projectId}
               disabled={submitting || projects.length === 0}
               onChange={(event) => {
@@ -207,7 +201,7 @@ export function NewEnvironmentForm({ projects, onCreated }: NewEnvironmentFormPr
             <Label htmlFor="environment-kind">Kind</Label>
             <select
               id="environment-kind"
-              className={selectClassName}
+              className={nativeSelectClassName()}
               value={kind}
               disabled={submitting}
               onChange={(event) => {
@@ -228,7 +222,7 @@ export function NewEnvironmentForm({ projects, onCreated }: NewEnvironmentFormPr
             <Label htmlFor="environment-region">Region</Label>
             <select
               id="environment-region"
-              className={selectClassName}
+              className={nativeSelectClassName()}
               value={region}
               disabled={submitting}
               onChange={(event) => {

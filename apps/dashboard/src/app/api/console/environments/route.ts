@@ -12,6 +12,7 @@ import {
   ENVIRONMENT_FIELDS_INVALID,
   ENVIRONMENT_KIND_INVALID,
   ENVIRONMENT_NAME_INVALID,
+  ENVIRONMENT_PROJECT_ID_INVALID,
   ENVIRONMENT_PROJECT_NOT_FOUND,
   ENVIRONMENT_PROJECT_REQUIRED,
   ENVIRONMENT_REGION_INVALID,
@@ -91,7 +92,7 @@ export async function POST(request: Request) {
     return jsonError(400, ENVIRONMENT_PROJECT_REQUIRED, "missing_project");
   }
   if (!isControlPlaneUuid(projectId)) {
-    return jsonError(400, ENVIRONMENT_PROJECT_REQUIRED, "invalid_project_id");
+    return jsonError(400, ENVIRONMENT_PROJECT_ID_INVALID, "invalid_project_id");
   }
   if (typeof payload.slug !== "string" || typeof payload.name !== "string" || typeof payload.kind !== "string") {
     return jsonError(400, "slug, name, and kind are required.", "missing_fields");

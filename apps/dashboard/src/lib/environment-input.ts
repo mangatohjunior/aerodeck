@@ -1,9 +1,4 @@
-import {
-  isValidProjectName,
-  isValidProjectSlug,
-  PROJECT_NAME_INVALID,
-  PROJECT_SLUG_INVALID,
-} from "@/lib/project-input";
+import { isValidProjectName, isValidProjectSlug, PROJECT_SLUG_INVALID } from "@/lib/project-input";
 
 /** Matches control-plane `EnvironmentKind`. */
 export const ENVIRONMENT_KINDS = ["dev", "staging", "prod"] as const;
@@ -31,11 +26,12 @@ export const DEFAULT_ENVIRONMENT_REGION: EnvironmentRegion = "nyc3";
 const REGION_PATTERN = /^[a-z]{3}[0-9]$/;
 
 export const ENVIRONMENT_SLUG_INVALID = PROJECT_SLUG_INVALID;
-export const ENVIRONMENT_NAME_INVALID = PROJECT_NAME_INVALID;
+export const ENVIRONMENT_NAME_INVALID = "Enter an environment name (1–120 characters).";
 export const ENVIRONMENT_KIND_INVALID = "Select a kind: dev, staging, or prod.";
 export const ENVIRONMENT_REGION_INVALID =
   "Use a DigitalOcean region like nyc3, ams3, or fra1.";
 export const ENVIRONMENT_PROJECT_REQUIRED = "Select a project.";
+export const ENVIRONMENT_PROJECT_ID_INVALID = "project_id must be a UUID.";
 export const ENVIRONMENT_PROJECT_NOT_FOUND = "Project was not found.";
 export const ENVIRONMENT_SLUG_TAKEN = "That slug is already taken in this project.";
 /** Upstream 422 after local checks passed — do not assume which field failed. */

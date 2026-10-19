@@ -5,8 +5,8 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { environmentOptionKey } from "@/lib/environment-option";
+import { nativeSelectClassName } from "@/lib/native-select";
 import type { EnvironmentOption } from "@/lib/types";
-import { cn } from "@/lib/utils";
 
 type EnvironmentSelectProps = {
   environments: EnvironmentOption[];
@@ -35,12 +35,7 @@ export function EnvironmentSelect({
       <Label htmlFor="environment">Environment</Label>
       <select
         id="environment"
-        className={cn(
-          "h-10 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none",
-          "focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50",
-          "disabled:cursor-not-allowed disabled:opacity-50",
-          "aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20",
-        )}
+        className={nativeSelectClassName()}
         value={environmentKey}
         aria-invalid={invalid ? true : undefined}
         disabled={disabled || loadingEnvironments || environments.length === 0}
