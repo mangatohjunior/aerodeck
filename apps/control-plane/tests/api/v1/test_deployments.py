@@ -265,12 +265,19 @@ async def test_create_persists_environment_link(client: AsyncClient, auth: dict[
 async def test_create_rejects_partial_environment_link(
     client: AsyncClient, auth: dict[str, str]
 ) -> None:
-    response = await client.post(
+    project_only = await client.post(
         DEPLOYMENTS,
         json={"repo_url": REPO, "project_id": str(uuid4())},
         headers=auth,
     )
-    assert response.status_code == 422
+    assert project_only.status_code == 422
+
+    environment_only = await client.post(
+        DEPLOYMENTS,
+        json={"repo_url": REPO, "environment_id": str(uuid4())},
+        headers=auth,
+    )
+    assert environment_only.status_code == 422
 
 
 async def test_create_rejects_unknown_environment(client: AsyncClient, auth: dict[str, str]) -> None:

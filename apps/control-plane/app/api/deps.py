@@ -32,6 +32,7 @@ from app.services.certificate_keys import FileCertificateKeyStore
 from app.services.certificates import CertificateService
 from app.services.console_sessions import ConsoleSessionService
 from app.services.console_users import ConsoleUserService
+from app.services.deployment_terminal import DeploymentTerminalService
 from app.services.deployments import DeploymentService
 from app.services.dns01 import DigitalOceanDns01, Dns01Provider, Dns01UnavailableError, MemoryDns01
 from app.services.dns_records import (
@@ -150,10 +151,23 @@ def get_environment_service(
 EnvironmentServiceDep = Annotated[EnvironmentService, Depends(get_environment_service)]
 
 
+def get_deployment_terminal_service(
+    deployments: DeploymentRepositoryDep,
+) -> DeploymentTerminalService:
+    return DeploymentTerminalService(deployments)
+
+
+DeploymentTerminalServiceDep = Annotated[
+    DeploymentTerminalService, Depends(get_deployment_terminal_service)
+]
+
+
 def get_deployment_service(
-    deployments: DeploymentRepositoryDep, environments: EnvironmentServiceDep
+    deployments: DeploymentRepositoryDep,
+    environments: EnvironmentServiceDep,
+    terminal: DeploymentTerminalServiceDep,
 ) -> DeploymentService:
-    return DeploymentService(deployments, environments)
+    return DeploymentService(deployments, environments, terminal)
 
 
 DeploymentServiceDep = Annotated[DeploymentService, Depends(get_deployment_service)]

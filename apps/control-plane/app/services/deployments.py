@@ -23,8 +23,11 @@ def _is_deployment_environment_fk_violation(exc: IntegrityError) -> bool:
     detail = str(exc.orig if exc.orig is not None else exc).lower()
     if _DEPLOYMENT_ENV_FK in detail:
         return True
-    # SQLite often reports only "FOREIGN KEY constraint failed".
-    return "foreign key" in detail
+    # SQLite omits the constraint name; do not treat every dialect's FK text as a miss.
+    orig = exc.orig
+    if orig is not None and type(orig).__module__.startswith("sqlite3"):
+        return "foreign key" in detail
+    return False
 
 
 class EnvironmentLookup(Protocol):
@@ -38,10 +41,11 @@ class DeploymentService:
         self,
         deployments: DeploymentRepository,
         environments: EnvironmentLookup,
+        terminal: DeploymentTerminalService,
     ) -> None:
         self._deployments = deployments
         self._environments = environments
-        self._terminal = DeploymentTerminalService(deployments)
+        self._terminal = terminal
 
     async def create(self, data: DeploymentCreate) -> Deployment:
         parsed = parse_github_repo(data.repo_url)
