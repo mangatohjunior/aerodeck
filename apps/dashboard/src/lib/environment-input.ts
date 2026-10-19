@@ -72,7 +72,7 @@ export type EnvironmentCreateParsed = {
 
 export type EnvironmentCreateParseResult =
   | { ok: true; value: EnvironmentCreateParsed }
-  | { ok: false; error: string };
+  | { ok: false; error: string; code: string };
 
 /** Client/BFF-shared validation for environment create forms. */
 export function parseEnvironmentCreateFields(
@@ -80,23 +80,23 @@ export function parseEnvironmentCreateFields(
 ): EnvironmentCreateParseResult {
   const projectId = input.projectId.trim();
   if (projectId.length === 0) {
-    return { ok: false, error: ENVIRONMENT_PROJECT_REQUIRED };
+    return { ok: false, error: ENVIRONMENT_PROJECT_REQUIRED, code: "missing_project" };
   }
   const name = input.name.trim();
   const slug = input.slug.trim().toLowerCase();
   const kind = input.kind.trim();
   const region = input.region.trim();
   if (!isValidEnvironmentName(name)) {
-    return { ok: false, error: ENVIRONMENT_NAME_INVALID };
+    return { ok: false, error: ENVIRONMENT_NAME_INVALID, code: "invalid_name" };
   }
   if (!isValidEnvironmentSlug(slug)) {
-    return { ok: false, error: ENVIRONMENT_SLUG_INVALID };
+    return { ok: false, error: ENVIRONMENT_SLUG_INVALID, code: "invalid_slug" };
   }
   if (!isValidEnvironmentKind(kind)) {
-    return { ok: false, error: ENVIRONMENT_KIND_INVALID };
+    return { ok: false, error: ENVIRONMENT_KIND_INVALID, code: "invalid_kind" };
   }
   if (!isValidEnvironmentRegion(region)) {
-    return { ok: false, error: ENVIRONMENT_REGION_INVALID };
+    return { ok: false, error: ENVIRONMENT_REGION_INVALID, code: "invalid_region" };
   }
   return { ok: true, value: { projectId, name, slug, kind, region } };
 }

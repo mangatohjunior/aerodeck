@@ -67,7 +67,7 @@ describe("parseEnvironmentCreateFields", () => {
     }
   });
 
-  it("returns the first validation error", () => {
+  it("returns the first validation error with a stable code", () => {
     assert.deepEqual(
       parseEnvironmentCreateFields({
         projectId: "",
@@ -76,7 +76,7 @@ describe("parseEnvironmentCreateFields", () => {
         kind: "prod",
         region: "nyc3",
       }),
-      { ok: false, error: ENVIRONMENT_PROJECT_REQUIRED },
+      { ok: false, error: ENVIRONMENT_PROJECT_REQUIRED, code: "missing_project" },
     );
     assert.deepEqual(
       parseEnvironmentCreateFields({
@@ -86,7 +86,7 @@ describe("parseEnvironmentCreateFields", () => {
         kind: "prod",
         region: "nyc3",
       }),
-      { ok: false, error: ENVIRONMENT_NAME_INVALID },
+      { ok: false, error: ENVIRONMENT_NAME_INVALID, code: "invalid_name" },
     );
   });
 });

@@ -10,18 +10,11 @@ import {
 import {
   DEFAULT_ENVIRONMENT_REGION,
   ENVIRONMENT_FIELDS_INVALID,
-  ENVIRONMENT_KIND_INVALID,
-  ENVIRONMENT_NAME_INVALID,
   ENVIRONMENT_PROJECT_ID_INVALID,
   ENVIRONMENT_PROJECT_NOT_FOUND,
   ENVIRONMENT_PROJECT_REQUIRED,
-  ENVIRONMENT_REGION_INVALID,
-  ENVIRONMENT_SLUG_INVALID,
   ENVIRONMENT_SLUG_TAKEN,
-  isValidEnvironmentKind,
-  isValidEnvironmentName,
-  isValidEnvironmentRegion,
-  isValidEnvironmentSlug,
+  parseEnvironmentCreateFields,
 } from "@/lib/environment-input";
 import { jsonError } from "@/lib/mock-http";
 import { requireSessionUser } from "@/lib/session";
@@ -87,48 +80,41 @@ export async function POST(request: Request) {
     return jsonError(400, "Request body must be JSON.", "invalid_json");
   }
 
-  const projectId = typeof payload.project_id === "string" ? payload.project_id.trim() : "";
-  if (projectId.length === 0) {
+  const projectIdRaw = typeof payload.project_id === "string" ? payload.project_id : "";
+  if (projectIdRaw.trim().length === 0) {
     return jsonError(400, ENVIRONMENT_PROJECT_REQUIRED, "missing_project");
   }
-  if (!isControlPlaneUuid(projectId)) {
+  if (!isControlPlaneUuid(projectIdRaw.trim())) {
     return jsonError(400, ENVIRONMENT_PROJECT_ID_INVALID, "invalid_project_id");
   }
   if (typeof payload.slug !== "string" || typeof payload.name !== "string" || typeof payload.kind !== "string") {
     return jsonError(400, "slug, name, and kind are required.", "missing_fields");
   }
+  if (
+    payload.region !== undefined &&
+    payload.region !== null &&
+    typeof payload.region !== "string"
+  ) {
+    return jsonError(400, "region must be a string.", "invalid_region");
+  }
 
-  const slug = payload.slug.trim();
-  const name = payload.name.trim();
-  const kind = payload.kind.trim();
-  const regionRaw =
+  const region =
     payload.region === undefined || payload.region === null
       ? DEFAULT_ENVIRONMENT_REGION
-      : typeof payload.region === "string"
-        ? payload.region.trim()
-        : "";
-
-  if (!isValidEnvironmentSlug(slug)) {
-    return jsonError(400, ENVIRONMENT_SLUG_INVALID, "invalid_slug");
-  }
-  if (!isValidEnvironmentName(name)) {
-    return jsonError(400, ENVIRONMENT_NAME_INVALID, "invalid_name");
-  }
-  if (!isValidEnvironmentKind(kind)) {
-    return jsonError(400, ENVIRONMENT_KIND_INVALID, "invalid_kind");
-  }
-  if (!isValidEnvironmentRegion(regionRaw)) {
-    return jsonError(400, ENVIRONMENT_REGION_INVALID, "invalid_region");
+      : payload.region;
+  const parsed = parseEnvironmentCreateFields({
+    projectId: projectIdRaw,
+    slug: payload.slug,
+    name: payload.name,
+    kind: payload.kind,
+    region,
+  });
+  if (!parsed.ok) {
+    return jsonError(400, parsed.error, parsed.code);
   }
 
   try {
-    const environment = await createControlPlaneEnvironment(config, {
-      projectId,
-      slug,
-      name,
-      kind,
-      region: regionRaw,
-    });
+    const environment = await createControlPlaneEnvironment(config, parsed.value);
     return NextResponse.json(environment, { status: 201 });
   } catch (cause) {
     if (cause instanceof ControlPlaneError && cause.status === 404) {

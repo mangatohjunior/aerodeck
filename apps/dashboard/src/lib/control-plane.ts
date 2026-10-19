@@ -187,9 +187,11 @@ export async function getControlPlaneProject(
     },
   );
   if (response.status === 404) {
+    await discardResponseBody(response);
     throw new ControlPlaneError("control plane project was not found (404)", 404);
   }
   if (!response.ok) {
+    await discardResponseBody(response);
     throw new ControlPlaneError(
       `control plane project request failed (${response.status})`,
       response.status,
@@ -237,15 +239,19 @@ export async function createControlPlaneEnvironment(
     },
   );
   if (response.status === 404) {
+    await discardResponseBody(response);
     throw new ControlPlaneError("control plane environment project was not found (404)", 404);
   }
   if (response.status === 409) {
+    await discardResponseBody(response);
     throw new ControlPlaneError("control plane environment conflict (409)", 409);
   }
   if (response.status === 422) {
+    await discardResponseBody(response);
     throw new ControlPlaneError("control plane environment rejected (422)", 422);
   }
   if (!response.ok) {
+    await discardResponseBody(response);
     throw new ControlPlaneError(
       `control plane environment request failed (${response.status})`,
       response.status,
