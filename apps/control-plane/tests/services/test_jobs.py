@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from app.models.deployment import Deployment, DeploymentStatus
-from app.services.jobs import JobService
+from app.services.jobs import DeploymentEnqueueHooks, JobService
 from app.services.provisioning import JobKind
 
 
@@ -55,8 +55,10 @@ def _job_service(
         environments,
         deployments,
         redis_url=None,
-        mark_deployment_failed=AsyncMock(),
-        set_provision_job_id=persist,
+        deployment_hooks=DeploymentEnqueueHooks(
+            mark_failed=AsyncMock(),
+            set_provision_job_id=persist,
+        ),
     )
     return service, persist
 

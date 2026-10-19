@@ -44,7 +44,7 @@ from app.services.dns_records import (
 )
 from app.services.environments import EnvironmentService
 from app.services.hypervisor import FirecrackerHypervisor, Hypervisor, MemoryHypervisor, SandboxUnavailableError
-from app.services.jobs import JobDispatcher, JobService
+from app.services.jobs import DeploymentEnqueueHooks, JobDispatcher, JobService
 from app.services.letsencrypt import LetsEncryptIssuer
 from app.services.projects import ProjectService
 from app.services.routes import RouteService
@@ -294,8 +294,10 @@ def get_job_service(
         environments,
         deployments,
         redis_url=settings.redis_url,
-        mark_deployment_failed=try_mark_deployment_failed_isolated,
-        set_provision_job_id=set_provision_job_id_isolated,
+        deployment_hooks=DeploymentEnqueueHooks(
+            mark_failed=try_mark_deployment_failed_isolated,
+            set_provision_job_id=set_provision_job_id_isolated,
+        ),
     )
 
 

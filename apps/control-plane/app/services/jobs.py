@@ -42,6 +42,14 @@ class JobTicket:
     environment_id: uuid.UUID
 
 
+@dataclass(frozen=True, slots=True)
+class DeploymentEnqueueHooks:
+    """Isolated deployment side-effects for provision enqueue (fail mark + job id)."""
+
+    mark_failed: MarkDeploymentFailed
+    set_provision_job_id: SetProvisionJobId
+
+
 class JobService:
     def __init__(
         self,
@@ -50,15 +58,13 @@ class JobService:
         deployments: DeploymentService,
         *,
         redis_url: str | None,
-        mark_deployment_failed: MarkDeploymentFailed,
-        set_provision_job_id: SetProvisionJobId,
+        deployment_hooks: DeploymentEnqueueHooks,
     ) -> None:
         self._dispatcher = dispatcher
         self._environments = environments
         self._deployments = deployments
         self._redis_url = redis_url
-        self._mark_deployment_failed = mark_deployment_failed
-        self._set_provision_job_id = set_provision_job_id
+        self._deployment_hooks = deployment_hooks
 
     async def enqueue(
         self,
@@ -106,7 +112,7 @@ class JobService:
                         type(publish_exc).__name__,
                     )
                 # Own session+commit: the request that raised will roll back.
-                await self._mark_deployment_failed(linked_deployment_id)
+                await self._deployment_hooks.mark_failed(linked_deployment_id)
             raise
         if linked_deployment_id is not None:
             await self._remember_provision_job_id(linked_deployment_id, job_id)
@@ -125,13 +131,14 @@ class JobService:
             )
             return
         try:
-            await self._set_provision_job_id(deployment_id, job_uuid)
+            await self._deployment_hooks.set_provision_job_id(deployment_id, job_uuid)
         except Exception as persist_exc:
             logger.warning(
                 "event=deployment_provision_job_id_skipped deployment=%s job_id=%s error_type=%s",
                 deployment_id,
                 job_id,
                 type(persist_exc).__name__,
+                exc_info=persist_exc,
             )
 
     async def state(self, job_id: uuid.UUID) -> JobState:
