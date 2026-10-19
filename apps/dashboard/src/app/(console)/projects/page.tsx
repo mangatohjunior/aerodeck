@@ -2,10 +2,11 @@
 
 import { useEffect, useState } from "react";
 
+import { NewProjectForm } from "@/components/new-project-form";
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { fetchProjectPage } from "@/lib/api";
-import type { ProjectPage } from "@/lib/types";
+import type { Project, ProjectPage } from "@/lib/types";
 
 export default function ProjectsPage() {
   const [page, setPage] = useState<ProjectPage | null>(null);
@@ -19,7 +20,23 @@ export default function ProjectsPage() {
       });
   }, []);
 
+  function handleCreated(project: Project) {
+    setPage((current) => {
+      if (!current || current.source !== "control-plane") {
+        return current;
+      }
+      const alreadyListed = current.items.some((row) => row.id === project.id);
+      const items = [project, ...current.items.filter((row) => row.id !== project.id)];
+      return {
+        ...current,
+        items,
+        total: alreadyListed ? current.total : current.total + 1,
+      };
+    });
+  }
+
   const rows = page?.items ?? [];
+  const canCreate = page?.source === "control-plane";
 
   return (
     <div className="mx-auto w-full max-w-4xl">
@@ -28,10 +45,11 @@ export default function ProjectsPage() {
         title="Projects"
         description={
           page?.source === "control-plane"
-            ? "Live projects from GET /api/v1/projects."
+            ? "Live projects through GET and POST /api/console/projects."
             : "Local seed. The server uses the control plane when CONTROL_PLANE_URL is set."
         }
       />
+      {canCreate ? <NewProjectForm onCreated={handleCreated} /> : null}
       {error ? (
         <p className="text-sm text-destructive" role="alert">
           {error}
@@ -46,9 +64,9 @@ export default function ProjectsPage() {
               <div key={row.id} className="py-4 first:pt-4">
                 <p className="font-medium">{row.name}</p>
                 <p className="font-mono text-xs text-primary">{row.slug}</p>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  {row.description}
-                </p>
+                {row.description ? (
+                  <p className="mt-1 text-sm text-muted-foreground">{row.description}</p>
+                ) : null}
               </div>
             ))}
           </CardContent>

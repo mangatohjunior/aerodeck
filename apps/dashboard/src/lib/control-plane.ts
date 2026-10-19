@@ -118,6 +118,53 @@ export async function listControlPlaneProjects(
   return { items, total, limit, offset: 0 };
 }
 
+export type CreateControlPlaneProjectInput = {
+  slug: string;
+  name: string;
+  description?: string | null;
+};
+
+export async function createControlPlaneProject(
+  config: ControlPlaneConfig,
+  input: CreateControlPlaneProjectInput,
+  options: ListOptions = {},
+): Promise<Project> {
+  const fetchImpl = options.fetch ?? fetch;
+  const now = options.now ?? Date.now;
+  const accessToken = await accessTokenFor(config, fetchImpl, now);
+  const body: Record<string, string> = {
+    slug: input.slug,
+    name: input.name,
+  };
+  const description = input.description?.trim();
+  if (description) {
+    body.description = description;
+  }
+  const response = await fetchImpl(`${config.baseUrl}/api/v1/projects`, {
+    method: "POST",
+    headers: {
+      accept: "application/json",
+      authorization: `Bearer ${accessToken}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify(body),
+    cache: "no-store",
+  });
+  if (response.status === 409) {
+    throw new ControlPlaneError("control plane project conflict (409)", 409);
+  }
+  if (response.status === 422) {
+    throw new ControlPlaneError("control plane project rejected (422)", 422);
+  }
+  if (!response.ok) {
+    throw new ControlPlaneError(
+      `control plane project request failed (${response.status})`,
+      response.status,
+    );
+  }
+  return parseProject(await response.json());
+}
+
 export async function listControlPlaneSandboxes(
   config: ControlPlaneConfig,
   options: ListOptions = {},
