@@ -188,6 +188,9 @@ export async function fetchProvisionJob(jobId: string): Promise<ProvisionJob> {
     credentials: "same-origin",
     cache: "no-store",
   });
+  if (response.status === 401) {
+    throw new SessionEnded();
+  }
   return readJson(response);
 }
 

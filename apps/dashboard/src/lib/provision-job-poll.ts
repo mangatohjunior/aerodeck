@@ -57,6 +57,21 @@ export function isSettledActiveProvisionJob(
   );
 }
 
+/** Badge label when polling stopped while the CP status is still active. */
+export function settledActiveJobBadgeLabel(reason: ProvisionJobPollStopReason): string {
+  switch (reason) {
+    case "stale":
+    case "deployment_terminal":
+      return "Stale";
+    case "deadline":
+      return "Stopped";
+    case "errors":
+      return "Unavailable";
+    case "terminal":
+      return "Stopped";
+  }
+}
+
 export function provisionJobPollStopMessage(reason: ProvisionJobPollStopReason): string {
   switch (reason) {
     case "stale":

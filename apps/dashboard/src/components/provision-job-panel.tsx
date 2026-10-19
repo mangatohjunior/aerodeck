@@ -10,7 +10,11 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { isTerminalDeploymentStatus } from "@/lib/provision-job-poll";
+import {
+  isTerminalDeploymentStatus,
+  settledActiveJobBadgeLabel,
+  type ProvisionJobPollStopReason,
+} from "@/lib/provision-job-poll";
 import { useProvisionJobPoll } from "@/lib/use-provision-job-poll";
 import type { DeploymentStatus, ProvisionJobStatus } from "@/lib/types";
 
@@ -25,12 +29,16 @@ const JOB_STATUS_BADGE: Record<
   failed: { variant: "destructive", label: "Failed", Icon: XCircle },
 };
 
-function jobStatusBadge(status: ProvisionJobStatus, settledActive: boolean) {
-  if (settledActive) {
+function jobStatusBadge(
+  status: ProvisionJobStatus,
+  settledActive: boolean,
+  stopReason: ProvisionJobPollStopReason | null,
+) {
+  if (settledActive && stopReason !== null) {
     return (
       <Badge variant="secondary">
         <Clock />
-        Stale
+        {settledActiveJobBadgeLabel(stopReason)}
       </Badge>
     );
   }
@@ -51,7 +59,7 @@ type ProvisionJobPanelProps = {
 
 export function ProvisionJobPanel({ jobId, deploymentStatus }: ProvisionJobPanelProps) {
   const deploymentTerminal = isTerminalDeploymentStatus(deploymentStatus);
-  const { job, error, settledActive } = useProvisionJobPoll(jobId, deploymentTerminal);
+  const { job, error, settledActive, stopReason } = useProvisionJobPoll(jobId, deploymentTerminal);
 
   return (
     <Card>
@@ -61,7 +69,7 @@ export function ProvisionJobPanel({ jobId, deploymentStatus }: ProvisionJobPanel
             <CardTitle className="text-base">Provision job</CardTitle>
             <CardDescription className="mt-1 font-mono text-xs break-all">{jobId}</CardDescription>
           </div>
-          {job ? jobStatusBadge(job.status, settledActive) : null}
+          {job ? jobStatusBadge(job.status, settledActive, stopReason) : null}
         </div>
       </CardHeader>
       <CardContent className="grid gap-2 pt-4 text-sm">

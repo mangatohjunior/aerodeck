@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { fetchProvisionJob } from "./api";
+import { fetchProvisionJob, SessionEnded } from "./api";
 import { clearControlPlaneTokenCache, ControlPlaneError, getControlPlaneJob } from "./control-plane";
 import {
   isSettledActiveProvisionJob,
@@ -10,6 +10,7 @@ import {
   PROVISION_JOB_POLL_MAX_CONSECUTIVE_ERRORS,
   PROVISION_JOB_POLL_MAX_QUEUED_ONLY,
   provisionJobPollStopMessage,
+  settledActiveJobBadgeLabel,
 } from "./provision-job-poll";
 
 const config = {
@@ -245,6 +246,13 @@ describe("isSettledActiveProvisionJob", () => {
   it("explains deployment_terminal when the job never left active", () => {
     assert.match(provisionJobPollStopMessage("deployment_terminal"), /expired|queued/i);
   });
+
+  it("labels settled badges by stop reason", () => {
+    assert.equal(settledActiveJobBadgeLabel("stale"), "Stale");
+    assert.equal(settledActiveJobBadgeLabel("deployment_terminal"), "Stale");
+    assert.equal(settledActiveJobBadgeLabel("deadline"), "Stopped");
+    assert.equal(settledActiveJobBadgeLabel("errors"), "Unavailable");
+  });
 });
 
 describe("fetchProvisionJob", () => {
@@ -275,6 +283,23 @@ describe("fetchProvisionJob", () => {
         (cause: unknown) => {
           assert.ok(cause instanceof Error);
           assert.equal(cause.message, "Job queue is unavailable.");
+          return true;
+        },
+      );
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("throws SessionEnded on 401 so polling can stop", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async () =>
+      jsonResponse({ detail: "Not signed in.", code: "unauthenticated" }, 401)) as typeof fetch;
+    try {
+      await assert.rejects(
+        () => fetchProvisionJob("44444444-4444-4444-8444-444444444444"),
+        (cause: unknown) => {
+          assert.ok(cause instanceof SessionEnded);
           return true;
         },
       );

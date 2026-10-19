@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
-import { fetchProvisionJob } from "@/lib/api";
+import { fetchProvisionJob, SessionEnded } from "@/lib/api";
 import {
   isActiveProvisionJobStatus,
   isSettledActiveProvisionJob,
@@ -16,7 +16,8 @@ import type { ProvisionJob, ProvisionJobStatus } from "@/lib/types";
 export type ProvisionJobPollView = {
   job: ProvisionJob | null;
   error: string | null;
-  /** True when polling stopped on an active status (stale / expired / ceiling). */
+  stopReason: ProvisionJobPollStopReason | null;
+  /** True when polling stopped on an active status (stale / expired / ceiling / errors). */
   settledActive: boolean;
 };
 
@@ -28,18 +29,29 @@ export function useProvisionJobPoll(
   const [job, setJob] = useState<ProvisionJob | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [stopReason, setStopReason] = useState<ProvisionJobPollStopReason | null>(null);
+  const prevJobIdRef = useRef(jobId);
+  const retainedStatusRef = useRef<ProvisionJobStatus | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
-    let lastStatus: ProvisionJobStatus | null = null;
     let attempts = 0;
     let consecutiveErrors = 0;
-    let everLeftQueued = false;
+    const jobIdChanged = prevJobIdRef.current !== jobId;
+    prevJobIdRef.current = jobId;
 
-    setJob(null);
-    setError(null);
-    setStopReason(null);
+    if (jobIdChanged) {
+      setJob(null);
+      setError(null);
+      setStopReason(null);
+      retainedStatusRef.current = null;
+    } else if (deploymentTerminal) {
+      // Keep the last badge while we stop / one-shot refresh — no loading flicker.
+      setStopReason("deployment_terminal");
+    }
+
+    let lastStatus: ProvisionJobStatus | null = retainedStatusRef.current;
+    let everLeftQueued = lastStatus !== null && lastStatus !== "queued";
 
     function applyStop(reason: ProvisionJobPollStopReason) {
       setStopReason(reason);
@@ -82,6 +94,7 @@ export function useProvisionJobPoll(
         attempts += 1;
         consecutiveErrors = 0;
         lastStatus = next.status;
+        retainedStatusRef.current = next.status;
         if (next.status !== "queued") {
           everLeftQueued = true;
         }
@@ -92,6 +105,11 @@ export function useProvisionJobPoll(
         if (cancelled) {
           return;
         }
+        if (cause instanceof SessionEnded) {
+          setError(cause.message);
+          setStopReason("errors");
+          return;
+        }
         attempts += 1;
         consecutiveErrors += 1;
         setError(cause instanceof Error ? cause.message : "Could not load job status.");
@@ -99,7 +117,13 @@ export function useProvisionJobPoll(
       }
     }
 
-    void load();
+    if (!jobIdChanged && deploymentTerminal && lastStatus !== null) {
+      // Already have a status from the live poll — settle without a loading gap.
+      scheduleNext();
+    } else {
+      void load();
+    }
+
     return () => {
       cancelled = true;
       if (timer !== undefined) {
@@ -111,6 +135,7 @@ export function useProvisionJobPoll(
   return {
     job,
     error,
+    stopReason,
     settledActive: isSettledActiveProvisionJob(stopReason, job?.status ?? null),
   };
 }
