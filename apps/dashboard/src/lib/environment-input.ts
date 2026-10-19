@@ -1,3 +1,4 @@
+import { isControlPlaneUuid } from "@/lib/control-plane-uuid";
 import { isValidProjectName, isValidProjectSlug, PROJECT_SLUG_INVALID } from "@/lib/project-input";
 
 /** Matches control-plane `EnvironmentKind`. */
@@ -81,6 +82,9 @@ export function parseEnvironmentCreateFields(
   const projectId = input.projectId.trim();
   if (projectId.length === 0) {
     return { ok: false, error: ENVIRONMENT_PROJECT_REQUIRED, code: "missing_project" };
+  }
+  if (!isControlPlaneUuid(projectId)) {
+    return { ok: false, error: ENVIRONMENT_PROJECT_ID_INVALID, code: "invalid_project_id" };
   }
   const name = input.name.trim();
   const slug = input.slug.trim().toLowerCase();

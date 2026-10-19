@@ -1,4 +1,7 @@
+import { isControlPlaneUuid } from "./control-plane-uuid";
 import type { Deployment, DeploymentStatus, EnvironmentOption, Project, Sandbox } from "./types";
+
+export { isControlPlaneUuid } from "./control-plane-uuid";
 
 const CLIENT_ID_MAX = 128;
 const CLIENT_SECRET_MAX = 512;
@@ -274,13 +277,6 @@ export async function listControlPlaneSandboxes(
     items.push(...page);
   }
   return { items, total: items.length };
-}
-
-const CONTROL_PLANE_UUID =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-export function isControlPlaneUuid(value: string): boolean {
-  return CONTROL_PLANE_UUID.test(value);
 }
 
 export async function openControlPlaneDeploymentLogs(

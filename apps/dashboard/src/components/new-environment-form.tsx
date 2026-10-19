@@ -3,6 +3,12 @@
 import { Layers, Loader2 } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
 
+import {
+  EnvironmentKindField,
+  EnvironmentNameSlugFields,
+  EnvironmentProjectField,
+  EnvironmentRegionField,
+} from "@/components/environment-form-fields";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -12,19 +18,14 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { createEnvironment } from "@/lib/api";
 import {
   DEFAULT_ENVIRONMENT_REGION,
-  ENVIRONMENT_KINDS,
-  ENVIRONMENT_REGIONS,
   parseEnvironmentCreateFields,
   type EnvironmentKind,
   type EnvironmentRegion,
 } from "@/lib/environment-input";
-import { nativeSelectClassName } from "@/lib/native-select";
-import { PROJECT_NAME_MAX, PROJECT_SLUG_MAX, slugFromName } from "@/lib/project-input";
+import { slugFromName } from "@/lib/project-input";
 import type { EnvironmentOption, Project } from "@/lib/types";
 
 type NewEnvironmentFormProps = {
@@ -52,14 +53,32 @@ export function NewEnvironmentForm({ projects, onCreated }: NewEnvironmentFormPr
     );
   }, [projects]);
 
-  function bindName(value: string) {
-    setName(value);
+  function clearError() {
     if (error) {
       setError(null);
     }
+  }
+
+  function bindName(value: string) {
+    setName(value);
+    clearError();
     if (!slugTouched) {
       setSlug(slugFromName(value));
     }
+  }
+
+  function bindSlug(value: string) {
+    setSlugTouched(true);
+    setSlug(value);
+    clearError();
+  }
+
+  function resetFields() {
+    setName("");
+    setSlug("");
+    setSlugTouched(false);
+    setKind("dev");
+    setRegion(DEFAULT_ENVIRONMENT_REGION);
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -82,11 +101,7 @@ export function NewEnvironmentForm({ projects, onCreated }: NewEnvironmentFormPr
     try {
       const environment = await createEnvironment(parsed.value);
       onCreated(environment);
-      setName("");
-      setSlug("");
-      setSlugTouched(false);
-      setKind("dev");
-      setRegion(DEFAULT_ENVIRONMENT_REGION);
+      resetFields();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Create environment failed.");
     } finally {
@@ -113,107 +128,32 @@ export function NewEnvironmentForm({ projects, onCreated }: NewEnvironmentFormPr
       </CardHeader>
       <form onSubmit={handleSubmit}>
         <CardContent className="grid gap-4 pt-6 sm:grid-cols-2">
-          <div className="grid gap-2 sm:col-span-2">
-            <Label htmlFor="environment-project">Project</Label>
-            <select
-              id="environment-project"
-              className={nativeSelectClassName()}
-              value={projectId}
-              disabled={submitting || projects.length === 0}
-              onChange={(event) => {
-                setProjectId(event.target.value);
-                if (error) {
-                  setError(null);
-                }
-              }}
-            >
-              {projects.length === 0 ? (
-                <option value="">Create a project first</option>
-              ) : (
-                projects.map((row) => (
-                  <option key={row.id} value={row.id}>
-                    {row.name} ({row.slug})
-                  </option>
-                ))
-              )}
-            </select>
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor="environment-name">Name</Label>
-            <Input
-              id="environment-name"
-              name="name"
-              value={name}
-              maxLength={PROJECT_NAME_MAX}
-              autoComplete="off"
-              placeholder="Production"
-              disabled={submitting}
-              onChange={(event) => bindName(event.currentTarget.value)}
-            />
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor="environment-slug">Slug</Label>
-            <Input
-              id="environment-slug"
-              name="slug"
-              value={slug}
-              maxLength={PROJECT_SLUG_MAX}
-              autoComplete="off"
-              spellCheck={false}
-              placeholder="prod"
-              className="font-mono text-sm"
-              disabled={submitting}
-              onChange={(event) => {
-                setSlugTouched(true);
-                setSlug(event.currentTarget.value.trim().toLowerCase());
-                if (error) {
-                  setError(null);
-                }
-              }}
-            />
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor="environment-kind">Kind</Label>
-            <select
-              id="environment-kind"
-              className={nativeSelectClassName()}
-              value={kind}
-              disabled={submitting}
-              onChange={(event) => {
-                setKind(event.target.value as EnvironmentKind);
-                if (error) {
-                  setError(null);
-                }
-              }}
-            >
-              {ENVIRONMENT_KINDS.map((value) => (
-                <option key={value} value={value}>
-                  {value}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor="environment-region">Region</Label>
-            <select
-              id="environment-region"
-              className={nativeSelectClassName()}
-              value={region}
-              disabled={submitting}
-              onChange={(event) => {
-                setRegion(event.target.value as EnvironmentRegion);
-                if (error) {
-                  setError(null);
-                }
-              }}
-            >
-              {ENVIRONMENT_REGIONS.map((value) => (
-                <option key={value} value={value}>
-                  {value}
-                </option>
-              ))}
-            </select>
-          </div>
+          <EnvironmentProjectField
+            projects={projects}
+            projectId={projectId}
+            disabled={submitting}
+            onProjectIdChange={setProjectId}
+            onClearError={clearError}
+          />
+          <EnvironmentNameSlugFields
+            name={name}
+            slug={slug}
+            disabled={submitting}
+            onNameChange={bindName}
+            onSlugChange={bindSlug}
+          />
+          <EnvironmentKindField
+            kind={kind}
+            disabled={submitting}
+            onKindChange={setKind}
+            onClearError={clearError}
+          />
+          <EnvironmentRegionField
+            region={region}
+            disabled={submitting}
+            onRegionChange={setRegion}
+            onClearError={clearError}
+          />
           {error ? (
             <p className="sm:col-span-2 text-sm text-destructive" role="alert">
               {error}

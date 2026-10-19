@@ -2,14 +2,20 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import {
+  ENVIRONMENT_KIND_INVALID,
   ENVIRONMENT_NAME_INVALID,
+  ENVIRONMENT_PROJECT_ID_INVALID,
   ENVIRONMENT_PROJECT_REQUIRED,
+  ENVIRONMENT_REGION_INVALID,
+  ENVIRONMENT_SLUG_INVALID,
   isValidEnvironmentKind,
   isValidEnvironmentName,
   isValidEnvironmentRegion,
   isValidEnvironmentSlug,
   parseEnvironmentCreateFields,
 } from "./environment-input";
+
+const VALID_PROJECT_ID = "11111111-1111-4111-8111-111111111111";
 
 describe("isValidEnvironmentSlug", () => {
   it("matches project slug rules", () => {
@@ -49,7 +55,7 @@ describe("isValidEnvironmentRegion", () => {
 describe("parseEnvironmentCreateFields", () => {
   it("returns trimmed fields when valid", () => {
     const parsed = parseEnvironmentCreateFields({
-      projectId: " 11111111-1111-4111-8111-111111111111 ",
+      projectId: ` ${VALID_PROJECT_ID} `,
       name: "  Production ",
       slug: " Prod ",
       kind: "prod",
@@ -58,7 +64,7 @@ describe("parseEnvironmentCreateFields", () => {
     assert.equal(parsed.ok, true);
     if (parsed.ok) {
       assert.deepEqual(parsed.value, {
-        projectId: "11111111-1111-4111-8111-111111111111",
+        projectId: VALID_PROJECT_ID,
         name: "Production",
         slug: "prod",
         kind: "prod",
@@ -67,7 +73,7 @@ describe("parseEnvironmentCreateFields", () => {
     }
   });
 
-  it("returns the first validation error with a stable code", () => {
+  it("returns stable codes for each validation failure", () => {
     assert.deepEqual(
       parseEnvironmentCreateFields({
         projectId: "",
@@ -80,13 +86,53 @@ describe("parseEnvironmentCreateFields", () => {
     );
     assert.deepEqual(
       parseEnvironmentCreateFields({
-        projectId: "11111111-1111-4111-8111-111111111111",
+        projectId: "not-a-uuid",
+        name: "Production",
+        slug: "prod",
+        kind: "prod",
+        region: "nyc3",
+      }),
+      { ok: false, error: ENVIRONMENT_PROJECT_ID_INVALID, code: "invalid_project_id" },
+    );
+    assert.deepEqual(
+      parseEnvironmentCreateFields({
+        projectId: VALID_PROJECT_ID,
         name: "   ",
         slug: "prod",
         kind: "prod",
         region: "nyc3",
       }),
       { ok: false, error: ENVIRONMENT_NAME_INVALID, code: "invalid_name" },
+    );
+    assert.deepEqual(
+      parseEnvironmentCreateFields({
+        projectId: VALID_PROJECT_ID,
+        name: "Production",
+        slug: "Prod!",
+        kind: "prod",
+        region: "nyc3",
+      }),
+      { ok: false, error: ENVIRONMENT_SLUG_INVALID, code: "invalid_slug" },
+    );
+    assert.deepEqual(
+      parseEnvironmentCreateFields({
+        projectId: VALID_PROJECT_ID,
+        name: "Production",
+        slug: "prod",
+        kind: "qa",
+        region: "nyc3",
+      }),
+      { ok: false, error: ENVIRONMENT_KIND_INVALID, code: "invalid_kind" },
+    );
+    assert.deepEqual(
+      parseEnvironmentCreateFields({
+        projectId: VALID_PROJECT_ID,
+        name: "Production",
+        slug: "prod",
+        kind: "prod",
+        region: "NYC3",
+      }),
+      { ok: false, error: ENVIRONMENT_REGION_INVALID, code: "invalid_region" },
     );
   });
 });

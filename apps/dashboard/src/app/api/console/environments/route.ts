@@ -3,16 +3,13 @@ import { connection, NextResponse } from "next/server";
 import {
   ControlPlaneError,
   createControlPlaneEnvironment,
-  isControlPlaneUuid,
   listControlPlaneEnvironments,
   readControlPlaneConfig,
 } from "@/lib/control-plane";
 import {
   DEFAULT_ENVIRONMENT_REGION,
   ENVIRONMENT_FIELDS_INVALID,
-  ENVIRONMENT_PROJECT_ID_INVALID,
   ENVIRONMENT_PROJECT_NOT_FOUND,
-  ENVIRONMENT_PROJECT_REQUIRED,
   ENVIRONMENT_SLUG_TAKEN,
   parseEnvironmentCreateFields,
 } from "@/lib/environment-input";
@@ -80,15 +77,13 @@ export async function POST(request: Request) {
     return jsonError(400, "Request body must be JSON.", "invalid_json");
   }
 
-  const projectIdRaw = typeof payload.project_id === "string" ? payload.project_id : "";
-  if (projectIdRaw.trim().length === 0) {
-    return jsonError(400, ENVIRONMENT_PROJECT_REQUIRED, "missing_project");
-  }
-  if (!isControlPlaneUuid(projectIdRaw.trim())) {
-    return jsonError(400, ENVIRONMENT_PROJECT_ID_INVALID, "invalid_project_id");
-  }
-  if (typeof payload.slug !== "string" || typeof payload.name !== "string" || typeof payload.kind !== "string") {
-    return jsonError(400, "slug, name, and kind are required.", "missing_fields");
+  if (
+    typeof payload.project_id !== "string" ||
+    typeof payload.slug !== "string" ||
+    typeof payload.name !== "string" ||
+    typeof payload.kind !== "string"
+  ) {
+    return jsonError(400, "project_id, slug, name, and kind are required.", "missing_fields");
   }
   if (
     payload.region !== undefined &&
@@ -103,7 +98,7 @@ export async function POST(request: Request) {
       ? DEFAULT_ENVIRONMENT_REGION
       : payload.region;
   const parsed = parseEnvironmentCreateFields({
-    projectId: projectIdRaw,
+    projectId: payload.project_id,
     slug: payload.slug,
     name: payload.name,
     kind: payload.kind,
