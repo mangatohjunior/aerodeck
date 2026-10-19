@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { environmentOptionKey } from "@/lib/environment-option";
@@ -75,6 +77,14 @@ export function EnvironmentSelect({
             Retry
           </Button>
         </div>
+      ) : !loadingEnvironments && environments.length === 0 ? (
+        <p className="text-xs text-muted-foreground">
+          No environments yet.{" "}
+          <Link href="/projects" className="text-primary hover:underline">
+            Create one on Projects
+          </Link>
+          , then return here and refresh the list.
+        </p>
       ) : (
         <p className="text-xs text-muted-foreground">
           Provision runs on the control-plane worker for the selected environment.

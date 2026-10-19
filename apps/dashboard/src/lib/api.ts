@@ -3,6 +3,7 @@ import {
   PROVISION_ENQUEUE_FAILED,
   type ApiError,
   type Deployment,
+  type EnvironmentOption,
   type EnvironmentOptionPage,
   type Project,
   type ProjectPage,
@@ -122,6 +123,31 @@ export async function fetchEnvironments(): Promise<EnvironmentOptionPage> {
   const response = await fetch("/api/console/environments", {
     credentials: "same-origin",
     cache: "no-store",
+  });
+  return readJson(response);
+}
+
+export async function createEnvironment(input: {
+  projectId: string;
+  slug: string;
+  name: string;
+  kind: string;
+  region?: string;
+}): Promise<EnvironmentOption> {
+  const body: Record<string, string> = {
+    project_id: input.projectId,
+    slug: input.slug,
+    name: input.name,
+    kind: input.kind,
+  };
+  if (input.region) {
+    body.region = input.region;
+  }
+  const response = await fetch("/api/console/environments", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "same-origin",
+    body: JSON.stringify(body),
   });
   return readJson(response);
 }
