@@ -1,4 +1,7 @@
+import { isControlPlaneUuid } from "./control-plane-uuid";
 import type { Deployment, DeploymentStatus, EnvironmentOption, Project, Sandbox } from "./types";
+
+export { isControlPlaneUuid } from "./control-plane-uuid";
 
 const CLIENT_ID_MAX = 128;
 const CLIENT_SECRET_MAX = 512;
@@ -165,6 +168,101 @@ export async function createControlPlaneProject(
   return parseProject(await response.json());
 }
 
+export async function getControlPlaneProject(
+  config: ControlPlaneConfig,
+  projectId: string,
+  options: ListOptions = {},
+): Promise<Project> {
+  if (!isControlPlaneUuid(projectId)) {
+    throw new ControlPlaneError("control plane project id was not a uuid");
+  }
+  const fetchImpl = options.fetch ?? fetch;
+  const now = options.now ?? Date.now;
+  const accessToken = await accessTokenFor(config, fetchImpl, now);
+  const response = await fetchImpl(
+    `${config.baseUrl}/api/v1/projects/${encodeURIComponent(projectId)}`,
+    {
+      headers: {
+        accept: "application/json",
+        authorization: `Bearer ${accessToken}`,
+      },
+      cache: "no-store",
+    },
+  );
+  if (response.status === 404) {
+    await discardResponseBody(response);
+    throw new ControlPlaneError("control plane project was not found (404)", 404);
+  }
+  if (!response.ok) {
+    await discardResponseBody(response);
+    throw new ControlPlaneError(
+      `control plane project request failed (${response.status})`,
+      response.status,
+    );
+  }
+  return parseProject(await response.json());
+}
+
+export type CreateControlPlaneEnvironmentInput = {
+  projectId: string;
+  slug: string;
+  name: string;
+  kind: string;
+  region: string;
+};
+
+export async function createControlPlaneEnvironment(
+  config: ControlPlaneConfig,
+  input: CreateControlPlaneEnvironmentInput,
+  options: ListOptions = {},
+): Promise<EnvironmentOption> {
+  if (!isControlPlaneUuid(input.projectId)) {
+    throw new ControlPlaneError("control plane project id was not a uuid");
+  }
+  const project = await getControlPlaneProject(config, input.projectId, options);
+  const fetchImpl = options.fetch ?? fetch;
+  const now = options.now ?? Date.now;
+  const accessToken = await accessTokenFor(config, fetchImpl, now);
+  const response = await fetchImpl(
+    `${config.baseUrl}/api/v1/projects/${encodeURIComponent(input.projectId)}/environments`,
+    {
+      method: "POST",
+      headers: {
+        accept: "application/json",
+        authorization: `Bearer ${accessToken}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        slug: input.slug,
+        name: input.name,
+        kind: input.kind,
+        region: input.region,
+      }),
+      cache: "no-store",
+    },
+  );
+  if (response.status === 404) {
+    await discardResponseBody(response);
+    throw new ControlPlaneError("control plane environment project was not found (404)", 404);
+  }
+  if (response.status === 409) {
+    await discardResponseBody(response);
+    throw new ControlPlaneError("control plane environment conflict (409)", 409);
+  }
+  if (response.status === 422) {
+    await discardResponseBody(response);
+    throw new ControlPlaneError("control plane environment rejected (422)", 422);
+  }
+  if (!response.ok) {
+    await discardResponseBody(response);
+    throw new ControlPlaneError(
+      `control plane environment request failed (${response.status})`,
+      response.status,
+    );
+  }
+  return parseEnvironmentOption(await response.json(), project);
+}
+
 export async function listControlPlaneSandboxes(
   config: ControlPlaneConfig,
   options: ListOptions = {},
@@ -179,13 +277,6 @@ export async function listControlPlaneSandboxes(
     items.push(...page);
   }
   return { items, total: items.length };
-}
-
-const CONTROL_PLANE_UUID =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-export function isControlPlaneUuid(value: string): boolean {
-  return CONTROL_PLANE_UUID.test(value);
 }
 
 export async function openControlPlaneDeploymentLogs(

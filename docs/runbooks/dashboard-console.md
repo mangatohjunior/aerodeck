@@ -7,16 +7,20 @@ browser never sees that client secret or the control-plane bearer.
 Overview and Projects read `GET /api/v1/projects`. Creating a project uses
 `POST /api/v1/projects` through `POST /api/console/projects` when the console
 client is set; the Projects form is hidden and create returns 404 when it is
-not, so the seed list stays unchanged. Sandboxes read
-`GET /api/v1/projects/{id}/sandboxes` through `GET /api/console/sandboxes`.
-Creating a deployment uses `POST /api/v1/deployments` through
-`POST /api/console/deployments` when the console client is set, and stays on
-`/api/mock/v1/deployments` when it is not
+not, so the seed list stays unchanged. Creating an environment uses
+`POST /api/v1/projects/{id}/environments` through
+`POST /api/console/environments` when the console client is set (slug, name,
+kind, DigitalOcean region); create returns 404 when the client is unset.
+Sandboxes read `GET /api/v1/projects/{id}/sandboxes` through
+`GET /api/console/sandboxes`. Creating a deployment uses
+`POST /api/v1/deployments` through `POST /api/console/deployments` when the
+console client is set, and stays on `/api/mock/v1/deployments` when it is not
 ([dashboard-mock.md](dashboard-mock.md)). With the console client, Deploy also
 lists environments via `GET /api/console/environments` and, on submit, creates
 the deployment with that `project_id`/`environment_id` (so list/detail keep the
 link after a restart) then queues `POST .../environments/{id}/provision` with
-the new `deployment_id` so the terminal can follow worker lines. Mock create
+the new `deployment_id` so the terminal can follow worker lines. An empty
+Deploy select links operators to Projects to create an environment. Mock create
 stays unlinked. If provision cannot be queued after create,
 the form stays put, disables Deploy, and shows a generic message so a retry
 does not create another orphan row; enqueue also marks that row `failed`. The

@@ -16,6 +16,7 @@ import {
   createControlPlaneDeployment,
   createControlPlaneDeploymentAndProvision,
   createControlPlaneProject,
+  createControlPlaneEnvironment,
   getControlPlaneDeployment,
   createControlPlaneSession,
   linkControlPlaneGoogleUser,
@@ -670,6 +671,157 @@ describe("createControlPlaneProject", () => {
         assert.equal(cause.status, 422);
         assert.equal(cause.message.includes("Payments!"), false);
         assert.match(cause.message, /rejected \(422\)/);
+        return true;
+      },
+    );
+  });
+});
+
+describe("createControlPlaneEnvironment", () => {
+  it("loads the project then posts the environment with the bearer", async () => {
+    clearControlPlaneTokenCache();
+    const projectId = "11111111-1111-4111-8111-111111111111";
+    const environmentId = "22222222-2222-4222-8222-222222222222";
+    const calls: string[] = [];
+    let posted = "";
+    const fetchImpl: typeof fetch = async (input, init) => {
+      const url = String(input);
+      if (url.endsWith("/api/v1/auth/token")) {
+        return jsonResponse({ access_token: "issued-bearer", expires_in: 900 });
+      }
+      calls.push(`${init?.method ?? "GET"} ${url}`);
+      if (url.endsWith(`/api/v1/projects/${projectId}`) && (init?.method ?? "GET") === "GET") {
+        return jsonResponse({
+          id: projectId,
+          slug: "payments",
+          name: "Payments",
+          description: null,
+          created_at: "2026-10-19T00:00:00.000Z",
+          updated_at: "2026-10-19T00:00:00.000Z",
+        });
+      }
+      if (url.endsWith(`/projects/${projectId}/environments`) && init?.method === "POST") {
+        posted = String(init.body ?? "");
+        return jsonResponse(
+          {
+            id: environmentId,
+            project_id: projectId,
+            slug: "prod",
+            name: "Production",
+            kind: "prod",
+            region: "ams3",
+            created_at: "2026-10-19T00:00:00.000Z",
+            updated_at: "2026-10-19T00:00:00.000Z",
+          },
+          201,
+        );
+      }
+      return jsonResponse({ detail: "unexpected" }, 500);
+    };
+
+    const environment = await createControlPlaneEnvironment(
+      config,
+      {
+        projectId,
+        slug: "prod",
+        name: "Production",
+        kind: "prod",
+        region: "ams3",
+      },
+      { fetch: fetchImpl },
+    );
+    assert.equal(environment.id, environmentId);
+    assert.equal(environment.project_slug, "payments");
+    assert.equal(environment.project_name, "Payments");
+    assert.equal(
+      posted,
+      JSON.stringify({ slug: "prod", name: "Production", kind: "prod", region: "ams3" }),
+    );
+    assert.ok(calls.some((call) => call.startsWith("GET") && call.includes(`/projects/${projectId}`)));
+    assert.ok(calls.some((call) => call.startsWith("POST") && call.includes("/environments")));
+  });
+
+  it("does not create when the project is missing", async () => {
+    clearControlPlaneTokenCache();
+    const projectId = "11111111-1111-4111-8111-111111111111";
+    let created = false;
+    const fetchImpl: typeof fetch = async (input, init) => {
+      const url = String(input);
+      if (url.endsWith("/api/v1/auth/token")) {
+        return jsonResponse({ access_token: "issued-bearer", expires_in: 900 });
+      }
+      if (url.endsWith(`/api/v1/projects/${projectId}`)) {
+        return jsonResponse({ detail: "missing", secret: "super-secret" }, 404);
+      }
+      if (url.includes("/environments") && init?.method === "POST") {
+        created = true;
+      }
+      return jsonResponse({ detail: "unexpected" }, 500);
+    };
+
+    await assert.rejects(
+      () =>
+        createControlPlaneEnvironment(
+          config,
+          {
+            projectId,
+            slug: "prod",
+            name: "Production",
+            kind: "prod",
+            region: "nyc3",
+          },
+          { fetch: fetchImpl },
+        ),
+      (cause: unknown) => {
+        assert.ok(cause instanceof ControlPlaneError);
+        assert.equal(cause.status, 404);
+        assert.equal(cause.message.includes("super-secret"), false);
+        assert.match(cause.message, /not found \(404\)/);
+        return true;
+      },
+    );
+    assert.equal(created, false);
+  });
+
+  it("maps conflict without leaking upstream bodies", async () => {
+    clearControlPlaneTokenCache();
+    const projectId = "11111111-1111-4111-8111-111111111111";
+    const fetchImpl: typeof fetch = async (input, init) => {
+      const url = String(input);
+      if (url.endsWith("/api/v1/auth/token")) {
+        return jsonResponse({ access_token: "issued-bearer", expires_in: 900 });
+      }
+      if (url.endsWith(`/api/v1/projects/${projectId}`) && (init?.method ?? "GET") === "GET") {
+        return jsonResponse({
+          id: projectId,
+          slug: "payments",
+          name: "Payments",
+          description: null,
+          created_at: "2026-10-19T00:00:00.000Z",
+          updated_at: "2026-10-19T00:00:00.000Z",
+        });
+      }
+      return jsonResponse({ detail: "taken", secret: "super-secret" }, 409);
+    };
+
+    await assert.rejects(
+      () =>
+        createControlPlaneEnvironment(
+          config,
+          {
+            projectId,
+            slug: "prod",
+            name: "Production",
+            kind: "prod",
+            region: "nyc3",
+          },
+          { fetch: fetchImpl },
+        ),
+      (cause: unknown) => {
+        assert.ok(cause instanceof ControlPlaneError);
+        assert.equal(cause.status, 409);
+        assert.equal(cause.message.includes("super-secret"), false);
+        assert.match(cause.message, /conflict \(409\)/);
         return true;
       },
     );
