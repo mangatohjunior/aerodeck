@@ -51,8 +51,8 @@ from app.services.routes import RouteService
 from app.services.sandbox_hosts import SandboxHostService
 from app.services.sandboxes import SandboxService
 from app.tasks.deployment_status import (
-    set_provision_job_id_isolated,
     try_mark_deployment_failed_isolated,
+    try_set_provision_job_id_isolated,
 )
 
 SettingsDep = Annotated[Settings, Depends(get_settings)]
@@ -296,7 +296,7 @@ def get_job_service(
         redis_url=settings.redis_url,
         deployment_hooks=DeploymentEnqueueHooks(
             mark_failed=try_mark_deployment_failed_isolated,
-            set_provision_job_id=set_provision_job_id_isolated,
+            set_provision_job_id=try_set_provision_job_id_isolated,
         ),
     )
 

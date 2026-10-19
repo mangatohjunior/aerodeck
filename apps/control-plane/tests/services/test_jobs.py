@@ -9,6 +9,7 @@ import pytest
 from app.models.deployment import Deployment, DeploymentStatus
 from app.services.jobs import DeploymentEnqueueHooks, JobService
 from app.services.provisioning import JobKind
+from app.tasks.deployment_status import try_set_provision_job_id_isolated
 
 
 def _deployment() -> Deployment:
@@ -107,16 +108,24 @@ async def test_enqueue_returns_ticket_when_job_id_is_not_a_uuid() -> None:
 
 
 @pytest.mark.asyncio
-async def test_enqueue_returns_ticket_when_provision_job_id_persist_raises() -> None:
+async def test_enqueue_returns_ticket_when_try_set_hook_swallows_persist_errors() -> None:
+    """Production injects try_set_*; a raising strict callback is wrapped the same way."""
     job_id = str(uuid.uuid4())
     deployment = _deployment()
     environment = _environment()
-    persist = AsyncMock(side_effect=RuntimeError("session boom"))
+    strict = AsyncMock(side_effect=RuntimeError("session boom"))
+
+    async def try_persist(deployment_id: uuid.UUID, parsed_job_id: uuid.UUID) -> None:
+        try:
+            await strict(deployment_id, parsed_job_id)
+        except RuntimeError:
+            return
+
     service, _ = _job_service(
         job_id=job_id,
         deployment=deployment,
         environment=environment,
-        set_provision_job_id=persist,
+        set_provision_job_id=AsyncMock(side_effect=try_persist),
     )
 
     ticket = await service.enqueue(
@@ -127,5 +136,19 @@ async def test_enqueue_returns_ticket_when_provision_job_id_persist_raises() -> 
     )
 
     assert ticket.job_id == job_id
-    persist.assert_awaited_once()
+    strict.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_try_set_provision_job_id_isolated_swallows_errors(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def boom(_deployment_id: uuid.UUID, _job_id: uuid.UUID) -> None:
+        raise RuntimeError("session boom")
+
+    monkeypatch.setattr(
+        "app.tasks.deployment_status.set_provision_job_id_isolated",
+        boom,
+    )
+    await try_set_provision_job_id_isolated(uuid.uuid4(), uuid.uuid4())
 

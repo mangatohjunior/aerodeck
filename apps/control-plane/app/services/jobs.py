@@ -120,7 +120,7 @@ class JobService:
         return JobTicket(job_id=job_id, kind=kind, project_id=environment.project_id, environment_id=environment.id)
 
     async def _remember_provision_job_id(self, deployment_id: uuid.UUID, job_id: str) -> None:
-        """Best-effort: broker already accepted the task — never fail the ticket (#139)."""
+        """Parse job id then best-effort persist (hook is try_* and must not raise)."""
         try:
             job_uuid = uuid.UUID(job_id)
         except ValueError:
@@ -130,16 +130,7 @@ class JobService:
                 job_id,
             )
             return
-        try:
-            await self._deployment_hooks.set_provision_job_id(deployment_id, job_uuid)
-        except Exception as persist_exc:
-            logger.warning(
-                "event=deployment_provision_job_id_skipped deployment=%s job_id=%s error_type=%s",
-                deployment_id,
-                job_id,
-                type(persist_exc).__name__,
-                exc_info=persist_exc,
-            )
+        await self._deployment_hooks.set_provision_job_id(deployment_id, job_uuid)
 
     async def state(self, job_id: uuid.UUID) -> JobState:
         return await run_in_threadpool(self._dispatcher.state, str(job_id))
