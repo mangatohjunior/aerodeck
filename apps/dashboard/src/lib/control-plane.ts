@@ -995,10 +995,7 @@ function parseProvisionJob(value: unknown): ProvisionJob {
   if (row.result === null) {
     job.result = null;
   } else if (row.result !== undefined) {
-    if (!row.result || typeof row.result !== "object" || Array.isArray(row.result)) {
-      throw new ControlPlaneError("control plane job response was not a job");
-    }
-    job.result = row.result as Record<string, string | boolean>;
+    job.result = parseProvisionJobResult(row.result);
   }
   if (row.error === null || typeof row.error === "string") {
     job.error = row.error;
@@ -1006,6 +1003,20 @@ function parseProvisionJob(value: unknown): ProvisionJob {
     throw new ControlPlaneError("control plane job response was not a job");
   }
   return job;
+}
+
+function parseProvisionJobResult(value: unknown): Record<string, string | boolean> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new ControlPlaneError("control plane job response was not a job");
+  }
+  const result: Record<string, string | boolean> = {};
+  for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
+    if (typeof entry !== "string" && typeof entry !== "boolean") {
+      throw new ControlPlaneError("control plane job response was not a job");
+    }
+    result[key] = entry;
+  }
+  return result;
 }
 
 async function listProjectEnvironments(

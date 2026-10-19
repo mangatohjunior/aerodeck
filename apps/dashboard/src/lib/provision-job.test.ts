@@ -62,6 +62,30 @@ describe("getControlPlaneJob", () => {
       },
     );
   });
+
+  it("rejects result maps with non-string/boolean values", async () => {
+    clearControlPlaneTokenCache();
+    const jobId = "44444444-4444-4444-8444-444444444444";
+    const fetchImpl: typeof fetch = async (input) => {
+      const url = String(input);
+      if (url.endsWith("/api/v1/auth/token")) {
+        return jsonResponse({ access_token: "issued-bearer", expires_in: 900 });
+      }
+      return jsonResponse({
+        job_id: jobId,
+        status: "succeeded",
+        result: { ok: true, nested: { nope: 1 } },
+      });
+    };
+    await assert.rejects(
+      () => getControlPlaneJob(config, jobId, { fetch: fetchImpl }),
+      (cause: unknown) => {
+        assert.ok(cause instanceof ControlPlaneError);
+        assert.match(cause.message, /not a job/);
+        return true;
+      },
+    );
+  });
 });
 
 describe("fetchProvisionJob", () => {

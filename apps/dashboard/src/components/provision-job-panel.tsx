@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckCircle2, Loader2, XCircle } from "lucide-react";
+import { CheckCircle2, Loader2, XCircle, type LucideIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
@@ -19,45 +19,29 @@ export const PROVISION_JOB_POLL_MS = 5_000;
 
 const ACTIVE_STATUSES = new Set<ProvisionJobStatus>(["queued", "running", "retrying"]);
 
+const JOB_STATUS_BADGE: Record<
+  ProvisionJobStatus,
+  { variant: "default" | "secondary" | "destructive"; label: string; Icon: LucideIcon; spin?: boolean }
+> = {
+  queued: { variant: "secondary", label: "Queued", Icon: Loader2, spin: true },
+  running: { variant: "secondary", label: "Running", Icon: Loader2, spin: true },
+  retrying: { variant: "secondary", label: "Retrying", Icon: Loader2, spin: true },
+  succeeded: { variant: "default", label: "Succeeded", Icon: CheckCircle2 },
+  failed: { variant: "destructive", label: "Failed", Icon: XCircle },
+};
+
 function jobStatusBadge(status: ProvisionJobStatus) {
-  if (status === "failed") {
-    return (
-      <Badge variant="destructive">
-        <XCircle />
-        Failed
-      </Badge>
-    );
-  }
-  if (status === "succeeded") {
-    return (
-      <Badge variant="default">
-        <CheckCircle2 />
-        Succeeded
-      </Badge>
-    );
-  }
-  if (status === "retrying") {
-    return (
-      <Badge variant="secondary">
-        <Loader2 className="animate-spin" />
-        Retrying
-      </Badge>
-    );
-  }
-  if (status === "queued") {
-    return (
-      <Badge variant="secondary">
-        <Loader2 className="animate-spin" />
-        Queued
-      </Badge>
-    );
-  }
+  const { variant, label, Icon, spin } = JOB_STATUS_BADGE[status];
   return (
-    <Badge variant="secondary">
-      <Loader2 className="animate-spin" />
-      Running
+    <Badge variant={variant}>
+      <Icon className={spin ? "animate-spin" : undefined} />
+      {label}
     </Badge>
   );
+}
+
+function shouldKeepPolling(status: ProvisionJobStatus | null): boolean {
+  return status === null || ACTIVE_STATUSES.has(status);
 }
 
 type ProvisionJobPanelProps = {
@@ -71,6 +55,16 @@ export function ProvisionJobPanel({ jobId }: ProvisionJobPanelProps) {
   useEffect(() => {
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
+    let lastStatus: ProvisionJobStatus | null = null;
+
+    function scheduleNext() {
+      if (cancelled || !shouldKeepPolling(lastStatus)) {
+        return;
+      }
+      timer = setTimeout(() => {
+        void load();
+      }, PROVISION_JOB_POLL_MS);
+    }
 
     async function load() {
       try {
@@ -78,18 +72,17 @@ export function ProvisionJobPanel({ jobId }: ProvisionJobPanelProps) {
         if (cancelled) {
           return;
         }
+        lastStatus = next.status;
         setJob(next);
         setError(null);
-        if (ACTIVE_STATUSES.has(next.status)) {
-          timer = setTimeout(() => {
-            void load();
-          }, PROVISION_JOB_POLL_MS);
-        }
+        scheduleNext();
       } catch (cause: unknown) {
         if (cancelled) {
           return;
         }
         setError(cause instanceof Error ? cause.message : "Could not load job status.");
+        // Keep polling through transient BFF/CP failures until a terminal status.
+        scheduleNext();
       }
     }
 
