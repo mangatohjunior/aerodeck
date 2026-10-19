@@ -47,3 +47,44 @@ export function slugFromName(name: string): string {
     .slice(0, PROJECT_SLUG_MAX)
     .replace(/-+$/g, "");
 }
+
+export const PROJECT_UPDATE_EMPTY = "Change the name or description before saving.";
+
+export type ProjectUpdateFields = {
+  name?: string;
+  description?: string | null;
+};
+
+export type ProjectUpdateParsed = {
+  name?: string;
+  description?: string | null;
+};
+
+export type ProjectUpdateParseResult =
+  | { ok: true; value: ProjectUpdateParsed }
+  | { ok: false; error: string; code: string };
+
+export function parseProjectUpdateFields(input: ProjectUpdateFields): ProjectUpdateParseResult {
+  const value: ProjectUpdateParsed = {};
+  if (input.name !== undefined) {
+    const name = input.name.trim();
+    if (!isValidProjectName(name)) {
+      return { ok: false, error: PROJECT_NAME_INVALID, code: "invalid_name" };
+    }
+    value.name = name;
+  }
+  if (input.description !== undefined) {
+    if (input.description !== null && typeof input.description !== "string") {
+      return { ok: false, error: PROJECT_DESCRIPTION_INVALID_TYPE, code: "invalid_description" };
+    }
+    const description = normalizeProjectDescription(input.description);
+    if (description !== null && description.length > PROJECT_DESCRIPTION_MAX) {
+      return { ok: false, error: PROJECT_DESCRIPTION_TOO_LONG, code: "invalid_description" };
+    }
+    value.description = description;
+  }
+  if (value.name === undefined && value.description === undefined) {
+    return { ok: false, error: PROJECT_UPDATE_EMPTY, code: "empty_update" };
+  }
+  return { ok: true, value };
+}

@@ -17,8 +17,12 @@ import {
   createControlPlaneDeploymentAndProvision,
   createControlPlaneProject,
   createControlPlaneEnvironment,
+  deleteControlPlaneEnvironment,
+  deleteControlPlaneProject,
   getControlPlaneProjectDetail,
   getControlPlaneDeployment,
+  updateControlPlaneEnvironment,
+  updateControlPlaneProject,
   createControlPlaneSession,
   linkControlPlaneGoogleUser,
   listControlPlaneDeployments,
@@ -675,6 +679,120 @@ describe("createControlPlaneProject", () => {
         return true;
       },
     );
+  });
+});
+
+describe("updateControlPlaneProject", () => {
+  it("patches name and description with the bearer", async () => {
+    clearControlPlaneTokenCache();
+    const projectId = "11111111-1111-4111-8111-111111111111";
+    let posted = "";
+    const fetchImpl: typeof fetch = async (input, init) => {
+      const url = String(input);
+      if (url.endsWith("/api/v1/auth/token")) {
+        return jsonResponse({ access_token: "issued-bearer", expires_in: 900 });
+      }
+      assert.equal(init?.method, "PATCH");
+      posted = String(init?.body ?? "");
+      return jsonResponse({
+        id: projectId,
+        slug: "payments",
+        name: "Payments HQ",
+        description: "Ledger",
+        created_at: "2026-10-19T00:00:00.000Z",
+        updated_at: "2026-10-19T01:00:00.000Z",
+      });
+    };
+    const project = await updateControlPlaneProject(
+      config,
+      { projectId, name: "Payments HQ", description: "Ledger" },
+      { fetch: fetchImpl },
+    );
+    assert.equal(project.name, "Payments HQ");
+    assert.equal(posted, JSON.stringify({ name: "Payments HQ", description: "Ledger" }));
+  });
+});
+
+describe("deleteControlPlaneProject", () => {
+  it("deletes with the bearer and discards a 204 body", async () => {
+    clearControlPlaneTokenCache();
+    const projectId = "11111111-1111-4111-8111-111111111111";
+    let method = "";
+    const fetchImpl: typeof fetch = async (input, init) => {
+      const url = String(input);
+      if (url.endsWith("/api/v1/auth/token")) {
+        return jsonResponse({ access_token: "issued-bearer", expires_in: 900 });
+      }
+      method = init?.method ?? "";
+      return new Response(null, { status: 204 });
+    };
+    await deleteControlPlaneProject(config, projectId, { fetch: fetchImpl });
+    assert.equal(method, "DELETE");
+  });
+});
+
+describe("updateControlPlaneEnvironment", () => {
+  it("loads the project then patches the environment", async () => {
+    clearControlPlaneTokenCache();
+    const projectId = "11111111-1111-4111-8111-111111111111";
+    const environmentId = "22222222-2222-4222-8222-222222222222";
+    let posted = "";
+    const fetchImpl: typeof fetch = async (input, init) => {
+      const url = String(input);
+      if (url.endsWith("/api/v1/auth/token")) {
+        return jsonResponse({ access_token: "issued-bearer", expires_in: 900 });
+      }
+      if (url.endsWith(`/api/v1/projects/${projectId}`) && (init?.method ?? "GET") === "GET") {
+        return jsonResponse({
+          id: projectId,
+          slug: "payments",
+          name: "Payments",
+          description: null,
+          created_at: "2026-10-19T00:00:00.000Z",
+          updated_at: "2026-10-19T00:00:00.000Z",
+        });
+      }
+      assert.equal(init?.method, "PATCH");
+      posted = String(init?.body ?? "");
+      return jsonResponse({
+        id: environmentId,
+        project_id: projectId,
+        slug: "prod",
+        name: "Production EU",
+        kind: "prod",
+        region: "ams3",
+        created_at: "2026-10-19T00:00:00.000Z",
+        updated_at: "2026-10-19T01:00:00.000Z",
+      });
+    };
+    const environment = await updateControlPlaneEnvironment(
+      config,
+      { projectId, environmentId, name: "Production EU", region: "ams3" },
+      { fetch: fetchImpl },
+    );
+    assert.equal(environment.name, "Production EU");
+    assert.equal(environment.project_slug, "payments");
+    assert.equal(posted, JSON.stringify({ name: "Production EU", region: "ams3" }));
+  });
+});
+
+describe("deleteControlPlaneEnvironment", () => {
+  it("deletes the environment with the bearer", async () => {
+    clearControlPlaneTokenCache();
+    const projectId = "11111111-1111-4111-8111-111111111111";
+    const environmentId = "22222222-2222-4222-8222-222222222222";
+    let method = "";
+    const fetchImpl: typeof fetch = async (input, init) => {
+      const url = String(input);
+      if (url.endsWith("/api/v1/auth/token")) {
+        return jsonResponse({ access_token: "issued-bearer", expires_in: 900 });
+      }
+      method = init?.method ?? "";
+      assert.ok(url.includes(`/environments/${environmentId}`));
+      return new Response(null, { status: 204 });
+    };
+    await deleteControlPlaneEnvironment(config, projectId, environmentId, { fetch: fetchImpl });
+    assert.equal(method, "DELETE");
   });
 });
 

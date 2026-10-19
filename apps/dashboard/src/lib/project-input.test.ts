@@ -5,9 +5,11 @@ import {
   isValidProjectName,
   isValidProjectSlug,
   normalizeProjectDescription,
+  parseProjectUpdateFields,
   PROJECT_DESCRIPTION_MAX,
   PROJECT_NAME_MAX,
   PROJECT_SLUG_MAX,
+  PROJECT_UPDATE_EMPTY,
   slugFromName,
 } from "./project-input";
 
@@ -73,5 +75,23 @@ describe("slugFromName", () => {
     assert.equal(suggested.endsWith("-"), false);
     assert.equal(isValidProjectSlug(suggested), true);
     assert.equal(suggested, "a".repeat(PROJECT_SLUG_MAX - 1));
+  });
+});
+
+describe("parseProjectUpdateFields", () => {
+  it("accepts name and nullable description", () => {
+    const parsed = parseProjectUpdateFields({ name: "  Payments  ", description: "  " });
+    assert.deepEqual(parsed, {
+      ok: true,
+      value: { name: "Payments", description: null },
+    });
+  });
+
+  it("rejects an empty update", () => {
+    assert.deepEqual(parseProjectUpdateFields({}), {
+      ok: false,
+      error: PROJECT_UPDATE_EMPTY,
+      code: "empty_update",
+    });
   });
 });

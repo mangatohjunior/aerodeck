@@ -104,3 +104,52 @@ export function parseEnvironmentCreateFields(
   }
   return { ok: true, value: { projectId, name, slug, kind, region } };
 }
+
+export const ENVIRONMENT_UPDATE_EMPTY = "Change the name, kind, or region before saving.";
+
+export type EnvironmentUpdateFields = {
+  name?: string;
+  kind?: string;
+  region?: string;
+};
+
+export type EnvironmentUpdateParsed = {
+  name?: string;
+  kind?: EnvironmentKind;
+  region?: string;
+};
+
+export type EnvironmentUpdateParseResult =
+  | { ok: true; value: EnvironmentUpdateParsed }
+  | { ok: false; error: string; code: string };
+
+export function parseEnvironmentUpdateFields(
+  input: EnvironmentUpdateFields,
+): EnvironmentUpdateParseResult {
+  const value: EnvironmentUpdateParsed = {};
+  if (input.name !== undefined) {
+    const name = input.name.trim();
+    if (!isValidEnvironmentName(name)) {
+      return { ok: false, error: ENVIRONMENT_NAME_INVALID, code: "invalid_name" };
+    }
+    value.name = name;
+  }
+  if (input.kind !== undefined) {
+    const kind = input.kind.trim();
+    if (!isValidEnvironmentKind(kind)) {
+      return { ok: false, error: ENVIRONMENT_KIND_INVALID, code: "invalid_kind" };
+    }
+    value.kind = kind;
+  }
+  if (input.region !== undefined) {
+    const region = input.region.trim();
+    if (!isValidEnvironmentRegion(region)) {
+      return { ok: false, error: ENVIRONMENT_REGION_INVALID, code: "invalid_region" };
+    }
+    value.region = region;
+  }
+  if (value.name === undefined && value.kind === undefined && value.region === undefined) {
+    return { ok: false, error: ENVIRONMENT_UPDATE_EMPTY, code: "empty_update" };
+  }
+  return { ok: true, value };
+}

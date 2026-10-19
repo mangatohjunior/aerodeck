@@ -84,6 +84,59 @@ export async function fetchProjectDetail(projectId: string): Promise<ProjectDeta
   return readJson(response);
 }
 
+export async function updateProject(
+  projectId: string,
+  input: { name?: string; description?: string | null },
+): Promise<Project> {
+  const response = await fetch(`/api/console/projects/${encodeURIComponent(projectId)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    credentials: "same-origin",
+    body: JSON.stringify(input),
+  });
+  return readJson(response);
+}
+
+export async function deleteProject(projectId: string): Promise<void> {
+  const response = await fetch(`/api/console/projects/${encodeURIComponent(projectId)}`, {
+    method: "DELETE",
+    credentials: "same-origin",
+  });
+  if (!response.ok) {
+    await readJson(response);
+  }
+}
+
+export async function updateEnvironment(
+  projectId: string,
+  environmentId: string,
+  input: { name?: string; kind?: string; region?: string },
+): Promise<EnvironmentOption> {
+  const response = await fetch(
+    `/api/console/projects/${encodeURIComponent(projectId)}/environments/${encodeURIComponent(environmentId)}`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      credentials: "same-origin",
+      body: JSON.stringify(input),
+    },
+  );
+  return readJson(response);
+}
+
+export async function deleteEnvironment(projectId: string, environmentId: string): Promise<void> {
+  const response = await fetch(
+    `/api/console/projects/${encodeURIComponent(projectId)}/environments/${encodeURIComponent(environmentId)}`,
+    {
+      method: "DELETE",
+      credentials: "same-origin",
+    },
+  );
+  if (!response.ok) {
+    await readJson(response);
+  }
+}
+
 export async function createProject(input: {
   slug: string;
   name: string;

@@ -4,12 +4,14 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 
+import { EnvironmentEditRow } from "@/components/environment-edit-row";
 import { NewEnvironmentForm } from "@/components/new-environment-form";
 import { PageHeader } from "@/components/page-header";
+import { ProjectEditPanel } from "@/components/project-edit-panel";
 import { Card, CardContent } from "@/components/ui/card";
 import { fetchProjectDetail } from "@/lib/api";
 import { mergeEnvironmentsById } from "@/lib/environment-list";
-import type { EnvironmentOption, ProjectDetail } from "@/lib/types";
+import type { EnvironmentOption, Project, ProjectDetail } from "@/lib/types";
 
 export default function ProjectDetailPage() {
   const params = useParams<{ id: string }>();
@@ -62,6 +64,10 @@ export default function ProjectDetailPage() {
     document.getElementById("environments")?.scrollIntoView();
   }, [loading, detail]);
 
+  function handleProjectUpdated(project: Project) {
+    setDetail((current) => (current ? { ...current, project } : current));
+  }
+
   function handleEnvironmentCreated(environment: EnvironmentOption) {
     setDetail((current) => {
       if (!current || current.source !== "control-plane") {
@@ -74,9 +80,35 @@ export default function ProjectDetailPage() {
     });
   }
 
+  function handleEnvironmentUpdated(environment: EnvironmentOption) {
+    setDetail((current) => {
+      if (!current) {
+        return current;
+      }
+      return {
+        ...current,
+        environments: current.environments.map((row) =>
+          row.id === environment.id ? environment : row,
+        ),
+      };
+    });
+  }
+
+  function handleEnvironmentDeleted(environmentId: string) {
+    setDetail((current) => {
+      if (!current) {
+        return current;
+      }
+      return {
+        ...current,
+        environments: current.environments.filter((row) => row.id !== environmentId),
+      };
+    });
+  }
+
   const project = detail?.project;
   const environments = detail?.environments ?? [];
-  const canCreate = detail?.source === "control-plane" && project;
+  const canMutate = detail?.source === "control-plane" && project;
 
   return (
     <div className="mx-auto w-full max-w-4xl">
@@ -103,7 +135,8 @@ export default function ProjectDetailPage() {
           {error}
         </p>
       ) : null}
-      {project ? (
+      {canMutate ? <ProjectEditPanel project={project} onUpdated={handleProjectUpdated} /> : null}
+      {!canMutate && project ? (
         <Card className="mb-6">
           <CardContent className="space-y-2 pt-6">
             <p className="font-mono text-sm text-primary">{project.slug}</p>
@@ -115,7 +148,7 @@ export default function ProjectDetailPage() {
           </CardContent>
         </Card>
       ) : null}
-      {canCreate ? (
+      {canMutate ? (
         <NewEnvironmentForm projects={[project]} onCreated={handleEnvironmentCreated} />
       ) : null}
       <section id="environments" className="scroll-mt-6">
@@ -137,14 +170,23 @@ export default function ProjectDetailPage() {
         ) : (
           <Card>
             <CardContent className="divide-y divide-border pt-0">
-              {environments.map((env) => (
-                <div key={env.id} className="py-4 first:pt-4">
-                  <p className="font-medium">{env.name}</p>
-                  <p className="font-mono text-xs text-primary">
-                    {env.slug} ({env.kind}, {env.region})
-                  </p>
-                </div>
-              ))}
+              {environments.map((env) =>
+                canMutate ? (
+                  <EnvironmentEditRow
+                    key={env.id}
+                    environment={env}
+                    onUpdated={handleEnvironmentUpdated}
+                    onDeleted={handleEnvironmentDeleted}
+                  />
+                ) : (
+                  <div key={env.id} className="py-4 first:pt-4">
+                    <p className="font-medium">{env.name}</p>
+                    <p className="font-mono text-xs text-primary">
+                      {env.slug} ({env.kind}, {env.region})
+                    </p>
+                  </div>
+                ),
+              )}
             </CardContent>
           </Card>
         )}

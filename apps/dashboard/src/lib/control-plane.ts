@@ -263,6 +263,195 @@ export async function createControlPlaneEnvironment(
   return parseEnvironmentOption(await response.json(), project);
 }
 
+export type UpdateControlPlaneProjectInput = {
+  projectId: string;
+  name?: string;
+  description?: string | null;
+};
+
+export async function updateControlPlaneProject(
+  config: ControlPlaneConfig,
+  input: UpdateControlPlaneProjectInput,
+  options: ListOptions = {},
+): Promise<Project> {
+  if (!isControlPlaneUuid(input.projectId)) {
+    throw new ControlPlaneError("control plane project id was not a uuid");
+  }
+  const body: Record<string, string | null> = {};
+  if (input.name !== undefined) {
+    body.name = input.name;
+  }
+  if (input.description !== undefined) {
+    body.description = input.description;
+  }
+  const fetchImpl = options.fetch ?? fetch;
+  const now = options.now ?? Date.now;
+  const accessToken = await accessTokenFor(config, fetchImpl, now);
+  const response = await fetchImpl(
+    `${config.baseUrl}/api/v1/projects/${encodeURIComponent(input.projectId)}`,
+    {
+      method: "PATCH",
+      headers: {
+        accept: "application/json",
+        authorization: `Bearer ${accessToken}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify(body),
+      cache: "no-store",
+    },
+  );
+  if (response.status === 404) {
+    await discardResponseBody(response);
+    throw new ControlPlaneError("control plane project was not found (404)", 404);
+  }
+  if (response.status === 422) {
+    await discardResponseBody(response);
+    throw new ControlPlaneError("control plane project rejected (422)", 422);
+  }
+  if (!response.ok) {
+    await discardResponseBody(response);
+    throw new ControlPlaneError(
+      `control plane project request failed (${response.status})`,
+      response.status,
+    );
+  }
+  return parseProject(await response.json());
+}
+
+export async function deleteControlPlaneProject(
+  config: ControlPlaneConfig,
+  projectId: string,
+  options: ListOptions = {},
+): Promise<void> {
+  if (!isControlPlaneUuid(projectId)) {
+    throw new ControlPlaneError("control plane project id was not a uuid");
+  }
+  const fetchImpl = options.fetch ?? fetch;
+  const now = options.now ?? Date.now;
+  const accessToken = await accessTokenFor(config, fetchImpl, now);
+  const response = await fetchImpl(
+    `${config.baseUrl}/api/v1/projects/${encodeURIComponent(projectId)}`,
+    {
+      method: "DELETE",
+      headers: {
+        accept: "application/json",
+        authorization: `Bearer ${accessToken}`,
+      },
+      cache: "no-store",
+    },
+  );
+  if (response.status === 404) {
+    await discardResponseBody(response);
+    throw new ControlPlaneError("control plane project was not found (404)", 404);
+  }
+  if (!response.ok) {
+    await discardResponseBody(response);
+    throw new ControlPlaneError(
+      `control plane project request failed (${response.status})`,
+      response.status,
+    );
+  }
+  await discardResponseBody(response);
+}
+
+export type UpdateControlPlaneEnvironmentInput = {
+  projectId: string;
+  environmentId: string;
+  name?: string;
+  kind?: string;
+  region?: string;
+};
+
+export async function updateControlPlaneEnvironment(
+  config: ControlPlaneConfig,
+  input: UpdateControlPlaneEnvironmentInput,
+  options: ListOptions = {},
+): Promise<EnvironmentOption> {
+  if (!isControlPlaneUuid(input.projectId) || !isControlPlaneUuid(input.environmentId)) {
+    throw new ControlPlaneError("control plane environment ids were not uuids");
+  }
+  const project = await getControlPlaneProject(config, input.projectId, options);
+  const body: Record<string, string> = {};
+  if (input.name !== undefined) {
+    body.name = input.name;
+  }
+  if (input.kind !== undefined) {
+    body.kind = input.kind;
+  }
+  if (input.region !== undefined) {
+    body.region = input.region;
+  }
+  const fetchImpl = options.fetch ?? fetch;
+  const now = options.now ?? Date.now;
+  const accessToken = await accessTokenFor(config, fetchImpl, now);
+  const response = await fetchImpl(
+    `${config.baseUrl}/api/v1/projects/${encodeURIComponent(input.projectId)}/environments/${encodeURIComponent(input.environmentId)}`,
+    {
+      method: "PATCH",
+      headers: {
+        accept: "application/json",
+        authorization: `Bearer ${accessToken}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify(body),
+      cache: "no-store",
+    },
+  );
+  if (response.status === 404) {
+    await discardResponseBody(response);
+    throw new ControlPlaneError("control plane environment was not found (404)", 404);
+  }
+  if (response.status === 422) {
+    await discardResponseBody(response);
+    throw new ControlPlaneError("control plane environment rejected (422)", 422);
+  }
+  if (!response.ok) {
+    await discardResponseBody(response);
+    throw new ControlPlaneError(
+      `control plane environment request failed (${response.status})`,
+      response.status,
+    );
+  }
+  return parseEnvironmentOption(await response.json(), project);
+}
+
+export async function deleteControlPlaneEnvironment(
+  config: ControlPlaneConfig,
+  projectId: string,
+  environmentId: string,
+  options: ListOptions = {},
+): Promise<void> {
+  if (!isControlPlaneUuid(projectId) || !isControlPlaneUuid(environmentId)) {
+    throw new ControlPlaneError("control plane environment ids were not uuids");
+  }
+  const fetchImpl = options.fetch ?? fetch;
+  const now = options.now ?? Date.now;
+  const accessToken = await accessTokenFor(config, fetchImpl, now);
+  const response = await fetchImpl(
+    `${config.baseUrl}/api/v1/projects/${encodeURIComponent(projectId)}/environments/${encodeURIComponent(environmentId)}`,
+    {
+      method: "DELETE",
+      headers: {
+        accept: "application/json",
+        authorization: `Bearer ${accessToken}`,
+      },
+      cache: "no-store",
+    },
+  );
+  if (response.status === 404) {
+    await discardResponseBody(response);
+    throw new ControlPlaneError("control plane environment was not found (404)", 404);
+  }
+  if (!response.ok) {
+    await discardResponseBody(response);
+    throw new ControlPlaneError(
+      `control plane environment request failed (${response.status})`,
+      response.status,
+    );
+  }
+  await discardResponseBody(response);
+}
+
 export async function listControlPlaneSandboxes(
   config: ControlPlaneConfig,
   options: ListOptions = {},
