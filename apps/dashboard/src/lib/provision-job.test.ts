@@ -1,0 +1,102 @@
+import assert from "node:assert/strict";
+import { describe, it } from "node:test";
+
+import { fetchProvisionJob } from "./api";
+import { clearControlPlaneTokenCache, ControlPlaneError, getControlPlaneJob } from "./control-plane";
+
+const config = {
+  baseUrl: "https://cp.example",
+  clientId: "console",
+  clientSecret: "secret-value",
+};
+
+function jsonResponse(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "content-type": "application/json" },
+  });
+}
+
+describe("getControlPlaneJob", () => {
+  it("reads job status with the bearer and hides secrets", async () => {
+    clearControlPlaneTokenCache();
+    const jobId = "44444444-4444-4444-8444-444444444444";
+    let authorization = "";
+    const fetchImpl: typeof fetch = async (input, init) => {
+      const url = String(input);
+      if (url.endsWith("/api/v1/auth/token")) {
+        return jsonResponse({ access_token: "issued-bearer", expires_in: 900 });
+      }
+      authorization = new Headers(init?.headers).get("authorization") ?? "";
+      assert.ok(url.endsWith(`/api/v1/jobs/${jobId}`));
+      return jsonResponse({
+        job_id: jobId,
+        status: "running",
+        result: null,
+        error: null,
+        secret: "super-secret",
+      });
+    };
+    const job = await getControlPlaneJob(config, jobId, { fetch: fetchImpl });
+    assert.equal(authorization, "Bearer issued-bearer");
+    assert.equal(job.status, "running");
+    assert.equal(JSON.stringify(job).includes("super-secret"), false);
+  });
+
+  it("maps a down queue to 503 without leaking bodies", async () => {
+    clearControlPlaneTokenCache();
+    const fetchImpl: typeof fetch = async (input) => {
+      const url = String(input);
+      if (url.endsWith("/api/v1/auth/token")) {
+        return jsonResponse({ access_token: "issued-bearer", expires_in: 900 });
+      }
+      return jsonResponse({ detail: "broker down", secret: "super-secret" }, 503);
+    };
+    await assert.rejects(
+      () => getControlPlaneJob(config, "44444444-4444-4444-8444-444444444444", { fetch: fetchImpl }),
+      (cause: unknown) => {
+        assert.ok(cause instanceof ControlPlaneError);
+        assert.equal(cause.status, 503);
+        assert.equal(cause.message.includes("super-secret"), false);
+        return true;
+      },
+    );
+  });
+});
+
+describe("fetchProvisionJob", () => {
+  it("gets /api/console/jobs/{id} same-origin", async () => {
+    const jobId = "44444444-4444-4444-8444-444444444444";
+    let url = "";
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async (input) => {
+      url = String(input);
+      return jsonResponse({ job_id: jobId, status: "queued", result: null, error: null });
+    }) as typeof fetch;
+    try {
+      const job = await fetchProvisionJob(jobId);
+      assert.equal(url, `/api/console/jobs/${jobId}`);
+      assert.equal(job.status, "queued");
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("maps error detail from a non-OK response", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async () =>
+      jsonResponse({ detail: "Job queue is unavailable.", code: "queue_unavailable" }, 503)) as typeof fetch;
+    try {
+      await assert.rejects(
+        () => fetchProvisionJob("44444444-4444-4444-8444-444444444444"),
+        (cause: unknown) => {
+          assert.ok(cause instanceof Error);
+          assert.equal(cause.message, "Job queue is unavailable.");
+          return true;
+        },
+      );
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+});

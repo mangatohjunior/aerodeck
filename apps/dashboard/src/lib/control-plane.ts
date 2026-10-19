@@ -1,5 +1,13 @@
 import { isControlPlaneUuid } from "./control-plane-uuid";
-import type { Deployment, DeploymentStatus, EnvironmentOption, Project, Sandbox } from "./types";
+import type {
+  Deployment,
+  DeploymentStatus,
+  EnvironmentOption,
+  Project,
+  ProvisionJob,
+  ProvisionJobStatus,
+  Sandbox,
+} from "./types";
 
 export { isControlPlaneUuid } from "./control-plane-uuid";
 
@@ -926,6 +934,78 @@ export async function getControlPlaneDeployment(
     throw new ControlPlaneError(`control plane deployment request failed (${response.status})`, response.status);
   }
   return parseDeployment(await response.json());
+}
+
+const PROVISION_JOB_STATUSES = new Set<ProvisionJobStatus>([
+  "queued",
+  "running",
+  "retrying",
+  "succeeded",
+  "failed",
+]);
+
+export async function getControlPlaneJob(
+  config: ControlPlaneConfig,
+  jobId: string,
+  options: ListOptions = {},
+): Promise<ProvisionJob> {
+  if (!isControlPlaneUuid(jobId)) {
+    throw new ControlPlaneError("control plane job id was not a uuid");
+  }
+  const fetchImpl = options.fetch ?? fetch;
+  const now = options.now ?? Date.now;
+  const accessToken = await accessTokenFor(config, fetchImpl, now);
+  const response = await fetchImpl(
+    `${config.baseUrl}/api/v1/jobs/${encodeURIComponent(jobId)}`,
+    {
+      headers: {
+        accept: "application/json",
+        authorization: `Bearer ${accessToken}`,
+      },
+      cache: "no-store",
+    },
+  );
+  if (response.status === 503) {
+    await discardResponseBody(response);
+    throw new ControlPlaneError("control plane job queue unavailable (503)", 503);
+  }
+  if (!response.ok) {
+    await discardResponseBody(response);
+    throw new ControlPlaneError(`control plane job request failed (${response.status})`, response.status);
+  }
+  return parseProvisionJob(await response.json());
+}
+
+function parseProvisionJob(value: unknown): ProvisionJob {
+  if (!value || typeof value !== "object") {
+    throw new ControlPlaneError("control plane job response was not a job");
+  }
+  const row = value as Record<string, unknown>;
+  if (
+    typeof row.job_id !== "string" ||
+    typeof row.status !== "string" ||
+    !PROVISION_JOB_STATUSES.has(row.status as ProvisionJobStatus)
+  ) {
+    throw new ControlPlaneError("control plane job response was not a job");
+  }
+  const job: ProvisionJob = {
+    job_id: row.job_id,
+    status: row.status as ProvisionJobStatus,
+  };
+  if (row.result === null) {
+    job.result = null;
+  } else if (row.result !== undefined) {
+    if (!row.result || typeof row.result !== "object" || Array.isArray(row.result)) {
+      throw new ControlPlaneError("control plane job response was not a job");
+    }
+    job.result = row.result as Record<string, string | boolean>;
+  }
+  if (row.error === null || typeof row.error === "string") {
+    job.error = row.error;
+  } else if (row.error !== undefined) {
+    throw new ControlPlaneError("control plane job response was not a job");
+  }
+  return job;
 }
 
 async function listProjectEnvironments(

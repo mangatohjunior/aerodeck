@@ -9,6 +9,7 @@ import {
   type ProjectDetail,
   type ProjectPage,
   type ProjectSource,
+  type ProvisionJob,
   type PublicUser,
   type SandboxPage,
 } from "@/lib/types";
@@ -178,6 +179,15 @@ export async function fetchDeployment(id: string, controlPlane = false): Promise
     ? `/api/console/deployments/${deploymentId}`
     : `${MOCK_API_PREFIX}/deployments/${deploymentId}`;
   const response = await fetch(path, { credentials: "same-origin", cache: "no-store" });
+  return readJson(response);
+}
+
+/** Same-origin BFF to control-plane job status; mock path has no jobs API. */
+export async function fetchProvisionJob(jobId: string): Promise<ProvisionJob> {
+  const response = await fetch(`/api/console/jobs/${encodeURIComponent(jobId)}`, {
+    credentials: "same-origin",
+    cache: "no-store",
+  });
   return readJson(response);
 }
 
