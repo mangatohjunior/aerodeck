@@ -160,7 +160,7 @@ export function DeploymentStatusView({ deployment, logSource }: DeploymentStatus
       {logSource === "control-plane" && deployment.provision_job_id ? (
         <ProvisionJobPanel
           jobId={deployment.provision_job_id}
-          deploymentStatus={deployment.status}
+          deploymentStatus={status}
         />
       ) : null}
 

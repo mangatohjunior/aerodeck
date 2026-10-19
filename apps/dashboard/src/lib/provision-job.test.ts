@@ -116,6 +116,31 @@ describe("getControlPlaneJob", () => {
       },
     );
   });
+
+  it("rejects when response job_id does not match the requested id", async () => {
+    clearControlPlaneTokenCache();
+    const requested = "44444444-4444-4444-8444-444444444444";
+    const fetchImpl: typeof fetch = async (input) => {
+      const url = String(input);
+      if (url.endsWith("/api/v1/auth/token")) {
+        return jsonResponse({ access_token: "issued-bearer", expires_in: 900 });
+      }
+      return jsonResponse({
+        job_id: "55555555-5555-4555-8555-555555555555",
+        status: "queued",
+        result: null,
+        error: null,
+      });
+    };
+    await assert.rejects(
+      () => getControlPlaneJob(config, requested, { fetch: fetchImpl }),
+      (cause: unknown) => {
+        assert.ok(cause instanceof ControlPlaneError);
+        assert.match(cause.message, /not a job/);
+        return true;
+      },
+    );
+  });
 });
 
 describe("nextProvisionJobPoll", () => {

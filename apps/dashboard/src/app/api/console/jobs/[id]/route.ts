@@ -32,7 +32,12 @@ export async function GET(
 
   try {
     const job = await getControlPlaneJob(config, id);
-    return NextResponse.json(job);
+    // Console only needs status/error for the detail panel — omit structured result.
+    return NextResponse.json({
+      job_id: job.job_id,
+      status: job.status,
+      error: job.error ?? null,
+    });
   } catch (cause) {
     if (cause instanceof ControlPlaneError && cause.status === 503) {
       return jsonError(503, "Job queue is unavailable.", "queue_unavailable");

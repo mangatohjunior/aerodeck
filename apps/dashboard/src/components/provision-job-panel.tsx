@@ -20,8 +20,6 @@ import {
 } from "@/lib/provision-job-poll";
 import type { DeploymentStatus, ProvisionJob, ProvisionJobStatus } from "@/lib/types";
 
-export { PROVISION_JOB_POLL_MS };
-
 const JOB_STATUS_BADGE: Record<
   ProvisionJobStatus,
   { variant: "default" | "secondary" | "destructive"; label: string; Icon: LucideIcon; spin?: boolean }
@@ -74,8 +72,9 @@ export function ProvisionJobPanel({ jobId, deploymentStatus }: ProvisionJobPanel
         deploymentTerminal,
       });
       if (!decision.keepPolling) {
-        // Terminal job / finished deployment: stop quietly. Stale/deadline/errors need a message.
-        if (decision.reason === "stale" || decision.reason === "deadline" || decision.reason === "errors") {
+        // Terminal job / finished deployment: stop quietly. Keep the last BFF error on
+        // consecutive-failure stop; only set a message for stale/deadline.
+        if (decision.reason === "stale" || decision.reason === "deadline") {
           setError(provisionJobPollStopMessage(decision.reason));
         }
         return;

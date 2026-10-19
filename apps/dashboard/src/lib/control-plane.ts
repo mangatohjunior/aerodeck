@@ -966,10 +966,10 @@ export async function getControlPlaneJob(
     await discardResponseBody(response);
     throw new ControlPlaneError(`control plane job request failed (${response.status})`, response.status);
   }
-  return parseProvisionJob(await response.json());
+  return parseProvisionJob(await response.json(), jobId);
 }
 
-function parseProvisionJob(value: unknown): ProvisionJob {
+function parseProvisionJob(value: unknown, expectedJobId: string): ProvisionJob {
   if (!value || typeof value !== "object") {
     throw new ControlPlaneError("control plane job response was not a job");
   }
@@ -977,6 +977,7 @@ function parseProvisionJob(value: unknown): ProvisionJob {
   if (
     typeof row.job_id !== "string" ||
     !isControlPlaneUuid(row.job_id) ||
+    row.job_id !== expectedJobId ||
     typeof row.status !== "string" ||
     !PROVISION_JOB_STATUSES.has(row.status as ProvisionJobStatus)
   ) {
