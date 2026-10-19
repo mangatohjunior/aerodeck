@@ -34,8 +34,10 @@ shows a Provision job panel that polls `GET /api/console/jobs/{id}` (→
 `GET /api/v1/jobs/{id}`) about every 5s until succeeded/failed, a poll
 ceiling (~3 min), consecutive fetch failures, or forever-`queued` stale stop
 (control plane maps unknown/expired jobs to `queued`). Already-terminal
-deployments fetch once and do not keep polling. Mock detail hides the panel
-(no jobs API). The browser never calls FastAPI.
+deployments (including live Terminal Done/fail) fetch once and stop; if the
+job is still active they show a Stale badge and an expiry note instead of a
+spinner. Mock detail hides the panel (no jobs API). The browser never calls
+FastAPI.
 An empty Deploy select links operators to Projects to create an environment. Mock
 create stays unlinked. If provision cannot be queued after create,
 the form stays put, disables Deploy, and shows a generic message so a retry

@@ -41,6 +41,17 @@ export function isActiveProvisionJobStatus(status: ProvisionJobStatus): boolean 
   return PROVISION_JOB_ACTIVE_STATUSES.has(status);
 }
 
+/** Active CP status after we stopped polling — badge should not keep spinning. */
+export function isSettledActiveProvisionJob(
+  reason: ProvisionJobPollStopReason | null,
+  status: ProvisionJobStatus | null,
+): boolean {
+  if (reason === null || status === null || !isActiveProvisionJobStatus(status)) {
+    return false;
+  }
+  return reason === "deployment_terminal" || reason === "stale" || reason === "deadline";
+}
+
 export function provisionJobPollStopMessage(reason: ProvisionJobPollStopReason): string {
   switch (reason) {
     case "stale":
@@ -50,7 +61,7 @@ export function provisionJobPollStopMessage(reason: ProvisionJobPollStopReason):
     case "deadline":
       return "Job is still in progress after the poll limit; polling stopped. Refresh to try again.";
     case "deployment_terminal":
-      return "Deployment already finished; job polling stopped.";
+      return "Deployment already finished; job result may have expired (unknown jobs look queued on the control plane).";
     case "terminal":
       return "";
   }
@@ -80,8 +91,6 @@ export function nextProvisionJobPoll(state: ProvisionJobPollState): ProvisionJob
   if (state.attempts >= PROVISION_JOB_POLL_MAX_ATTEMPTS) {
     return { keepPolling: false, reason: "deadline" };
   }
-  if (state.status === null || isActiveProvisionJobStatus(state.status)) {
-    return { keepPolling: true };
-  }
-  return { keepPolling: false, reason: "terminal" };
+  // status is null (first schedule after error) or still active — keep going.
+  return { keepPolling: true };
 }

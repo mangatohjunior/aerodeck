@@ -4,10 +4,12 @@ import { describe, it } from "node:test";
 import { fetchProvisionJob } from "./api";
 import { clearControlPlaneTokenCache, ControlPlaneError, getControlPlaneJob } from "./control-plane";
 import {
+  isSettledActiveProvisionJob,
   nextProvisionJobPoll,
   PROVISION_JOB_POLL_MAX_ATTEMPTS,
   PROVISION_JOB_POLL_MAX_CONSECUTIVE_ERRORS,
   PROVISION_JOB_POLL_MAX_QUEUED_ONLY,
+  provisionJobPollStopMessage,
 } from "./provision-job-poll";
 
 const config = {
@@ -226,6 +228,21 @@ describe("nextProvisionJobPoll", () => {
       }),
       { keepPolling: false, reason: "errors" },
     );
+  });
+});
+
+describe("isSettledActiveProvisionJob", () => {
+  it("marks forever-queued jobs on a finished deployment as settled", () => {
+    assert.equal(isSettledActiveProvisionJob("deployment_terminal", "queued"), true);
+    assert.equal(isSettledActiveProvisionJob("stale", "queued"), true);
+    assert.equal(isSettledActiveProvisionJob("deadline", "running"), true);
+    assert.equal(isSettledActiveProvisionJob("terminal", "succeeded"), false);
+    assert.equal(isSettledActiveProvisionJob("deployment_terminal", "succeeded"), false);
+    assert.equal(isSettledActiveProvisionJob(null, "queued"), false);
+  });
+
+  it("explains deployment_terminal when the job never left active", () => {
+    assert.match(provisionJobPollStopMessage("deployment_terminal"), /expired|queued/i);
   });
 });
 
