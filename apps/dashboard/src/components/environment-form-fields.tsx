@@ -27,6 +27,18 @@ export function EnvironmentProjectField({
   onProjectIdChange: (projectId: string) => void;
   onClearError: ClearError;
 }) {
+  if (projects.length === 1) {
+    const only = projects[0];
+    return (
+      <p className="sm:col-span-2 text-sm text-muted-foreground">
+        Project{" "}
+        <span className="font-medium text-foreground">
+          {only.name} ({only.slug})
+        </span>
+      </p>
+    );
+  }
+
   return (
     <div className="grid gap-2 sm:col-span-2">
       <Label htmlFor="environment-project">Project</Label>

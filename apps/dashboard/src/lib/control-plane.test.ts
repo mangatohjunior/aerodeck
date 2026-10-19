@@ -17,6 +17,7 @@ import {
   createControlPlaneDeploymentAndProvision,
   createControlPlaneProject,
   createControlPlaneEnvironment,
+  getControlPlaneProjectDetail,
   getControlPlaneDeployment,
   createControlPlaneSession,
   linkControlPlaneGoogleUser,
@@ -671,6 +672,77 @@ describe("createControlPlaneProject", () => {
         assert.equal(cause.status, 422);
         assert.equal(cause.message.includes("Payments!"), false);
         assert.match(cause.message, /rejected \(422\)/);
+        return true;
+      },
+    );
+  });
+});
+
+describe("getControlPlaneProjectDetail", () => {
+  it("loads the project and its environments with one bearer", async () => {
+    clearControlPlaneTokenCache();
+    const projectId = "11111111-1111-4111-8111-111111111111";
+    const environmentId = "22222222-2222-4222-8222-222222222222";
+    const fetchImpl: typeof fetch = async (input) => {
+      const url = String(input);
+      if (url.endsWith("/api/v1/auth/token")) {
+        return jsonResponse({ access_token: "issued-bearer", expires_in: 900 });
+      }
+      if (url.endsWith(`/api/v1/projects/${projectId}`) && !url.includes("/environments")) {
+        return jsonResponse({
+          id: projectId,
+          slug: "payments",
+          name: "Payments",
+          description: null,
+          created_at: "2026-10-19T00:00:00.000Z",
+          updated_at: "2026-10-19T00:00:00.000Z",
+        });
+      }
+      if (url.includes(`/projects/${projectId}/environments`)) {
+        return jsonResponse({
+          items: [
+            {
+              id: environmentId,
+              project_id: projectId,
+              slug: "prod",
+              name: "Production",
+              kind: "prod",
+              region: "ams3",
+              created_at: "2026-10-19T00:00:00.000Z",
+              updated_at: "2026-10-19T00:00:00.000Z",
+            },
+          ],
+          total: 1,
+          limit: 200,
+          offset: 0,
+        });
+      }
+      return jsonResponse({ detail: "unexpected" }, 500);
+    };
+
+    const detail = await getControlPlaneProjectDetail(config, projectId, { fetch: fetchImpl });
+    assert.equal(detail.project.slug, "payments");
+    assert.equal(detail.environments.length, 1);
+    assert.equal(detail.environments[0]?.slug, "prod");
+    assert.equal(detail.environments[0]?.project_slug, "payments");
+  });
+
+  it("maps a missing project without leaking upstream bodies", async () => {
+    clearControlPlaneTokenCache();
+    const projectId = "11111111-1111-4111-8111-111111111111";
+    const fetchImpl: typeof fetch = async (input) => {
+      const url = String(input);
+      if (url.endsWith("/api/v1/auth/token")) {
+        return jsonResponse({ access_token: "issued-bearer", expires_in: 900 });
+      }
+      return jsonResponse({ detail: "missing", secret: "super-secret" }, 404);
+    };
+    await assert.rejects(
+      () => getControlPlaneProjectDetail(config, projectId, { fetch: fetchImpl }),
+      (cause: unknown) => {
+        assert.ok(cause instanceof ControlPlaneError);
+        assert.equal(cause.status, 404);
+        assert.equal(cause.message.includes("super-secret"), false);
         return true;
       },
     );

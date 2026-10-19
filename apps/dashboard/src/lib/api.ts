@@ -6,6 +6,7 @@ import {
   type EnvironmentOption,
   type EnvironmentOptionPage,
   type Project,
+  type ProjectDetail,
   type ProjectPage,
   type ProjectSource,
   type PublicUser,
@@ -69,6 +70,14 @@ export async function fetchHealth(): Promise<{ status: string; mode: string }> {
 
 export async function fetchProjectPage(): Promise<ProjectPage> {
   const response = await fetch("/api/console/projects", {
+    credentials: "same-origin",
+    cache: "no-store",
+  });
+  return readJson(response);
+}
+
+export async function fetchProjectDetail(projectId: string): Promise<ProjectDetail> {
+  const response = await fetch(`/api/console/projects/${encodeURIComponent(projectId)}`, {
     credentials: "same-origin",
     cache: "no-store",
   });

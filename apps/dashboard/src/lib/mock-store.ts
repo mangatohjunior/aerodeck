@@ -70,6 +70,10 @@ export function listProjects(): Project[] {
   return getStore().projects;
 }
 
+export function getProject(id: string): Project | undefined {
+  return getStore().projects.find((row) => row.id === id);
+}
+
 export function listSandboxes(): Sandbox[] {
   return getStore().sandboxes;
 }
