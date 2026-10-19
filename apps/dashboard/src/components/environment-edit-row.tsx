@@ -11,8 +11,6 @@ import {
   ENVIRONMENT_KINDS,
   ENVIRONMENT_REGIONS,
   parseEnvironmentUpdateFields,
-  type EnvironmentKind,
-  type EnvironmentRegion,
 } from "@/lib/environment-input";
 import { nativeSelectClassName } from "@/lib/native-select";
 import { PROJECT_NAME_MAX } from "@/lib/project-input";
@@ -24,30 +22,43 @@ type EnvironmentEditRowProps = {
   onDeleted: (environmentId: string) => void;
 };
 
+/** Curated options plus the live wire value when CP has a valid but non-listed slug. */
+function withCurrentOption(options: readonly string[], current: string): string[] {
+  if (options.includes(current)) {
+    return [...options];
+  }
+  return [current, ...options];
+}
+
 export function EnvironmentEditRow({
   environment,
   onUpdated,
   onDeleted,
 }: EnvironmentEditRowProps) {
   const [name, setName] = useState(environment.name);
-  const [kind, setKind] = useState<EnvironmentKind>(
-    (ENVIRONMENT_KINDS as readonly string[]).includes(environment.kind)
-      ? (environment.kind as EnvironmentKind)
-      : "dev",
-  );
-  const [region, setRegion] = useState<EnvironmentRegion>(
-    (ENVIRONMENT_REGIONS as readonly string[]).includes(environment.region)
-      ? (environment.region as EnvironmentRegion)
-      : "nyc3",
-  );
+  const [kind, setKind] = useState(environment.kind);
+  const [region, setRegion] = useState(environment.region);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
+  const kindOptions = withCurrentOption(ENVIRONMENT_KINDS, environment.kind);
+  const regionOptions = withCurrentOption(ENVIRONMENT_REGIONS, environment.region);
+
   async function handleSave(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
-    const parsed = parseEnvironmentUpdateFields({ name, kind, region });
+    const fields: { name?: string; kind?: string; region?: string } = {};
+    if (name.trim() !== environment.name) {
+      fields.name = name;
+    }
+    if (kind !== environment.kind) {
+      fields.kind = kind;
+    }
+    if (region !== environment.region) {
+      fields.region = region;
+    }
+    const parsed = parseEnvironmentUpdateFields(fields);
     if (!parsed.ok) {
       setError(parsed.error);
       return;
@@ -61,16 +72,8 @@ export function EnvironmentEditRow({
       );
       onUpdated(updated);
       setName(updated.name);
-      setKind(
-        (ENVIRONMENT_KINDS as readonly string[]).includes(updated.kind)
-          ? (updated.kind as EnvironmentKind)
-          : kind,
-      );
-      setRegion(
-        (ENVIRONMENT_REGIONS as readonly string[]).includes(updated.region)
-          ? (updated.region as EnvironmentRegion)
-          : region,
-      );
+      setKind(updated.kind);
+      setRegion(updated.region);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Update failed.");
     } finally {
@@ -126,13 +129,13 @@ export function EnvironmentEditRow({
           value={kind}
           disabled={busy}
           onChange={(event) => {
-            setKind(event.target.value as EnvironmentKind);
+            setKind(event.target.value);
             if (error) {
               setError(null);
             }
           }}
         >
-          {ENVIRONMENT_KINDS.map((value) => (
+          {kindOptions.map((value) => (
             <option key={value} value={value}>
               {value}
             </option>
@@ -147,13 +150,13 @@ export function EnvironmentEditRow({
           value={region}
           disabled={busy}
           onChange={(event) => {
-            setRegion(event.target.value as EnvironmentRegion);
+            setRegion(event.target.value);
             if (error) {
               setError(null);
             }
           }}
         >
-          {ENVIRONMENT_REGIONS.map((value) => (
+          {regionOptions.map((value) => (
             <option key={value} value={value}>
               {value}
             </option>

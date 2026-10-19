@@ -7,6 +7,8 @@ import {
   normalizeProjectDescription,
   parseProjectUpdateFields,
   PROJECT_DESCRIPTION_MAX,
+  PROJECT_DESCRIPTION_TOO_LONG,
+  PROJECT_NAME_INVALID,
   PROJECT_NAME_MAX,
   PROJECT_SLUG_MAX,
   PROJECT_UPDATE_EMPTY,
@@ -93,5 +95,26 @@ describe("parseProjectUpdateFields", () => {
       error: PROJECT_UPDATE_EMPTY,
       code: "empty_update",
     });
+  });
+
+  it("rejects empty, too-long names and overlong descriptions", () => {
+    assert.deepEqual(parseProjectUpdateFields({ name: "   " }), {
+      ok: false,
+      error: PROJECT_NAME_INVALID,
+      code: "invalid_name",
+    });
+    assert.deepEqual(parseProjectUpdateFields({ name: "x".repeat(PROJECT_NAME_MAX + 1) }), {
+      ok: false,
+      error: PROJECT_NAME_INVALID,
+      code: "invalid_name",
+    });
+    assert.deepEqual(
+      parseProjectUpdateFields({ description: "x".repeat(PROJECT_DESCRIPTION_MAX + 1) }),
+      {
+        ok: false,
+        error: PROJECT_DESCRIPTION_TOO_LONG,
+        code: "invalid_description",
+      },
+    );
   });
 });

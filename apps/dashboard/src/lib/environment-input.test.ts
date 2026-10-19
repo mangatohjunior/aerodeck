@@ -154,4 +154,22 @@ describe("parseEnvironmentUpdateFields", () => {
       code: "empty_update",
     });
   });
+
+  it("returns stable codes for each validation failure", () => {
+    assert.deepEqual(parseEnvironmentUpdateFields({ name: "   " }), {
+      ok: false,
+      error: ENVIRONMENT_NAME_INVALID,
+      code: "invalid_name",
+    });
+    assert.deepEqual(parseEnvironmentUpdateFields({ kind: "qa" }), {
+      ok: false,
+      error: ENVIRONMENT_KIND_INVALID,
+      code: "invalid_kind",
+    });
+    assert.deepEqual(parseEnvironmentUpdateFields({ region: "NYC3" }), {
+      ok: false,
+      error: ENVIRONMENT_REGION_INVALID,
+      code: "invalid_region",
+    });
+  });
 });
