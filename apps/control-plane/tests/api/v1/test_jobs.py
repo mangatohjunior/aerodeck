@@ -135,6 +135,7 @@ async def test_provision_dispatch_failure_after_seed_publishes_queue_failed(
         stored = await client.get(f"/api/v1/deployments/{deployment_id}", headers=auth)
         assert stored.status_code == 200, stored.text
         assert stored.json()["status"] == "failed"
+        assert stored.json()["provision_job_id"] is None
     finally:
         queued_app.dependency_overrides[get_job_dispatcher] = lambda: dispatcher
         clear_memory_log_lines()
@@ -170,9 +171,19 @@ async def test_provision_with_deployment_id_publishes_log_lines(
         json={"deployment_id": deployment_id},
     )
     assert accepted.status_code == 202, accepted.text
+    job_id = accepted.json()["job_id"]
 
-    job = await client.get(f"/api/v1/jobs/{accepted.json()['job_id']}", headers=auth)
+    job = await client.get(f"/api/v1/jobs/{job_id}", headers=auth)
     assert job.json()["status"] == "succeeded"
+
+    stored = await client.get(f"/api/v1/deployments/{deployment_id}", headers=auth)
+    assert stored.status_code == 200, stored.text
+    assert stored.json()["provision_job_id"] == job_id
+
+    listed = await client.get("/api/v1/deployments", headers=auth)
+    assert listed.status_code == 200, listed.text
+    match = next(row for row in listed.json()["items"] if row["id"] == deployment_id)
+    assert match["provision_job_id"] == job_id
 
     lines = await published_lines(None, uuid.UUID(deployment_id))
     assert lines is not None

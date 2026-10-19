@@ -101,6 +101,14 @@ class DeploymentService:
     async def mark_failed(self, deployment_id: uuid.UUID) -> Deployment:
         return await self._mark_terminal(deployment_id, DeploymentStatus.failed)
 
+    async def set_provision_job_id(
+        self, deployment_id: uuid.UUID, job_id: uuid.UUID
+    ) -> Deployment:
+        """Remember the last successful provision enqueue for console job status."""
+        deployment = await self.get(deployment_id)
+        deployment.provision_job_id = job_id
+        return await self._deployments.save(deployment)
+
     async def _mark_terminal(
         self, deployment_id: uuid.UUID, status: DeploymentStatus
     ) -> Deployment:

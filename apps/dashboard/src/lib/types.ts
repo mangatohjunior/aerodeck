@@ -46,6 +46,8 @@ export type Deployment = {
   repo: string;
   project_id?: string | null;
   environment_id?: string | null;
+  /** Last provision Celery job id when enqueue succeeded; omit/null on older rows. */
+  provision_job_id?: string | null;
   started_at: string;
   status: DeploymentStatus;
 };

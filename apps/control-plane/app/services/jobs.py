@@ -103,6 +103,8 @@ class JobService:
                 # Own session+commit: the request that raised will roll back.
                 await self._mark_deployment_failed(linked_deployment)
             raise
+        if linked_deployment is not None:
+            await self._deployments.set_provision_job_id(linked_deployment, uuid.UUID(job_id))
         logger.info("queued %s job %s for environment %s", kind.value, job_id, environment.id)
         return JobTicket(job_id=job_id, kind=kind, project_id=environment.project_id, environment_id=environment.id)
 
