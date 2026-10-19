@@ -28,10 +28,14 @@ export default function ProjectDetailPage() {
       setLoading(false);
       return;
     }
+    // Drop prior detail immediately so edit/delete cannot target another project
+    // while this route's fetch is still in flight.
     setLoading(true);
+    setDetail(null);
+    setError(null);
     fetchProjectDetail(projectId)
       .then((next) => {
-        if (cancelled) {
+        if (cancelled || next.project.id !== projectId) {
           return;
         }
         setDetail(next);
@@ -108,7 +112,8 @@ export default function ProjectDetailPage() {
 
   const project = detail?.project;
   const environments = detail?.environments ?? [];
-  const canMutate = detail?.source === "control-plane" && project;
+  const detailReady = !loading && project != null && project.id === projectId;
+  const canMutate = detailReady && detail?.source === "control-plane";
 
   return (
     <div className="mx-auto w-full max-w-4xl">
@@ -135,8 +140,10 @@ export default function ProjectDetailPage() {
           {error}
         </p>
       ) : null}
-      {canMutate ? <ProjectEditPanel project={project} onUpdated={handleProjectUpdated} /> : null}
-      {!canMutate && project ? (
+      {canMutate && project ? (
+        <ProjectEditPanel project={project} onUpdated={handleProjectUpdated} />
+      ) : null}
+      {detailReady && !canMutate && project ? (
         <Card className="mb-6">
           <CardContent className="space-y-2 pt-6">
             <p className="font-mono text-sm text-primary">{project.slug}</p>
@@ -148,7 +155,7 @@ export default function ProjectDetailPage() {
           </CardContent>
         </Card>
       ) : null}
-      {canMutate ? (
+      {canMutate && project ? (
         <NewEnvironmentForm projects={[project]} onCreated={handleEnvironmentCreated} />
       ) : null}
       <section id="environments" className="scroll-mt-6">
