@@ -57,8 +57,11 @@ export function isSettledActiveProvisionJob(
   );
 }
 
+/** Stop reasons that can leave an active CP status on screen (not job-terminal). */
+export type SettledActiveBadgeReason = Exclude<ProvisionJobPollStopReason, "terminal">;
+
 /** Badge label when polling stopped while the CP status is still active. */
-export function settledActiveJobBadgeLabel(reason: ProvisionJobPollStopReason): string {
+export function settledActiveJobBadgeLabel(reason: SettledActiveBadgeReason): string {
   switch (reason) {
     case "stale":
     case "deployment_terminal":
@@ -67,8 +70,6 @@ export function settledActiveJobBadgeLabel(reason: ProvisionJobPollStopReason): 
       return "Stopped";
     case "errors":
       return "Unavailable";
-    case "terminal":
-      return "Stopped";
   }
 }
 

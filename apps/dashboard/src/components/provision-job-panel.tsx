@@ -34,7 +34,7 @@ function jobStatusBadge(
   settledActive: boolean,
   stopReason: ProvisionJobPollStopReason | null,
 ) {
-  if (settledActive && stopReason !== null) {
+  if (settledActive && stopReason !== null && stopReason !== "terminal") {
     return (
       <Badge variant="secondary">
         <Clock />

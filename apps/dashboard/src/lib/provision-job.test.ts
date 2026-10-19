@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 
 import { fetchProvisionJob, SessionEnded } from "./api";
 import { clearControlPlaneTokenCache, ControlPlaneError, getControlPlaneJob } from "./control-plane";
+import { messageForPollStop } from "./provision-job-poll-controller";
 import {
   isSettledActiveProvisionJob,
   nextProvisionJobPoll,
@@ -252,6 +253,15 @@ describe("isSettledActiveProvisionJob", () => {
     assert.equal(settledActiveJobBadgeLabel("deployment_terminal"), "Stale");
     assert.equal(settledActiveJobBadgeLabel("deadline"), "Stopped");
     assert.equal(settledActiveJobBadgeLabel("errors"), "Unavailable");
+  });
+});
+
+describe("messageForPollStop", () => {
+  it("explains stale and deployment_terminal stops, not quiet terminal", () => {
+    assert.match(messageForPollStop("stale", "queued") ?? "", /expired|queued/i);
+    assert.match(messageForPollStop("deployment_terminal", "queued") ?? "", /expired|queued/i);
+    assert.equal(messageForPollStop("terminal", "succeeded"), null);
+    assert.equal(messageForPollStop("errors", "running"), null);
   });
 });
 
