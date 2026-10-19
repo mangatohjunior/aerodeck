@@ -1,7 +1,7 @@
 "use client";
 
 import { CheckCircle2, Loader2, Rocket, XCircle } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import { DeploymentEnvironmentLink } from "@/components/deployment-environment-link";
 import { LinkButton } from "@/components/link-button";
@@ -17,16 +17,11 @@ import {
 } from "@/components/ui/card";
 import {
   deploymentLogsUrl,
-  fetchEnvironments,
   markDeploymentFailed,
   markDeploymentSucceeded,
 } from "@/lib/api";
-import type {
-  Deployment,
-  DeploymentStatus,
-  EnvironmentOption,
-  ProjectSource,
-} from "@/lib/types";
+import { useEnvironmentCatalog } from "@/lib/use-environment-catalog";
+import type { Deployment, DeploymentStatus, ProjectSource } from "@/lib/types";
 
 type DeploymentStatusViewProps = {
   deployment: Deployment;
@@ -76,30 +71,10 @@ function statusBadge(status: DeploymentStatus) {
 export function DeploymentStatusView({ deployment, logSource }: DeploymentStatusViewProps) {
   const [status, setStatus] = useState<DeploymentStatus>(deployment.status);
   const [error, setError] = useState<string | null>(null);
-  const [environments, setEnvironments] = useState<EnvironmentOption[]>([]);
+  const environments = useEnvironmentCatalog(
+    logSource === "control-plane" && Boolean(deployment.project_id && deployment.environment_id),
+  );
   const copy = logSourceCopy(logSource);
-
-  useEffect(() => {
-    if (logSource !== "control-plane" || !deployment.project_id || !deployment.environment_id) {
-      return;
-    }
-    let cancelled = false;
-    fetchEnvironments()
-      .then((page) => {
-        if (!cancelled) {
-          setEnvironments(page.items);
-        }
-      })
-      .catch((cause: unknown) => {
-        console.warn(
-          "event=deployment_environment_catalog_failed detail=%s",
-          cause instanceof Error ? cause.message : "request failed",
-        );
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [logSource, deployment.project_id, deployment.environment_id]);
 
   function recordOutcome(outcome: TerminalOutcome) {
     if (status === "succeeded" || status === "failed") {

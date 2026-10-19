@@ -1,8 +1,7 @@
 """Isolated commits for deployment ``failed`` outside the request session.
 
 Enqueue failure must mark the row even though the request then raises and rolls
-back. Status updates only need ``DeploymentRepository``; environment lookup is
-wired for create via API deps, not this bridge.
+back. Status updates go through ``DeploymentRepository`` only (no EnvironmentLookup).
 """
 
 import asyncio
@@ -11,8 +10,8 @@ import uuid
 from app.core.config import get_settings
 from app.core.db import SessionLocal, bind_engine, create_engine, unbind_engine
 from app.core.logging import get_logger
+from app.models.deployment import DeploymentStatus
 from app.repositories.deployments import DeploymentRepository
-from app.services.deployments import DeploymentService
 
 logger = get_logger("tasks.deployment_status")
 
@@ -21,8 +20,11 @@ async def mark_deployment_failed_isolated(deployment_id: uuid.UUID) -> None:
     """Commit failed on its own session so a later request rollback cannot undo it."""
     async with SessionLocal() as session:
         try:
-            service = DeploymentService(DeploymentRepository(session))
-            await service.mark_failed(deployment_id)
+            stored = await DeploymentRepository(session).set_terminal_status(
+                deployment_id, DeploymentStatus.failed
+            )
+            if stored is None:
+                raise LookupError(f"Deployment {deployment_id} not found")
             await session.commit()
         except Exception:
             await session.rollback()

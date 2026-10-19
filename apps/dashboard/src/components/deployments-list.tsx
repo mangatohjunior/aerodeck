@@ -8,14 +8,15 @@ import { PageHeader } from "@/components/page-header";
 import { LinkButton } from "@/components/link-button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import { fetchDeployments, fetchEnvironments } from "@/lib/api";
+import { fetchDeployments } from "@/lib/api";
 import { formatInstant } from "@/lib/format";
-import type { Deployment, EnvironmentOption } from "@/lib/types";
+import { useEnvironmentCatalog } from "@/lib/use-environment-catalog";
+import type { Deployment } from "@/lib/types";
 
 export function DeploymentsList({ controlPlane = false }: { controlPlane?: boolean }) {
   const [rows, setRows] = useState<Deployment[]>([]);
-  const [environments, setEnvironments] = useState<EnvironmentOption[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const environments = useEnvironmentCatalog(controlPlane);
 
   useEffect(() => {
     let cancelled = false;
@@ -30,20 +31,6 @@ export function DeploymentsList({ controlPlane = false }: { controlPlane?: boole
           setError(cause instanceof Error ? cause.message : "Failed to load deployments.");
         }
       });
-    if (controlPlane) {
-      fetchEnvironments()
-        .then((page) => {
-          if (!cancelled) {
-            setEnvironments(page.items);
-          }
-        })
-        .catch((cause: unknown) => {
-          console.warn(
-            "event=deployment_environment_catalog_failed detail=%s",
-            cause instanceof Error ? cause.message : "request failed",
-          );
-        });
-    }
     return () => {
       cancelled = true;
     };

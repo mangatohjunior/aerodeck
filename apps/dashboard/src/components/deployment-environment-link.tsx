@@ -9,7 +9,7 @@ type DeploymentEnvironmentLinkProps = {
   className?: string;
 };
 
-/** Slug label when the catalog matches; otherwise a projects link (no raw UUIDs). */
+/** Always links to Projects; shows slug when the catalog matches. */
 export function DeploymentEnvironmentLink({
   deployment,
   environments,
@@ -21,13 +21,9 @@ export function DeploymentEnvironmentLink({
   const label = deploymentEnvironmentLabel(deployment, environments);
   return (
     <p className={className}>
-      {label ? (
-        label
-      ) : (
-        <Link href="/projects" className="text-primary hover:underline">
-          Linked environment
-        </Link>
-      )}
+      <Link href="/projects" className="text-primary hover:underline">
+        {label ?? "Linked environment"}
+      </Link>
     </p>
   );
 }

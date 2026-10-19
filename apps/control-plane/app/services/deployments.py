@@ -24,7 +24,7 @@ class DeploymentService:
     def __init__(
         self,
         deployments: DeploymentRepository,
-        environments: EnvironmentLookup | None = None,
+        environments: EnvironmentLookup,
     ) -> None:
         self._deployments = deployments
         self._environments = environments
@@ -37,8 +37,6 @@ class DeploymentService:
         project_id = data.project_id
         environment_id = data.environment_id
         if project_id is not None and environment_id is not None:
-            if self._environments is None:
-                raise RuntimeError("environment link requires an EnvironmentLookup")
             await self._environments.get(project_id, environment_id)
         stored = await self._deployments.add(
             Deployment(
@@ -72,15 +70,7 @@ class DeploymentService:
     async def _mark_terminal(
         self, deployment_id: uuid.UUID, status: DeploymentStatus
     ) -> Deployment:
-        deployment = await self.get(deployment_id)
-        if deployment.status in (DeploymentStatus.succeeded, DeploymentStatus.failed):
-            logger.info(
-                "deployment %s already %s; leave unchanged",
-                deployment_id,
-                deployment.status.value,
-            )
-            return deployment
-        deployment.status = status
-        stored = await self._deployments.save(deployment)
-        logger.info("deployment %s %s", stored.id, status.value)
+        stored = await self._deployments.set_terminal_status(deployment_id, status)
+        if stored is None:
+            raise NotFoundError(f"Deployment {deployment_id} not found")
         return stored
