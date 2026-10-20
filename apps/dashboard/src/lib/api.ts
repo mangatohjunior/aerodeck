@@ -3,6 +3,7 @@ import {
   PROVISION_ENQUEUE_FAILED,
   type ApiError,
   type Deployment,
+  type AcceptedJob,
   type EnvironmentOption,
   type EnvironmentOptionPage,
   type Project,
@@ -136,6 +137,21 @@ export async function deleteEnvironment(projectId: string, environmentId: string
   if (!response.ok) {
     await readJson(response);
   }
+}
+
+/** Queue day-2 reconcile for an environment; returns the accepted Celery job id. */
+export async function queueEnvironmentReconcile(
+  projectId: string,
+  environmentId: string,
+): Promise<AcceptedJob> {
+  const response = await fetch(
+    `/api/console/projects/${encodeURIComponent(projectId)}/environments/${encodeURIComponent(environmentId)}/reconcile`,
+    {
+      method: "POST",
+      credentials: "same-origin",
+    },
+  );
+  return readJson(response);
 }
 
 export async function createProject(input: {

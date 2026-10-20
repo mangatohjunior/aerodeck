@@ -36,8 +36,13 @@ ceiling (~3 min), consecutive fetch failures, or forever-`queued` stale stop
 (control plane maps unknown/expired jobs to `queued`). Already-terminal
 deployments (including live Terminal Done/fail) fetch once and stop; if the
 job is still active they show a Stale badge and an expiry note instead of a
-spinner. Mock detail hides the panel (no jobs API). The browser never calls
-FastAPI.
+spinner. Mock detail hides the panel (no jobs API). On a control-plane project
+detail, each environment row has **Reconcile**, which POSTs
+`/api/console/projects/{id}/environments/{environmentId}/reconcile`
+(→ `POST .../reconcile` on the control plane) and shows the accepted
+`job_id`. Queue down surfaces a generic unavailable message with no
+success state. Without the client, reconcile returns 404. The browser
+never calls FastAPI.
 An empty Deploy select links operators to Projects to create an environment. Mock
 create stays unlinked. If provision cannot be queued after create,
 the form stays put, disables Deploy, and shows a generic message so a retry
