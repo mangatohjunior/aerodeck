@@ -5,6 +5,7 @@ import { useState } from "react";
 
 import { DeploymentEnvironmentLink } from "@/components/deployment-environment-link";
 import { LinkButton } from "@/components/link-button";
+import { ProvisionJobPanel } from "@/components/provision-job-panel";
 import { Terminal } from "@/components/terminal";
 import { Badge } from "@/components/ui/badge";
 import { formatInstant } from "@/lib/format";
@@ -155,6 +156,13 @@ export function DeploymentStatusView({ deployment, logSource }: DeploymentStatus
           ) : null}
         </CardContent>
       </Card>
+
+      {logSource === "control-plane" && deployment.provision_job_id ? (
+        <ProvisionJobPanel
+          jobId={deployment.provision_job_id}
+          deploymentStatus={status}
+        />
+      ) : null}
 
       {error ? (
         <p className="text-sm text-destructive" role="alert">

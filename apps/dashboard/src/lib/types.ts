@@ -52,6 +52,30 @@ export type Deployment = {
   status: DeploymentStatus;
 };
 
+/** Control-plane Celery job status from `GET /api/v1/jobs/{id}`. */
+export type ProvisionJobStatus = "queued" | "running" | "retrying" | "succeeded" | "failed";
+
+export const PROVISION_JOB_STATUSES = new Set<ProvisionJobStatus>([
+  "queued",
+  "running",
+  "retrying",
+  "succeeded",
+  "failed",
+]);
+
+export const PROVISION_JOB_ACTIVE_STATUSES = new Set<ProvisionJobStatus>([
+  "queued",
+  "running",
+  "retrying",
+]);
+
+export type ProvisionJob = {
+  job_id: string;
+  status: ProvisionJobStatus;
+  result?: Record<string, string | boolean> | null;
+  error?: string | null;
+};
+
 export type EnvironmentOption = {
   id: string;
   project_id: string;

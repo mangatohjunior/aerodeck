@@ -29,6 +29,15 @@ link after a restart) then queues `POST .../environments/{id}/provision` with
 the new `deployment_id` so the terminal can follow worker lines. A successful
 provision enqueue also stores `provision_job_id` on the deployment so list/detail
 can reload that Celery job later; older rows and enqueue failures leave it null.
+When the console client is set and a deployment has `provision_job_id`, detail
+shows a Provision job panel that polls `GET /api/console/jobs/{id}` (→
+`GET /api/v1/jobs/{id}`) about every 5s until succeeded/failed, a poll
+ceiling (~3 min), consecutive fetch failures, or forever-`queued` stale stop
+(control plane maps unknown/expired jobs to `queued`). Already-terminal
+deployments (including live Terminal Done/fail) fetch once and stop; if the
+job is still active they show a Stale badge and an expiry note instead of a
+spinner. Mock detail hides the panel (no jobs API). The browser never calls
+FastAPI.
 An empty Deploy select links operators to Projects to create an environment. Mock
 create stays unlinked. If provision cannot be queued after create,
 the form stays put, disables Deploy, and shows a generic message so a retry
