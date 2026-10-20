@@ -861,18 +861,7 @@ export async function provisionControlPlaneEnvironment(
       cache: "no-store",
     },
   );
-  if (response.status === 404) {
-    await discardResponseBody(response);
-    throw new ControlPlaneError("control plane provision target was not found (404)", 404);
-  }
-  if (response.status === 503) {
-    await discardResponseBody(response);
-    throw new ControlPlaneError("control plane provision queue unavailable (503)", 503);
-  }
-  if (!response.ok) {
-    await discardResponseBody(response);
-    throw new ControlPlaneError(`control plane provision request failed (${response.status})`, response.status);
-  }
+  await throwIfEnvironmentJobResponseFailed(response, "provision");
   await discardResponseBody(response);
 }
 
@@ -899,23 +888,33 @@ export async function reconcileControlPlaneEnvironment(
       cache: "no-store",
     },
   );
-  if (response.status === 404) {
-    await discardResponseBody(response);
-    throw new ControlPlaneError("control plane reconcile target was not found (404)", 404);
-  }
-  if (response.status === 503) {
-    await discardResponseBody(response);
-    throw new ControlPlaneError("control plane reconcile queue unavailable (503)", 503);
-  }
-  if (!response.ok) {
-    await discardResponseBody(response);
-    throw new ControlPlaneError(`control plane reconcile request failed (${response.status})`, response.status);
-  }
+  await throwIfEnvironmentJobResponseFailed(response, "reconcile");
   return parseAcceptedJob(await response.json(), {
     kind: "reconcile",
     projectId,
     environmentId,
   });
+}
+
+async function throwIfEnvironmentJobResponseFailed(
+  response: Response,
+  operation: "provision" | "reconcile",
+): Promise<void> {
+  if (response.status === 404) {
+    await discardResponseBody(response);
+    throw new ControlPlaneError(`control plane ${operation} target was not found (404)`, 404);
+  }
+  if (response.status === 503) {
+    await discardResponseBody(response);
+    throw new ControlPlaneError(`control plane ${operation} queue unavailable (503)`, 503);
+  }
+  if (!response.ok) {
+    await discardResponseBody(response);
+    throw new ControlPlaneError(
+      `control plane ${operation} request failed (${response.status})`,
+      response.status,
+    );
+  }
 }
 
 function parseAcceptedJob(

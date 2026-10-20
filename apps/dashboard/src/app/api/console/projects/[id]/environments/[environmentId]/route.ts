@@ -1,10 +1,10 @@
 import { connection, NextResponse } from "next/server";
 
+import { requireEnrolledEnvironmentIds } from "@/lib/console-environment-route";
 import { readJsonObject, readOptionalString } from "@/lib/console-json-body";
 import {
   ControlPlaneError,
   deleteControlPlaneEnvironment,
-  isControlPlaneUuid,
   readControlPlaneConfig,
   updateControlPlaneEnvironment,
 } from "@/lib/control-plane";
@@ -13,37 +13,15 @@ import {
   parseEnvironmentUpdateFields,
 } from "@/lib/environment-input";
 import { jsonError } from "@/lib/mock-http";
-import { requireSessionUser } from "@/lib/session";
 
 type RouteContext = {
   params: Promise<{ id: string; environmentId: string }>;
 };
 
-async function requireEnrolledIds(
-  context: RouteContext,
-): Promise<{ projectId: string; environmentId: string } | NextResponse> {
-  const user = await requireSessionUser();
-  if (user instanceof NextResponse) {
-    return user;
-  }
-  const { id, environmentId: rawEnvironmentId } = await context.params;
-  const projectId = id.trim();
-  const environmentId = rawEnvironmentId.trim();
-  if (
-    projectId.length === 0 ||
-    environmentId.length === 0 ||
-    !isControlPlaneUuid(projectId) ||
-    !isControlPlaneUuid(environmentId)
-  ) {
-    return jsonError(404, "Environment was not found.", "not_found");
-  }
-  return { projectId, environmentId };
-}
-
 export async function PATCH(request: Request, context: RouteContext) {
   await connection();
 
-  const gated = await requireEnrolledIds(context);
+  const gated = await requireEnrolledEnvironmentIds(context);
   if (gated instanceof NextResponse) {
     return gated;
   }
@@ -100,7 +78,7 @@ export async function PATCH(request: Request, context: RouteContext) {
 export async function DELETE(_request: Request, context: RouteContext) {
   await connection();
 
-  const gated = await requireEnrolledIds(context);
+  const gated = await requireEnrolledEnvironmentIds(context);
   if (gated instanceof NextResponse) {
     return gated;
   }

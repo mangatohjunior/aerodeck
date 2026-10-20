@@ -1,9 +1,9 @@
 import { MOCK_API_PREFIX } from "@/lib/catalog";
 import {
   PROVISION_ENQUEUE_FAILED,
+  type AcceptedJob,
   type ApiError,
   type Deployment,
-  type AcceptedJob,
   type EnvironmentOption,
   type EnvironmentOptionPage,
   type Project,

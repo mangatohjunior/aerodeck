@@ -1,13 +1,8 @@
 import { connection, NextResponse } from "next/server";
 
-import {
-  ControlPlaneError,
-  isControlPlaneUuid,
-  readControlPlaneConfig,
-  reconcileControlPlaneEnvironment,
-} from "@/lib/control-plane";
+import { requireEnrolledEnvironmentIds } from "@/lib/console-environment-route";
+import { readControlPlaneConfig, reconcileControlPlaneEnvironment } from "@/lib/control-plane";
 import { jsonControlPlaneError, jsonError } from "@/lib/mock-http";
-import { requireSessionUser } from "@/lib/session";
 
 type RouteContext = {
   params: Promise<{ id: string; environmentId: string }>;
@@ -16,9 +11,9 @@ type RouteContext = {
 export async function POST(_request: Request, context: RouteContext) {
   await connection();
 
-  const user = await requireSessionUser();
-  if (user instanceof NextResponse) {
-    return user;
+  const gated = await requireEnrolledEnvironmentIds(context);
+  if (gated instanceof NextResponse) {
+    return gated;
   }
 
   const config = readControlPlaneConfig();
@@ -26,20 +21,12 @@ export async function POST(_request: Request, context: RouteContext) {
     return jsonError(404, "Reconcile stays on the mock API.", "not_found");
   }
 
-  const { id, environmentId: rawEnvironmentId } = await context.params;
-  const projectId = id.trim();
-  const environmentId = rawEnvironmentId.trim();
-  if (
-    projectId.length === 0 ||
-    environmentId.length === 0 ||
-    !isControlPlaneUuid(projectId) ||
-    !isControlPlaneUuid(environmentId)
-  ) {
-    return jsonError(404, "Environment was not found.", "not_found");
-  }
-
   try {
-    const accepted = await reconcileControlPlaneEnvironment(config, projectId, environmentId);
+    const accepted = await reconcileControlPlaneEnvironment(
+      config,
+      gated.projectId,
+      gated.environmentId,
+    );
     return NextResponse.json(
       {
         job_id: accepted.job_id,
@@ -51,9 +38,6 @@ export async function POST(_request: Request, context: RouteContext) {
       { status: 202 },
     );
   } catch (cause) {
-    if (cause instanceof ControlPlaneError && cause.status === 404) {
-      return jsonError(404, "Environment was not found.", "not_found");
-    }
     return jsonControlPlaneError(
       cause,
       "console_environment_reconcile_failed",
