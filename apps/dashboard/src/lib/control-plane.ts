@@ -1,14 +1,16 @@
 import { isControlPlaneUuid } from "./control-plane-uuid";
 import type {
+  AcceptedJob,
   Deployment,
   DeploymentStatus,
   EnvironmentOption,
+  JobKind,
   Project,
   ProvisionJob,
   ProvisionJobStatus,
   Sandbox,
 } from "./types";
-import { PROVISION_JOB_STATUSES } from "./types";
+import { JOB_KINDS, PROVISION_JOB_STATUSES } from "./types";
 
 export { isControlPlaneUuid } from "./control-plane-uuid";
 
@@ -859,19 +861,94 @@ export async function provisionControlPlaneEnvironment(
       cache: "no-store",
     },
   );
+  await throwIfEnvironmentJobResponseFailed(response, "provision");
+  await discardResponseBody(response);
+}
+
+export async function reconcileControlPlaneEnvironment(
+  config: ControlPlaneConfig,
+  projectId: string,
+  environmentId: string,
+  options: ListOptions = {},
+): Promise<AcceptedJob> {
+  if (!isControlPlaneUuid(projectId) || !isControlPlaneUuid(environmentId)) {
+    throw new ControlPlaneError("control plane reconcile ids were not uuids");
+  }
+  const fetchImpl = options.fetch ?? fetch;
+  const now = options.now ?? Date.now;
+  const accessToken = await accessTokenFor(config, fetchImpl, now);
+  const response = await fetchImpl(
+    `${config.baseUrl}/api/v1/projects/${encodeURIComponent(projectId)}/environments/${encodeURIComponent(environmentId)}/reconcile`,
+    {
+      method: "POST",
+      headers: {
+        accept: "application/json",
+        authorization: `Bearer ${accessToken}`,
+      },
+      cache: "no-store",
+    },
+  );
+  await throwIfEnvironmentJobResponseFailed(response, "reconcile");
+  return parseAcceptedJob(await response.json(), {
+    kind: "reconcile",
+    projectId,
+    environmentId,
+  });
+}
+
+async function throwIfEnvironmentJobResponseFailed(
+  response: Response,
+  operation: "provision" | "reconcile",
+): Promise<void> {
   if (response.status === 404) {
     await discardResponseBody(response);
-    throw new ControlPlaneError("control plane provision target was not found (404)", 404);
+    throw new ControlPlaneError(`control plane ${operation} target was not found (404)`, 404);
   }
   if (response.status === 503) {
     await discardResponseBody(response);
-    throw new ControlPlaneError("control plane provision queue unavailable (503)", 503);
+    throw new ControlPlaneError(`control plane ${operation} queue unavailable (503)`, 503);
   }
   if (!response.ok) {
     await discardResponseBody(response);
-    throw new ControlPlaneError(`control plane provision request failed (${response.status})`, response.status);
+    throw new ControlPlaneError(
+      `control plane ${operation} request failed (${response.status})`,
+      response.status,
+    );
   }
-  await discardResponseBody(response);
+}
+
+function parseAcceptedJob(
+  value: unknown,
+  expected: { kind: JobKind; projectId: string; environmentId: string },
+): AcceptedJob {
+  if (!value || typeof value !== "object") {
+    throw new ControlPlaneError("control plane job accept response was not a job");
+  }
+  const row = value as Record<string, unknown>;
+  if (
+    typeof row.job_id !== "string" ||
+    !isControlPlaneUuid(row.job_id) ||
+    typeof row.kind !== "string" ||
+    !JOB_KINDS.has(row.kind as JobKind) ||
+    row.kind !== expected.kind ||
+    typeof row.project_id !== "string" ||
+    !isControlPlaneUuid(row.project_id) ||
+    row.project_id !== expected.projectId ||
+    typeof row.environment_id !== "string" ||
+    !isControlPlaneUuid(row.environment_id) ||
+    row.environment_id !== expected.environmentId ||
+    typeof row.status !== "string" ||
+    !PROVISION_JOB_STATUSES.has(row.status as ProvisionJobStatus)
+  ) {
+    throw new ControlPlaneError("control plane job accept response was not a job");
+  }
+  return {
+    job_id: row.job_id,
+    kind: row.kind as JobKind,
+    project_id: row.project_id,
+    environment_id: row.environment_id,
+    status: row.status as ProvisionJobStatus,
+  };
 }
 
 export async function createControlPlaneDeploymentAndProvision(

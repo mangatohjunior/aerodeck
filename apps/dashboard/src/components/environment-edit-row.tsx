@@ -1,6 +1,6 @@
 "use client";
 
-import { Loader2, Trash2 } from "lucide-react";
+import { Loader2, RefreshCw, Trash2 } from "lucide-react";
 import { useState, type FormEvent } from "react";
 
 import {
@@ -11,7 +11,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { deleteEnvironment, updateEnvironment } from "@/lib/api";
+import { deleteEnvironment, queueEnvironmentReconcile, updateEnvironment } from "@/lib/api";
 import {
   ENVIRONMENT_KINDS,
   ENVIRONMENT_REGIONS,
@@ -37,6 +37,8 @@ export function EnvironmentEditRow({
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [reconciling, setReconciling] = useState(false);
+  const [reconcileJobId, setReconcileJobId] = useState<string | null>(null);
 
   const idPrefix = `env-${environment.id}`;
 
@@ -100,7 +102,22 @@ export function EnvironmentEditRow({
     }
   }
 
-  const busy = saving || deleting;
+  async function handleReconcile() {
+    setError(null);
+    setReconcileJobId(null);
+    setReconciling(true);
+    try {
+      const accepted = await queueEnvironmentReconcile(environment.project_id, environment.id);
+      setReconcileJobId(accepted.job_id);
+    } catch (cause) {
+      setReconcileJobId(null);
+      setError(cause instanceof Error ? cause.message : "Reconcile failed.");
+    } finally {
+      setReconciling(false);
+    }
+  }
+
+  const busy = saving || deleting || reconciling;
 
   return (
     <form onSubmit={handleSave} className="grid gap-3 py-4 first:pt-4 sm:grid-cols-2">
@@ -147,6 +164,22 @@ export function EnvironmentEditRow({
           variant="outline"
           disabled={busy}
           onClick={() => {
+            void handleReconcile();
+          }}
+        >
+          {reconciling ? (
+            <Loader2 className="size-4 animate-spin" aria-hidden />
+          ) : (
+            <RefreshCw className="size-4" aria-hidden />
+          )}
+          {reconciling ? "Queuing…" : "Reconcile"}
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          disabled={busy}
+          onClick={() => {
             void handleDelete();
           }}
         >
@@ -158,6 +191,12 @@ export function EnvironmentEditRow({
           Delete
         </Button>
       </div>
+      {reconcileJobId ? (
+        <p className="sm:col-span-2 text-sm text-muted-foreground" role="status">
+          Reconcile queued · job{" "}
+          <span className="font-mono text-xs text-foreground break-all">{reconcileJobId}</span>
+        </p>
+      ) : null}
       {error ? (
         <p className="sm:col-span-2 text-sm text-destructive" role="alert">
           {error}

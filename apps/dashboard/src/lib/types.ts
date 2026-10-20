@@ -76,6 +76,20 @@ export type ProvisionJob = {
   error?: string | null;
 };
 
+/** Control-plane job kinds accepted by provision / reconcile enqueue. */
+export type JobKind = "provision" | "reconcile";
+
+export const JOB_KINDS = new Set<JobKind>(["provision", "reconcile"]);
+
+/** `202` body from `POST .../environments/{id}/provision|reconcile`. */
+export type AcceptedJob = {
+  job_id: string;
+  kind: JobKind;
+  project_id: string;
+  environment_id: string;
+  status: ProvisionJobStatus;
+};
+
 export type EnvironmentOption = {
   id: string;
   project_id: string;
