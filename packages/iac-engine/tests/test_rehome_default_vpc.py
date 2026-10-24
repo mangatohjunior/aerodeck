@@ -251,7 +251,7 @@ def _assert_ensure_delete_success(mod: Any) -> None:
 
 
 def _assert_ensure_delete_refused(mod: Any) -> None:
-    """Default moved + DELETE refused twice → leave in state (no state rm)."""
+    """Non-default + DELETE refused twice → leave in state (no state rm)."""
     orig_marker = mod.MARKER
     marker = ROOT / ".rehome-vpc-dropped-delete-fail"
     deletes = {"n": 0}
@@ -280,6 +280,50 @@ def _assert_ensure_delete_refused(mod: Any) -> None:
             raise SystemExit("failed DELETE after default move must not state rm")
         if marker.is_file():
             raise SystemExit("failed DELETE must not write marker")
+    finally:
+        mod.MARKER = orig_marker
+        marker.unlink(missing_ok=True)
+
+
+def _assert_ensure_still_default_drops(mod: Any) -> None:
+    """Still default=true after move → rename + state rm (not Terraform DELETE)."""
+    orig_marker = mod.MARKER
+    marker = ROOT / ".rehome-vpc-dropped-still-default"
+    deletes = {"n": 0}
+    renames = {"n": 0}
+
+    def on_delete() -> dict:
+        deletes["n"] += 1
+        raise mod.ApiError(403, "Can not delete default VPCs")
+
+    def on_reget() -> dict:
+        return {
+            "vpc": {
+                "id": "vpc-dev",
+                "name": "aerodeck-dev-ams3-private",
+                "default": True,
+                "description": "",
+            }
+        }
+
+    def handler(method: str, path: str, body: dict | None = None) -> dict:
+        if method == "PUT" and path == "/vpcs/vpc-dev":
+            renames["n"] += 1
+            return {}
+        return base(method, path, body)
+
+    base = _api_stack_default(mod, on_delete=on_delete, on_reget=on_reget)
+    try:
+        state_rms = _stub_ensure(mod, api_handler=handler, marker=marker)
+        mod.ensure_not_default(ENTRY)
+        if deletes["n"] != 1:
+            raise SystemExit("still-default path must try DELETE once then stop")
+        if renames["n"] != 1:
+            raise SystemExit("still-default path must rename via drop_from_state")
+        if not state_rms or "rm" not in state_rms[0]:
+            raise SystemExit("still-default path must state rm")
+        if not marker.is_file():
+            raise SystemExit("still-default path must write marker")
     finally:
         mod.MARKER = orig_marker
         marker.unlink(missing_ok=True)
@@ -323,6 +367,7 @@ def main() -> None:
     _assert_rename_failure_exits(mod)
     _assert_ensure_delete_success(mod)
     _assert_ensure_delete_refused(mod)
+    _assert_ensure_still_default_drops(mod)
     _assert_ensure_default_move_fails(mod)
     print("rehome_default_vpc helpers look right")
 

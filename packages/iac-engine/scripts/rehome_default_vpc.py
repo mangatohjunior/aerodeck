@@ -3,10 +3,11 @@
 
 DELETE /v2/vpcs/:id returns 403 "Can not delete default VPCs". The default
 flag cannot be unset; another VPC in the same region must be set default=true.
-When that succeeds, try to DELETE the former stack VPC (frees name and CIDR)
-or leave it in state for Terraform destroy. Only when it must remain as the
-region default: rename to …-kept-default, drop from state, and require a
-vpc_ip_range bump before the next apply (VPCs are free but CIDRs stay reserved).
+When that succeeds, try to DELETE the former stack VPC (frees name and CIDR).
+If DELETE fails but the VPC is confirmed non-default, leave it in state for
+Terraform. If it still reports default=true (Terraform DELETE would 403),
+rename to …-kept-default, drop from state, and bump vpc_ip_range before the
+next apply (VPCs are free but CIDRs stay reserved).
 
 Writes .rehome-vpc-dropped when state is changed so ci.sh can re-plan; a
 stored plan taken *before* the drop still contains the doomed DELETE.
@@ -232,23 +233,38 @@ def try_delete_vpc(vpc_id: str) -> bool:
         return False
 
 
-def try_delete_after_default_move(vpc_id: str) -> bool:
-    """DELETE after moving default; re-GET and retry once if the first 403s."""
+# Outcomes of try_delete_after_default_move (second value is re-GET attrs when set).
+DELETE_OK = "deleted"
+STILL_DEFAULT = "still_default"
+UNDELETABLE = "undeletable"
+
+
+def try_delete_after_default_move(vpc_id: str) -> tuple[str, dict | None]:
+    """DELETE after moving default; re-GET and retry once if the first call fails.
+
+    Returns (DELETE_OK, None) when gone; (STILL_DEFAULT, attrs) when it must be
+    rename+dropped; (UNDELETABLE, None) when confirmed non-default but DELETE
+    still fails (leave in state for Terraform).
+    """
     if try_delete_vpc(vpc_id):
-        return True
+        return DELETE_OK, None
     try:
         again = (api("GET", f"/vpcs/{vpc_id}").get("vpc") or {})
     except ApiError as exc:
         print(f"rehome_default_vpc: GET /vpcs/{vpc_id} after DELETE failed ({exc})")
-        return False
+        # Unknown — do not risk a Terraform DELETE on a possible default.
+        return STILL_DEFAULT, {"id": vpc_id, "name": "", "default": True, "description": ""}
+    leftover = {**again, "id": vpc_id}
     if again.get("default"):
         print(
             f"rehome_default_vpc: {vpc_id} still reports default=true after move; "
-            "leaving in state for Terraform DELETE"
+            "will rename and drop from state (Terraform DELETE would 403)"
         )
-        return False
+        return STILL_DEFAULT, leftover
     print(f"rehome_default_vpc: {vpc_id} confirmed non-default; retrying DELETE")
-    return try_delete_vpc(vpc_id)
+    if try_delete_vpc(vpc_id):
+        return DELETE_OK, None
+    return UNDELETABLE, None
 
 
 def ensure_not_default(entry: dict[str, str]) -> None:
@@ -287,17 +303,20 @@ def ensure_not_default(entry: dict[str, str]) -> None:
         drop_from_state(address, {**current, "id": managed_id})
         return
 
-    if try_delete_after_default_move(managed_id):
-        # Gone from DO; remove from state without rename (name+CIDR freed).
+    outcome, leftover = try_delete_after_default_move(managed_id)
+    if outcome == DELETE_OK:
         print(
             f"rehome_default_vpc: removing {address} from Terraform state after DELETE"
         )
         remove_from_state(address)
         return
+    if outcome == STILL_DEFAULT:
+        drop_from_state(address, leftover or {**current, "id": managed_id})
+        return
 
-    # Former default often immutable: leave in state so terraform destroy retries.
+    # Confirmed non-default but DELETE refused (e.g. members still attached).
     print(
-        f"rehome_default_vpc: {managed_id} still present after default move; "
+        f"rehome_default_vpc: {managed_id} is non-default but undeletable; "
         "leaving in state for Terraform DELETE"
     )
 
