@@ -887,6 +887,7 @@ describe("getControlPlaneProjectDetail", () => {
     assert.equal(detail.routes.length, 1);
     assert.equal(detail.routes[0]?.hostname, "app.example.com");
     assert.equal(detail.routes[0]?.enabled, true);
+    assert.equal(detail.routesUnavailable, false);
     assert.equal(JSON.stringify(detail.routes).includes("10.0.0.1"), false);
     assert.equal(JSON.stringify(detail.routes).includes("path_prefix"), false);
   });
@@ -955,6 +956,56 @@ describe("getControlPlaneProjectDetail", () => {
     assert.equal(detail.environments.length, 1);
     assert.equal(detail.environments[0]?.slug, "prod");
     assert.deepEqual(detail.routes, []);
+    assert.equal(detail.routesUnavailable, true);
+  });
+
+  it("marks routes unavailable when a hostname exceeds 253 characters", async () => {
+    clearControlPlaneTokenCache();
+    const projectId = "11111111-1111-4111-8111-111111111111";
+    const environmentId = "22222222-2222-4222-8222-222222222222";
+    const fetchImpl: typeof fetch = async (input) => {
+      const url = String(input);
+      if (url.endsWith("/api/v1/auth/token")) {
+        return jsonResponse({ access_token: "issued-bearer", expires_in: 900 });
+      }
+      if (
+        url.endsWith(`/api/v1/projects/${projectId}`) &&
+        !url.includes("/environments") &&
+        !url.includes("/routes")
+      ) {
+        return jsonResponse({
+          id: projectId,
+          slug: "payments",
+          name: "Payments",
+          description: null,
+          created_at: "2026-10-19T00:00:00.000Z",
+          updated_at: "2026-10-19T00:00:00.000Z",
+        });
+      }
+      if (url.includes(`/projects/${projectId}/environments`)) {
+        return jsonResponse({ items: [], total: 0, limit: 200, offset: 0 });
+      }
+      if (url.includes(`/projects/${projectId}/routes`)) {
+        return jsonResponse({
+          items: [
+            {
+              id: "33333333-3333-4333-8333-333333333333",
+              project_id: projectId,
+              environment_id: environmentId,
+              hostname: `${"a".repeat(250)}.example.com`,
+              enabled: true,
+            },
+          ],
+          total: 1,
+          limit: 200,
+          offset: 0,
+        });
+      }
+      return jsonResponse({ detail: "unexpected" }, 500);
+    };
+    const detail = await getControlPlaneProjectDetail(config, projectId, { fetch: fetchImpl });
+    assert.deepEqual(detail.routes, []);
+    assert.equal(detail.routesUnavailable, true);
   });
 
   it("keeps environments when the routes list returns 503", async () => {
@@ -1007,6 +1058,7 @@ describe("getControlPlaneProjectDetail", () => {
     const detail = await getControlPlaneProjectDetail(config, projectId, { fetch: fetchImpl });
     assert.equal(detail.environments.length, 1);
     assert.deepEqual(detail.routes, []);
+    assert.equal(detail.routesUnavailable, true);
   });
 
   it("maps a missing project without leaking upstream bodies", async () => {

@@ -704,7 +704,11 @@ export type ControlPlaneProjectDetail = {
   project: Project;
   environments: EnvironmentOption[];
   routes: ProjectRoute[];
+  /** True when routes failed to load; false when the list succeeded (possibly empty). */
+  routesUnavailable: boolean;
 };
+
+const ROUTE_HOSTNAME_MAX = 253;
 
 export async function getControlPlaneProjectDetail(
   config: ControlPlaneConfig,
@@ -716,19 +720,36 @@ export async function getControlPlaneProjectDetail(
   const now = options.now ?? Date.now;
   const accessToken = await accessTokenFor(config, fetchImpl, now);
   // Environments stay required; routes are best-effort so a routes outage does not hide the project.
-  const [environments, routes] = await Promise.all([
+  const [environments, routesResult] = await Promise.all([
     listProjectEnvironments(config, project, accessToken, fetchImpl),
-    listProjectRoutes(config, project.id, accessToken, fetchImpl).catch((cause: unknown) => {
-      const detail = cause instanceof ControlPlaneError ? cause.message : "request failed";
-      console.error(
-        "event=control_plane_project_routes_failed project_id=%s detail=%s",
-        projectId,
-        detail,
-      );
-      return [] as ProjectRoute[];
-    }),
+    loadProjectRoutesBestEffort(config, project.id, accessToken, fetchImpl),
   ]);
-  return { project, environments, routes };
+  return {
+    project,
+    environments,
+    routes: routesResult.routes,
+    routesUnavailable: routesResult.routesUnavailable,
+  };
+}
+
+async function loadProjectRoutesBestEffort(
+  config: ControlPlaneConfig,
+  projectId: string,
+  accessToken: string,
+  fetchImpl: typeof fetch,
+): Promise<{ routes: ProjectRoute[]; routesUnavailable: boolean }> {
+  try {
+    const routes = await listProjectRoutes(config, projectId, accessToken, fetchImpl);
+    return { routes, routesUnavailable: false };
+  } catch (cause: unknown) {
+    const detail = cause instanceof ControlPlaneError ? cause.message : "request failed";
+    console.error(
+      "event=control_plane_project_routes_failed project_id=%s detail=%s",
+      projectId,
+      detail,
+    );
+    return { routes: [], routesUnavailable: true };
+  }
 }
 
 type ControlPlaneResource = "project" | "environment";
@@ -1204,7 +1225,7 @@ function parseItemsPage<T>(
 
 function parseProjectRoute(value: unknown, projectId: string): ProjectRoute {
   if (!value || typeof value !== "object") {
-    throw new ControlPlaneError("control plane routes response was not a page");
+    throw new ControlPlaneError("control plane route row was invalid");
   }
   const row = value as Record<string, unknown>;
   if (
@@ -1217,9 +1238,10 @@ function parseProjectRoute(value: unknown, projectId: string): ProjectRoute {
     !isControlPlaneUuid(row.environment_id) ||
     typeof row.hostname !== "string" ||
     row.hostname.length === 0 ||
+    row.hostname.length > ROUTE_HOSTNAME_MAX ||
     typeof row.enabled !== "boolean"
   ) {
-    throw new ControlPlaneError("control plane routes response was not a page");
+    throw new ControlPlaneError("control plane route row was invalid");
   }
   return {
     id: row.id,

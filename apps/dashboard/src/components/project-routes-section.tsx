@@ -8,6 +8,8 @@ type ProjectRoutesSectionProps = {
   loading: boolean;
   /** True when the project itself failed to load. */
   projectUnavailable: boolean;
+  /** True when the control-plane routes list failed (not an empty list). */
+  routesUnavailable: boolean;
 };
 
 export function ProjectRoutesSection({
@@ -15,6 +17,7 @@ export function ProjectRoutesSection({
   source,
   loading,
   projectUnavailable,
+  routesUnavailable,
 }: ProjectRoutesSectionProps) {
   return (
     <section id="routes" className="mt-8 scroll-mt-6">
@@ -23,6 +26,14 @@ export function ProjectRoutesSection({
         <p className="text-sm text-muted-foreground">Loading routes…</p>
       ) : projectUnavailable ? (
         <p className="text-sm text-muted-foreground">Routes are unavailable until the project loads.</p>
+      ) : routesUnavailable ? (
+        <Card>
+          <CardContent className="py-6">
+            <p className="text-sm text-destructive" role="alert">
+              Routes could not be loaded. Refresh to try again.
+            </p>
+          </CardContent>
+        </Card>
       ) : routes.length === 0 ? (
         <Card>
           <CardContent className="py-6">

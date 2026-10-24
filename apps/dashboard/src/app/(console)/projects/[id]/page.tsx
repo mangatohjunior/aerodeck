@@ -209,6 +209,7 @@ export default function ProjectDetailPage() {
         source={detail?.source}
         loading={loading}
         projectUnavailable={Boolean(error && !project)}
+        routesUnavailable={Boolean(detail?.routes_unavailable)}
       />
     </div>
   );

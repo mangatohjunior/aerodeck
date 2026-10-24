@@ -65,6 +65,7 @@ export async function GET(_request: Request, context: RouteContext) {
       project,
       environments: [],
       routes: [],
+      routes_unavailable: false,
       source: "mock",
     };
     return NextResponse.json(body);
@@ -80,6 +81,7 @@ export async function GET(_request: Request, context: RouteContext) {
       project: detail.project,
       environments: detail.environments,
       routes: detail.routes,
+      routes_unavailable: detail.routesUnavailable,
       source: "control-plane",
     };
     return NextResponse.json(body);
