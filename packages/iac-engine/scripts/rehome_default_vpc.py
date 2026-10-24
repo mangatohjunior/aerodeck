@@ -232,6 +232,25 @@ def try_delete_vpc(vpc_id: str) -> bool:
         return False
 
 
+def try_delete_after_default_move(vpc_id: str) -> bool:
+    """DELETE after moving default; re-GET and retry once if the first 403s."""
+    if try_delete_vpc(vpc_id):
+        return True
+    try:
+        again = (api("GET", f"/vpcs/{vpc_id}").get("vpc") or {})
+    except ApiError as exc:
+        print(f"rehome_default_vpc: GET /vpcs/{vpc_id} after DELETE failed ({exc})")
+        return False
+    if again.get("default"):
+        print(
+            f"rehome_default_vpc: {vpc_id} still reports default=true after move; "
+            "leaving in state for Terraform DELETE"
+        )
+        return False
+    print(f"rehome_default_vpc: {vpc_id} confirmed non-default; retrying DELETE")
+    return try_delete_vpc(vpc_id)
+
+
 def ensure_not_default(entry: dict[str, str]) -> None:
     managed_id = entry["id"]
     region = entry["region"]
@@ -268,7 +287,7 @@ def ensure_not_default(entry: dict[str, str]) -> None:
         drop_from_state(address, {**current, "id": managed_id})
         return
 
-    if try_delete_vpc(managed_id):
+    if try_delete_after_default_move(managed_id):
         # Gone from DO; remove from state without rename (name+CIDR freed).
         print(
             f"rehome_default_vpc: removing {address} from Terraform state after DELETE"
@@ -278,7 +297,7 @@ def ensure_not_default(entry: dict[str, str]) -> None:
 
     # Former default often immutable: leave in state so terraform destroy retries.
     print(
-        f"rehome_default_vpc: {managed_id} is no longer default; "
+        f"rehome_default_vpc: {managed_id} still present after default move; "
         "leaving in state for Terraform DELETE"
     )
 

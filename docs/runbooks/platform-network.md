@@ -64,9 +64,12 @@ Do **not** `terraform apply` from a laptop. Procedure:
 ## Name or CIDR changes
 
 Changing `digitalocean_vpc.platform` `name` or `vpc_ip_range` ForceNew-replaces
-the VPC. Only apply that on an **empty** environment state (or when the only
-leftover is an undeletable region-default with no Droplet/Postgres attached).
-Do not rename or bump CIDR while compute or databases still use the old VPC.
+the VPC. Only do that when Terraform state has **no** `digitalocean_vpc`
+(`terraform state list` shows none) and any undeletable region-default is an
+**account-side leftover only** (not in state). If the stack VPC is still in
+state and is the region default, ForceNew apply will 403 on DELETE — run
+[destroy rehome](iac-destroy.md) or `terraform state rm` first. Do not rename
+or bump CIDR while Droplet/Postgres still use the old VPC.
 
 ## After a future apply, verify
 

@@ -164,15 +164,21 @@ def _stub_ensure(
     return state_rms
 
 
-def _assert_ensure_delete_success(mod: Any) -> None:
-    """Default moved + DELETE ok → state rm + marker, no rename PUT."""
-    orig_marker = mod.MARKER
-    marker = ROOT / ".rehome-vpc-dropped-delete-ok"
-    methods: list[str] = []
+def _api_stack_default(
+    mod: Any,
+    *,
+    on_delete: Callable[[], dict] | None = None,
+    on_put_keep: Callable[[], dict] | None = None,
+    on_reget: Callable[[], dict] | None = None,
+) -> Callable[..., dict]:
+    """Shared GET fixtures for a region-default stack VPC + placeholder keep."""
+    get_count = {"vpc_dev": 0}
 
     def api_handler(method: str, path: str, body: dict | None = None) -> dict:
-        methods.append(method)
         if method == "GET" and path == "/vpcs/vpc-dev":
+            get_count["vpc_dev"] += 1
+            if get_count["vpc_dev"] > 1 and on_reget is not None:
+                return on_reget()
             return {
                 "vpc": {
                     "id": "vpc-dev",
@@ -200,17 +206,40 @@ def _assert_ensure_delete_success(mod: Any) -> None:
                 ]
             }
         if method == "PUT" and path == "/vpcs/vpc-keep":
+            if on_put_keep is not None:
+                return on_put_keep()
             return {}
         if method == "DELETE" and path == "/vpcs/vpc-dev":
+            if on_delete is not None:
+                return on_delete()
             return {}
         if method == "PUT" and path == "/vpcs/vpc-dev":
-            raise SystemExit("DELETE path must not rename the stack VPC")
+            return {}
         raise SystemExit(f"unexpected api call {method} {path}")
 
+    return api_handler
+
+
+def _assert_ensure_delete_success(mod: Any) -> None:
+    """Default moved + DELETE ok → state rm + marker, no rename PUT."""
+    orig_marker = mod.MARKER
+    marker = ROOT / ".rehome-vpc-dropped-delete-ok"
+    deletes = {"n": 0}
+
+    def on_delete() -> dict:
+        deletes["n"] += 1
+        return {}
+
+    def forbid_rename(method: str, path: str, body: dict | None = None) -> dict:
+        if method == "PUT" and path == "/vpcs/vpc-dev":
+            raise SystemExit("DELETE path must not rename the stack VPC")
+        return base(method, path, body)
+
+    base = _api_stack_default(mod, on_delete=on_delete)
     try:
-        state_rms = _stub_ensure(mod, api_handler=api_handler, marker=marker)
+        state_rms = _stub_ensure(mod, api_handler=forbid_rename, marker=marker)
         mod.ensure_not_default(ENTRY)
-        if "DELETE" not in methods:
+        if deletes["n"] != 1:
             raise SystemExit("ensure_not_default must DELETE after default move")
         if not state_rms or "rm" not in state_rms[0]:
             raise SystemExit("successful DELETE must remove_from_state")
@@ -222,47 +251,31 @@ def _assert_ensure_delete_success(mod: Any) -> None:
 
 
 def _assert_ensure_delete_refused(mod: Any) -> None:
-    """Default moved + DELETE refused → leave in state (no state rm)."""
+    """Default moved + DELETE refused twice → leave in state (no state rm)."""
     orig_marker = mod.MARKER
     marker = ROOT / ".rehome-vpc-dropped-delete-fail"
+    deletes = {"n": 0}
 
-    def api_handler(method: str, path: str, body: dict | None = None) -> dict:
-        if method == "GET" and path == "/vpcs/vpc-dev":
-            return {
-                "vpc": {
-                    "id": "vpc-dev",
-                    "name": "aerodeck-dev-ams3-private",
-                    "default": True,
-                    "description": "",
-                }
-            }
-        if method == "GET" and path == "/vpcs":
-            return {
-                "vpcs": [
-                    {
-                        "id": "vpc-dev",
-                        "region": "ams3",
-                        "name": "aerodeck-dev-ams3-private",
-                        "default": True,
-                    },
-                    {
-                        "id": "vpc-keep",
-                        "region": "ams3",
-                        "name": "default-ams3",
-                        "default": False,
-                        "description": "",
-                    },
-                ]
-            }
-        if method == "PUT" and path == "/vpcs/vpc-keep":
-            return {}
-        if method == "DELETE" and path == "/vpcs/vpc-dev":
-            raise mod.ApiError(403, "Can not delete default VPCs")
-        raise SystemExit(f"unexpected api call {method} {path}")
+    def on_delete() -> dict:
+        deletes["n"] += 1
+        raise mod.ApiError(403, "Can not delete default VPCs")
 
+    def on_reget() -> dict:
+        return {
+            "vpc": {
+                "id": "vpc-dev",
+                "name": "aerodeck-dev-ams3-private",
+                "default": False,
+                "description": "",
+            }
+        }
+
+    handler = _api_stack_default(mod, on_delete=on_delete, on_reget=on_reget)
     try:
-        state_rms = _stub_ensure(mod, api_handler=api_handler, marker=marker)
+        state_rms = _stub_ensure(mod, api_handler=handler, marker=marker)
         mod.ensure_not_default(ENTRY)
+        if deletes["n"] != 2:
+            raise SystemExit("must retry DELETE once after confirming non-default")
         if state_rms:
             raise SystemExit("failed DELETE after default move must not state rm")
         if marker.is_file():
@@ -276,47 +289,22 @@ def _assert_ensure_default_move_fails(mod: Any) -> None:
     """set_replacement_default fails → drop_from_state (rename + state rm)."""
     orig_marker = mod.MARKER
     marker = ROOT / ".rehome-vpc-dropped-put-fail"
-    puts: list[str] = []
+    renames = {"n": 0}
 
-    def api_handler(method: str, path: str, body: dict | None = None) -> dict:
-        if method == "GET" and path == "/vpcs/vpc-dev":
-            return {
-                "vpc": {
-                    "id": "vpc-dev",
-                    "name": "aerodeck-dev-ams3-private",
-                    "default": True,
-                    "description": "",
-                }
-            }
-        if method == "GET" and path == "/vpcs":
-            return {
-                "vpcs": [
-                    {
-                        "id": "vpc-dev",
-                        "region": "ams3",
-                        "name": "aerodeck-dev-ams3-private",
-                        "default": True,
-                    },
-                    {
-                        "id": "vpc-keep",
-                        "region": "ams3",
-                        "name": "default-ams3",
-                        "default": False,
-                        "description": "",
-                    },
-                ]
-            }
-        if method == "PUT" and path == "/vpcs/vpc-keep":
-            raise mod.ApiError(422, "cannot set default")
+    def on_put_keep() -> dict:
+        raise mod.ApiError(422, "cannot set default")
+
+    def handler(method: str, path: str, body: dict | None = None) -> dict:
         if method == "PUT" and path == "/vpcs/vpc-dev":
-            puts.append(path)
+            renames["n"] += 1
             return {}
-        raise SystemExit(f"unexpected api call {method} {path}")
+        return base(method, path, body)
 
+    base = _api_stack_default(mod, on_put_keep=on_put_keep)
     try:
-        state_rms = _stub_ensure(mod, api_handler=api_handler, marker=marker)
+        state_rms = _stub_ensure(mod, api_handler=handler, marker=marker)
         mod.ensure_not_default(ENTRY)
-        if not puts:
+        if renames["n"] != 1:
             raise SystemExit("failed default move must rename via drop_from_state")
         if not state_rms or "rm" not in state_rms[0]:
             raise SystemExit("failed default move must state rm")
