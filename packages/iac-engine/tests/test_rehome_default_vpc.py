@@ -74,6 +74,57 @@ def main() -> None:
     if not mod.is_placeholder_or_kept(f"aerodeck-ams3{mod.PLACEHOLDER_NAME_SUFFIX}"):
         raise SystemExit("placeholder suffix must match pick_replacement")
 
+    calls: list[tuple[str, str]] = []
+
+    def failing_rename(method: str, path: str, body: dict | None = None) -> dict:
+        calls.append((method, path))
+        raise mod.ApiError(422, "rename refused")
+
+    mod.api = failing_rename  # type: ignore[method-assign]
+    ok = mod.release_stack_name(
+        "vpc-1",
+        {"name": "aerodeck-dev-ams3-private", "description": "", "default": True},
+    )
+    if ok:
+        raise SystemExit("release_stack_name must return False when PUT fails")
+    if ("PUT", "/vpcs/vpc-1") not in calls:
+        raise SystemExit("release_stack_name must PUT the VPC")
+
+    state_rms: list[list[str]] = []
+
+    def fake_check_call(cmd: list[str], *args, **kwargs) -> None:
+        state_rms.append(cmd)
+
+    mod.subprocess.check_call = fake_check_call  # type: ignore[method-assign]
+    marker = ROOT / ".rehome-vpc-dropped-test"
+    orig_marker = mod.MARKER
+    mod.MARKER = marker
+    try:
+        if marker.exists():
+            marker.unlink()
+        try:
+            mod.drop_from_state(
+                "module.network.digitalocean_vpc.platform",
+                {
+                    "id": "vpc-1",
+                    "name": "aerodeck-dev-ams3-private",
+                    "description": "",
+                    "default": True,
+                },
+            )
+        except SystemExit as exc:
+            if "failed to rename" not in str(exc):
+                raise SystemExit(f"unexpected SystemExit: {exc}") from exc
+        else:
+            raise SystemExit("drop_from_state must exit when rename fails")
+        if not state_rms or "state" not in state_rms[0] or "rm" not in state_rms[0]:
+            raise SystemExit("drop_from_state must state rm before exiting")
+        if not marker.is_file():
+            raise SystemExit("drop_from_state must write marker before exiting")
+    finally:
+        mod.MARKER = orig_marker
+        marker.unlink(missing_ok=True)
+
     print("rehome_default_vpc helpers look right")
 
 

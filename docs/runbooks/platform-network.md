@@ -22,7 +22,7 @@ CIDRs (must not overlap in the same region):
 
 | Environment | `vpc_ip_range` | DigitalOcean project label |
 | ----------- | -------------- | -------------------------- |
-| dev | `10.40.0.0/16` | Development |
+| dev | `10.41.0.0/16` | Development |
 | staging | `10.50.0.0/16` | Staging |
 | prod | `10.60.0.0/16` | Production |
 

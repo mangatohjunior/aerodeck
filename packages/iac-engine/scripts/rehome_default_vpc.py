@@ -3,8 +3,10 @@
 
 DELETE /v2/vpcs/:id returns 403 "Can not delete default VPCs". The default
 flag cannot be unset; another VPC in the same region must be set default=true.
-If that is refused (the first VPC in a region is often immutable), drop the
-VPC from Terraform state and leave it in the account. VPCs are free.
+When that succeeds, try to DELETE the former stack VPC (frees name and CIDR)
+or leave it in state for Terraform destroy. Only when it must remain as the
+region default: rename to …-kept-default, drop from state, and require a
+vpc_ip_range bump before the next apply (VPCs are free but CIDRs stay reserved).
 
 Writes .rehome-vpc-dropped when state is changed so ci.sh can re-plan; a
 stored plan taken *before* the drop still contains the doomed DELETE.
@@ -166,6 +168,11 @@ def drop_from_state(address: str, current: dict | None = None) -> None:
             "rehome_default_vpc: dropped default VPC from state but failed to "
             "rename it; free the stack VPC name before the next apply"
         )
+    if current and current.get("id"):
+        print(
+            "rehome_default_vpc: kept VPC still reserves its ip_range in the region; "
+            "bump vpc_ip_range in envs/<env>.tfvars before the next apply"
+        )
 
 
 def create_placeholder(region: str, listed: list[dict]) -> dict | None:
@@ -211,6 +218,16 @@ def set_replacement_default(replacement: dict) -> bool:
         return False
 
 
+def try_delete_vpc(vpc_id: str) -> bool:
+    try:
+        api("DELETE", f"/vpcs/{vpc_id}")
+        print(f"rehome_default_vpc: deleted former stack VPC {vpc_id}")
+        return True
+    except ApiError as exc:
+        print(f"rehome_default_vpc: DELETE {vpc_id} failed ({exc})")
+        return False
+
+
 def ensure_not_default(entry: dict[str, str]) -> None:
     managed_id = entry["id"]
     region = entry["region"]
@@ -227,10 +244,10 @@ def ensure_not_default(entry: dict[str, str]) -> None:
         print(f"rehome_default_vpc: {managed_id} is not the region default")
         return
 
-    # Never let Terraform DELETE a VPC that is (or was) the region default.
-    # PUT default onto another VPC when we can; always drop ours from state.
-    # Rename when dropping from state so the stack name is free for the next apply.
-    print(f"rehome_default_vpc: {managed_id} is the {region} default; will not DELETE it")
+    # Never Terraform-DELETE while this VPC is still the region default.
+    # After a successful default move: API-DELETE (or leave in state) so the
+    # CIDR is freed. Rename+drop only when it must remain.
+    print(f"rehome_default_vpc: {managed_id} is the {region} default; will not DELETE it yet")
     try:
         listed = api("GET", "/vpcs").get("vpcs") or []
     except ApiError as exc:
@@ -243,10 +260,24 @@ def ensure_not_default(entry: dict[str, str]) -> None:
             drop_from_state(address, {**current, "id": managed_id})
             return
 
-    if set_replacement_default(replacement):
-        current = {**current, "default": False, "id": managed_id}
+    if not set_replacement_default(replacement):
+        drop_from_state(address, {**current, "id": managed_id})
+        return
 
-    drop_from_state(address, {**current, "id": managed_id})
+    if try_delete_vpc(managed_id):
+        # Gone from DO; remove from state without rename (name+CIDR freed).
+        print(
+            f"rehome_default_vpc: removing {address} from Terraform state after DELETE"
+        )
+        subprocess.check_call(["terraform", "state", "rm", address])
+        MARKER.write_text(address + "\n", encoding="utf-8")
+        return
+
+    # Former default often immutable: leave in state so terraform destroy retries.
+    print(
+        f"rehome_default_vpc: {managed_id} is no longer default; "
+        "leaving in state for Terraform DELETE"
+    )
 
 
 def main() -> None:
