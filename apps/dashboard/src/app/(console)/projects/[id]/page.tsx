@@ -8,6 +8,7 @@ import { EnvironmentEditRow } from "@/components/environment-edit-row";
 import { NewEnvironmentForm } from "@/components/new-environment-form";
 import { PageHeader } from "@/components/page-header";
 import { ProjectEditPanel } from "@/components/project-edit-panel";
+import { ProjectRoutesSection } from "@/components/project-routes-section";
 import { Card, CardContent } from "@/components/ui/card";
 import { fetchProjectDetail } from "@/lib/api";
 import { mergeEnvironmentsById } from "@/lib/environment-list";
@@ -62,10 +63,14 @@ export default function ProjectDetailPage() {
     if (loading || !detail) {
       return;
     }
-    if (window.location.hash !== "#environments") {
+    const hash = window.location.hash;
+    if (hash === "#environments") {
+      document.getElementById("environments")?.scrollIntoView();
       return;
     }
-    document.getElementById("environments")?.scrollIntoView();
+    if (hash === "#routes") {
+      document.getElementById("routes")?.scrollIntoView();
+    }
   }, [loading, detail]);
 
   function handleProjectUpdated(project: Project) {
@@ -112,6 +117,7 @@ export default function ProjectDetailPage() {
 
   const project = detail?.project;
   const environments = detail?.environments ?? [];
+  const routes = detail?.routes ?? [];
   const detailReady = !loading && project != null && project.id === projectId;
   const canMutate = detailReady && detail?.source === "control-plane";
 
@@ -127,9 +133,9 @@ export default function ProjectDetailPage() {
         title={project?.name ?? "Project"}
         description={
           detail?.source === "control-plane"
-            ? "Live project and its environments from the control plane."
+            ? "Live project, environments, and routes from the control plane."
             : detail?.source === "mock"
-              ? "Local seed project. Environments are not stored in the mock catalog."
+              ? "Local seed project. Environments and routes are not stored in the mock catalog."
               : loading
                 ? "Loading project…"
                 : "Project detail."
@@ -198,6 +204,13 @@ export default function ProjectDetailPage() {
           </Card>
         )}
       </section>
+      <ProjectRoutesSection
+        routes={routes}
+        source={detail?.source}
+        loading={loading}
+        projectUnavailable={Boolean(error && !project)}
+        routesUnavailable={detail?.routes_unavailable ?? false}
+      />
     </div>
   );
 }

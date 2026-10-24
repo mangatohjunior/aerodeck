@@ -5,9 +5,10 @@ cookie. The server calls the control plane with an enrolled client. The
 browser never sees that client secret or the control-plane bearer.
 
 Overview and Projects read `GET /api/v1/projects`. Project detail uses
-`GET /api/v1/projects/{id}` plus that project's environments through
-`GET /api/console/projects/{id}` (seed detail with an empty env list when the
-console client is unset). Creating a project uses `POST /api/v1/projects`
+`GET /api/v1/projects/{id}` plus that project's environments and routes through
+`GET /api/console/projects/{id}` (routes from `GET /api/v1/projects/{id}/routes`;
+seed detail with empty env and route lists when the console client is unset).
+The Routes section shows hostname and enabled state only. Creating a project uses `POST /api/v1/projects`
 through `POST /api/console/projects` when the console client is set; the
 Projects form is hidden and create returns 404 when it is not, so the seed
 list stays unchanged. Creating an environment uses

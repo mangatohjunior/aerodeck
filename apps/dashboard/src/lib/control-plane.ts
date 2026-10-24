@@ -6,6 +6,7 @@ import type {
   EnvironmentOption,
   JobKind,
   Project,
+  ProjectRoute,
   ProvisionJob,
   ProvisionJobStatus,
   Sandbox,
@@ -702,7 +703,15 @@ export async function listControlPlaneEnvironments(
 export type ControlPlaneProjectDetail = {
   project: Project;
   environments: EnvironmentOption[];
+  routes: ProjectRoute[];
+  /** True when routes failed to load; false when the list succeeded (possibly empty). */
+  routesUnavailable: boolean;
 };
+
+const ROUTE_HOSTNAME_MAX = 253;
+/** Matches control-plane `Hostname` (lowercase DNS labels). */
+const ROUTE_HOSTNAME_PATTERN =
+  /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*$/;
 
 export async function getControlPlaneProjectDetail(
   config: ControlPlaneConfig,
@@ -713,8 +722,37 @@ export async function getControlPlaneProjectDetail(
   const fetchImpl = options.fetch ?? fetch;
   const now = options.now ?? Date.now;
   const accessToken = await accessTokenFor(config, fetchImpl, now);
-  const environments = await listProjectEnvironments(config, project, accessToken, fetchImpl);
-  return { project, environments };
+  // Environments stay required; routes are best-effort so a routes outage does not hide the project.
+  const [environments, routesResult] = await Promise.all([
+    listProjectEnvironments(config, project, accessToken, fetchImpl),
+    loadProjectRoutesBestEffort(config, project.id, accessToken, fetchImpl),
+  ]);
+  return {
+    project,
+    environments,
+    routes: routesResult.routes,
+    routesUnavailable: routesResult.routesUnavailable,
+  };
+}
+
+async function loadProjectRoutesBestEffort(
+  config: ControlPlaneConfig,
+  projectId: string,
+  accessToken: string,
+  fetchImpl: typeof fetch,
+): Promise<{ routes: ProjectRoute[]; routesUnavailable: boolean }> {
+  try {
+    const routes = await listProjectRoutes(config, projectId, accessToken, fetchImpl);
+    return { routes, routesUnavailable: false };
+  } catch (cause: unknown) {
+    const detail = cause instanceof ControlPlaneError ? cause.message : "request failed";
+    console.error(
+      "event=control_plane_project_routes_failed project_id=%s detail=%s",
+      projectId,
+      detail,
+    );
+    return { routes: [], routesUnavailable: true };
+  }
 }
 
 type ControlPlaneResource = "project" | "environment";
@@ -1103,17 +1141,7 @@ async function listProjectEnvironments(
     accessToken,
     fetchImpl,
     "environments",
-    (body) => {
-      if (!body || typeof body !== "object" || !Array.isArray((body as { items?: unknown }).items)) {
-        throw new ControlPlaneError("control plane environments response was not a page");
-      }
-      const record = body as { items: unknown[]; total?: unknown };
-      const pageItems = record.items.map((row) => parseEnvironmentOption(row, project));
-      return {
-        items: pageItems,
-        total: typeof record.total === "number" ? record.total : pageItems.length,
-      };
-    },
+    (body) => parseItemsPage(body, "environments", (row) => parseEnvironmentOption(row, project)),
   );
 }
 
@@ -1166,12 +1194,79 @@ async function listProjectSandboxes(
   );
 }
 
+async function listProjectRoutes(
+  config: ControlPlaneConfig,
+  projectId: string,
+  accessToken: string,
+  fetchImpl: typeof fetch,
+): Promise<ProjectRoute[]> {
+  return listPaginatedProjectCollection(
+    config,
+    projectId,
+    accessToken,
+    fetchImpl,
+    "routes",
+    (body) => parseItemsPage(body, "routes", (row) => parseProjectRoute(row, projectId)),
+  );
+}
+
+function parseItemsPage<T>(
+  body: unknown,
+  label: string,
+  mapRow: (row: unknown) => T,
+): { items: T[]; total: number } {
+  if (!body || typeof body !== "object" || !Array.isArray((body as { items?: unknown }).items)) {
+    throw new ControlPlaneError(`control plane ${label} response was not a page`);
+  }
+  const record = body as { items: unknown[]; total?: unknown };
+  const pageItems = record.items.map(mapRow);
+  return {
+    items: pageItems,
+    total: typeof record.total === "number" ? record.total : pageItems.length,
+  };
+}
+
+function parseProjectRoute(value: unknown, projectId: string): ProjectRoute {
+  if (!value || typeof value !== "object") {
+    throw new ControlPlaneError("control plane route row was invalid");
+  }
+  const row = value as Record<string, unknown>;
+  if (
+    typeof row.id !== "string" ||
+    !isControlPlaneUuid(row.id) ||
+    typeof row.project_id !== "string" ||
+    !isControlPlaneUuid(row.project_id) ||
+    row.project_id !== projectId ||
+    typeof row.environment_id !== "string" ||
+    !isControlPlaneUuid(row.environment_id) ||
+    typeof row.hostname !== "string" ||
+    typeof row.enabled !== "boolean"
+  ) {
+    throw new ControlPlaneError("control plane route row was invalid");
+  }
+  const hostname = row.hostname.toLowerCase();
+  if (
+    hostname.length === 0 ||
+    hostname.length > ROUTE_HOSTNAME_MAX ||
+    !ROUTE_HOSTNAME_PATTERN.test(hostname)
+  ) {
+    throw new ControlPlaneError("control plane route row was invalid");
+  }
+  return {
+    id: row.id,
+    project_id: row.project_id,
+    environment_id: row.environment_id,
+    hostname,
+    enabled: row.enabled,
+  };
+}
+
 async function listPaginatedProjectCollection<T>(
   config: ControlPlaneConfig,
   projectId: string,
   accessToken: string,
   fetchImpl: typeof fetch,
-  resource: "sandboxes" | "environments",
+  resource: "sandboxes" | "environments" | "routes",
   parsePage: (body: unknown) => { items: T[]; total: number },
 ): Promise<T[]> {
   const items: T[] = [];
