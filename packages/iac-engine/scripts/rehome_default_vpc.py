@@ -109,7 +109,34 @@ def unused_cidr(vpcs: list[dict], region: str) -> str:
     raise SystemExit("rehome_default_vpc: no free 10.x.0.0/20 for a placeholder VPC")
 
 
-def drop_from_state(address: str) -> None:
+def kept_default_name(old: str) -> str | None:
+    if not old or old.endswith("-kept-default"):
+        return None
+    return f"{old}-kept-default"
+
+
+def release_stack_name(vpc_id: str, current: dict) -> None:
+    """Rename a kept default so the next apply can recreate the stack VPC name."""
+    old = str(current.get("name") or "")
+    new_name = kept_default_name(old)
+    if not new_name:
+        return
+    body: dict = {
+        "name": new_name,
+        "description": current.get("description") or "",
+    }
+    if current.get("default"):
+        body["default"] = True
+    try:
+        api("PUT", f"/vpcs/{vpc_id}", body)
+        print(f"rehome_default_vpc: renamed {old!r} -> {new_name!r}")
+    except ApiError as exc:
+        print(f"rehome_default_vpc: rename to free stack name failed ({exc})")
+
+
+def drop_from_state(address: str, current: dict | None = None) -> None:
+    if current and current.get("id"):
+        release_stack_name(str(current["id"]), current)
     print(
         f"rehome_default_vpc: leaving the DigitalOcean default VPC in place; "
         f"removing {address} from Terraform state"
@@ -136,6 +163,7 @@ def ensure_not_default(entry: dict[str, str]) -> None:
 
     # Never let Terraform DELETE a VPC that is (or was) the region default.
     # PUT default onto another VPC when we can; always drop ours from state.
+    # Rename first so the canonical stack name is free for the next apply.
     print(f"rehome_default_vpc: {managed_id} is the {region} default; will not DELETE it")
     try:
         listed = api("GET", "/vpcs").get("vpcs") or []
@@ -160,7 +188,7 @@ def ensure_not_default(entry: dict[str, str]) -> None:
             )
         except ApiError as exc:
             print(f"rehome_default_vpc: POST /vpcs failed ({exc}); dropping from state")
-            drop_from_state(address)
+            drop_from_state(address, {**current, "id": managed_id})
             return
         replacement = created.get("vpc") or {}
 
@@ -178,10 +206,11 @@ def ensure_not_default(entry: dict[str, str]) -> None:
                 },
             )
             print(f"rehome_default_vpc: set {rid} ({rname}) as {region} default")
+            current = {**current, "default": False, "id": managed_id}
         except ApiError as exc:
             print(f"rehome_default_vpc: PUT default failed ({exc})")
 
-    drop_from_state(address)
+    drop_from_state(address, {**current, "id": managed_id})
 
 
 def main() -> None:

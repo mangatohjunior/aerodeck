@@ -10,7 +10,7 @@ Workloads never use the region's default VPC. Declared in
 | Resource | Name | Notes |
 | -------- | ---- | ----- |
 | Project | `aerodeck-<env>` | `is_default = false`. Attach later Droplets, databases, and clusters with `digitalocean_project_resources`. |
-| VPC | `aerodeck-<env>-<region>-vpc` | Private RFC1918 range (name includes region; DigitalOcean VPC names are account-wide). Set `vpc_uuid` on Droplets, databases, and clusters. |
+| VPC | `aerodeck-<env>-<region>-private` | Private RFC1918 range (name includes region; DigitalOcean VPC names are account-wide). Set `vpc_uuid` on Droplets, databases, and clusters. |
 
 DigitalOcean Projects cannot own a VPC. Supported project members are Droplets,
 databases, Kubernetes clusters, load balancers, volumes, Spaces, domains,
@@ -66,7 +66,7 @@ Do **not** `terraform apply` from a laptop. Procedure:
 In the DigitalOcean console:
 
 1. Project `aerodeck-<env>` exists and is not the account default.
-2. VPC `aerodeck-<env>-ams3-vpc` exists in `ams3` with the CIDR above.
+2. VPC `aerodeck-<env>-ams3-private` exists in `ams3` with the CIDR above.
 3. The VPC is listed under Networking → VPC, not as a project member. That is
    expected.
 4. `terraform output vpc_id` is a UUID later stacks pass as `vpc_uuid`.

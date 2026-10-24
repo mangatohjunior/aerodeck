@@ -52,6 +52,11 @@ def main() -> None:
     if not cidr.startswith("10.") or not cidr.endswith(".0.0/20"):
         raise SystemExit(f"unexpected placeholder cidr {cidr}")
 
+    if mod.kept_default_name("aerodeck-dev-ams3-private") != "aerodeck-dev-ams3-private-kept-default":
+        raise SystemExit("kept_default_name must free the stack VPC name")
+    if mod.kept_default_name("aerodeck-dev-ams3-private-kept-default") is not None:
+        raise SystemExit("already-kept names must not be renamed again")
+
     print("rehome_default_vpc helpers look right")
 
 

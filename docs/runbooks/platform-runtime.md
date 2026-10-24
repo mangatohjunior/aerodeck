@@ -13,7 +13,7 @@ or start the container ([control-plane-image.md](control-plane-image.md)).
 
 | Resource | Name | Notes |
 | -------- | ---- | ----- |
-| Droplet | `aerodeck-<env>-control` | Ubuntu in `aerodeck-<env>-<region>-vpc` (`vpc_uuid`). Docker plus `/etc/aerodeck/control-plane-image`. |
+| Droplet | `aerodeck-<env>-control` | Ubuntu in `aerodeck-<env>-<region>-private` (`vpc_uuid`). Docker plus `/etc/aerodeck/control-plane-image`. |
 | Droplet firewall | `aerodeck-<env>-control-fw` | SSH from the VPC (or `ssh_allow_cidrs`). Ports 8000 and 3000 from the VPC only. |
 | Edge Droplet | `aerodeck-<env>-edge` | Traefik v3, public 80/443, polls control `:8000` over the VPC. |
 | Edge firewall | `aerodeck-<env>-edge-fw` | SSH like control. 80/443 from the internet. |
@@ -90,7 +90,7 @@ Do **not** `terraform apply` from a laptop. Procedure:
 
 In the DigitalOcean console:
 
-1. Droplet `aerodeck-<env>-control` is in VPC `aerodeck-<env>-ams3-vpc`, not default.
+1. Droplet `aerodeck-<env>-control` is in VPC `aerodeck-<env>-ams3-private`, not default.
 2. Database clusters `aerodeck-<env>-pg` and `aerodeck-<env>-redis` show the
    same VPC. Trusted sources list only that Droplet.
 3. Project `aerodeck-<env>` members include the Droplet and both clusters.
