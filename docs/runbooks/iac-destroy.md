@@ -35,11 +35,12 @@ flag **only in the Actions runner checkout** so a smoke-test stack can go
 away without a laptop destroy. Merged code keeps `prevent_destroy = true`.
 
 DigitalOcean will not DELETE a VPC that is the region default
-(`Can not delete default VPCs`). Plan/apply/destroy on `main` move the
-default onto another VPC when the API allows it, rename the leftover to
-`…-kept-default` (so the next apply can recreate the stack name), then
-**drop it from Terraform state** so destroy does not call DELETE. The
-leftover stays in the account (free) and is not in state.
+(`Can not delete default VPCs`). Destroy rehome (`rehome_default_vpc.py` on
+destroy-plan/destroy-apply only) moves the default onto another VPC when the
+API allows it, renames the leftover to `…-kept-default` (so the next apply
+can recreate the stack name), then **drops it from Terraform state** so
+destroy does not call DELETE. The leftover stays in the account (free) and
+is not in state.
 
 ## How to run it
 

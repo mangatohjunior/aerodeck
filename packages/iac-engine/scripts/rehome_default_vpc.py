@@ -168,6 +168,49 @@ def drop_from_state(address: str, current: dict | None = None) -> None:
         )
 
 
+def create_placeholder(region: str, listed: list[dict]) -> dict | None:
+    name = f"aerodeck-{region}{PLACEHOLDER_NAME_SUFFIX}"
+    cidr = unused_cidr(listed, region)
+    print(f"rehome_default_vpc: creating placeholder {name} {cidr}")
+    try:
+        created = api(
+            "POST",
+            "/vpcs",
+            {
+                "name": name,
+                "region": region,
+                "description": "Region default so Terraform can delete stack VPCs",
+                "ip_range": cidr,
+            },
+        )
+    except ApiError as exc:
+        print(f"rehome_default_vpc: POST /vpcs failed ({exc})")
+        return None
+    return created.get("vpc") or {}
+
+
+def set_replacement_default(replacement: dict) -> bool:
+    rid = replacement.get("id")
+    rname = replacement.get("name")
+    if not rid or not rname:
+        return False
+    try:
+        api(
+            "PUT",
+            f"/vpcs/{rid}",
+            {
+                "name": rname,
+                "description": replacement.get("description") or "",
+                "default": True,
+            },
+        )
+        print(f"rehome_default_vpc: set {rid} ({rname}) as region default")
+        return True
+    except ApiError as exc:
+        print(f"rehome_default_vpc: PUT default failed ({exc})")
+        return False
+
+
 def ensure_not_default(entry: dict[str, str]) -> None:
     managed_id = entry["id"]
     region = entry["region"]
@@ -195,43 +238,13 @@ def ensure_not_default(entry: dict[str, str]) -> None:
 
     replacement = pick_replacement(managed_id, region, listed)
     if replacement is None:
-        name = f"aerodeck-{region}{PLACEHOLDER_NAME_SUFFIX}"
-        cidr = unused_cidr(listed, region)
-        print(f"rehome_default_vpc: creating placeholder {name} {cidr}")
-        try:
-            created = api(
-                "POST",
-                "/vpcs",
-                {
-                    "name": name,
-                    "region": region,
-                    "description": "Region default so Terraform can delete stack VPCs",
-                    "ip_range": cidr,
-                },
-            )
-        except ApiError as exc:
-            print(f"rehome_default_vpc: POST /vpcs failed ({exc}); dropping from state")
+        replacement = create_placeholder(region, listed)
+        if replacement is None:
             drop_from_state(address, {**current, "id": managed_id})
             return
-        replacement = created.get("vpc") or {}
 
-    rid = replacement.get("id")
-    rname = replacement.get("name")
-    if rid and rname:
-        try:
-            api(
-                "PUT",
-                f"/vpcs/{rid}",
-                {
-                    "name": rname,
-                    "description": replacement.get("description") or "",
-                    "default": True,
-                },
-            )
-            print(f"rehome_default_vpc: set {rid} ({rname}) as {region} default")
-            current = {**current, "default": False, "id": managed_id}
-        except ApiError as exc:
-            print(f"rehome_default_vpc: PUT default failed ({exc})")
+    if set_replacement_default(replacement):
+        current = {**current, "default": False, "id": managed_id}
 
     drop_from_state(address, {**current, "id": managed_id})
 
