@@ -153,6 +153,11 @@ def release_stack_name(vpc_id: str, current: dict) -> bool:
         return False
 
 
+def remove_from_state(address: str) -> None:
+    subprocess.check_call(["terraform", "state", "rm", address])
+    MARKER.write_text(address + "\n", encoding="utf-8")
+
+
 def drop_from_state(address: str, current: dict | None = None) -> None:
     rename_ok = True
     if current and current.get("id"):
@@ -161,8 +166,7 @@ def drop_from_state(address: str, current: dict | None = None) -> None:
         f"rehome_default_vpc: leaving the DigitalOcean default VPC in place; "
         f"removing {address} from Terraform state"
     )
-    subprocess.check_call(["terraform", "state", "rm", address])
-    MARKER.write_text(address + "\n", encoding="utf-8")
+    remove_from_state(address)
     if not rename_ok:
         raise SystemExit(
             "rehome_default_vpc: dropped default VPC from state but failed to "
@@ -269,8 +273,7 @@ def ensure_not_default(entry: dict[str, str]) -> None:
         print(
             f"rehome_default_vpc: removing {address} from Terraform state after DELETE"
         )
-        subprocess.check_call(["terraform", "state", "rm", address])
-        MARKER.write_text(address + "\n", encoding="utf-8")
+        remove_from_state(address)
         return
 
     # Former default often immutable: leave in state so terraform destroy retries.

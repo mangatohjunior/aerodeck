@@ -61,6 +61,13 @@ to a project. Compute and databases are a separate module
 Do **not** `terraform apply` from a laptop. Procedure:
 [iac-apply.md](iac-apply.md).
 
+## Name or CIDR changes
+
+Changing `digitalocean_vpc.platform` `name` or `vpc_ip_range` ForceNew-replaces
+the VPC. Only apply that on an **empty** environment state (or when the only
+leftover is an undeletable region-default with no Droplet/Postgres attached).
+Do not rename or bump CIDR while compute or databases still use the old VPC.
+
 ## After a future apply, verify
 
 In the DigitalOcean console:

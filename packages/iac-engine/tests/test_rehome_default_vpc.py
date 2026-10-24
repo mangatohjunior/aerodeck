@@ -1,10 +1,15 @@
 """Placeholder default VPC selection for destroy must stay in-region."""
 
+from __future__ import annotations
+
 import importlib.util
 from pathlib import Path
+from typing import Any, Callable
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "scripts" / "rehome_default_vpc.py"
+ADDRESS = "module.network.digitalocean_vpc.platform"
+ENTRY = {"address": ADDRESS, "id": "vpc-dev", "region": "ams3"}
 
 
 def _load():
@@ -16,8 +21,7 @@ def _load():
     return mod
 
 
-def main() -> None:
-    mod = _load()
+def _assert_entries(mod: Any) -> None:
     state = {
         "resources": [
             {
@@ -31,9 +35,17 @@ def main() -> None:
         ]
     }
     entries = mod.vpc_entries_from_state(state)
-    if entries != [{"address": "module.network.digitalocean_vpc.platform", "id": "vpc-dev", "region": "nyc3"}]:
+    if entries != [
+        {
+            "address": "module.network.digitalocean_vpc.platform",
+            "id": "vpc-dev",
+            "region": "nyc3",
+        }
+    ]:
         raise SystemExit(f"unexpected vpc entries: {entries}")
 
+
+def _assert_pick_replacement(mod: Any) -> None:
     listed = [
         {"id": "vpc-dev", "region": "nyc3", "name": "aerodeck-dev-vpc", "default": True},
         {"id": "vpc-keep", "region": "nyc3", "name": "default-nyc3", "default": False},
@@ -44,7 +56,12 @@ def main() -> None:
         raise SystemExit(f"should pick same-region non-managed VPC, got {picked}")
 
     kept_listed = [
-        {"id": "vpc-dev", "region": "ams3", "name": "aerodeck-dev-ams3-private", "default": True},
+        {
+            "id": "vpc-dev",
+            "region": "ams3",
+            "name": "aerodeck-dev-ams3-private",
+            "default": True,
+        },
         {
             "id": "vpc-old",
             "region": "ams3",
@@ -57,6 +74,8 @@ def main() -> None:
     if not kept_pick or kept_pick.get("id") != "vpc-old":
         raise SystemExit(f"should prefer -kept-default leftover, got {kept_pick}")
 
+
+def _assert_cidr_and_names(mod: Any) -> None:
     cidr = mod.unused_cidr(
         [{"region": "nyc3", "ip_range": "10.254.0.0/20"}],
         "nyc3",
@@ -74,6 +93,8 @@ def main() -> None:
     if not mod.is_placeholder_or_kept(f"aerodeck-ams3{mod.PLACEHOLDER_NAME_SUFFIX}"):
         raise SystemExit("placeholder suffix must match pick_replacement")
 
+
+def _assert_rename_failure_exits(mod: Any) -> None:
     calls: list[tuple[str, str]] = []
 
     def failing_rename(method: str, path: str, body: dict | None = None) -> dict:
@@ -100,11 +121,10 @@ def main() -> None:
     orig_marker = mod.MARKER
     mod.MARKER = marker
     try:
-        if marker.exists():
-            marker.unlink()
+        marker.unlink(missing_ok=True)
         try:
             mod.drop_from_state(
-                "module.network.digitalocean_vpc.platform",
+                ADDRESS,
                 {
                     "id": "vpc-1",
                     "name": "aerodeck-dev-ams3-private",
@@ -125,6 +145,197 @@ def main() -> None:
         mod.MARKER = orig_marker
         marker.unlink(missing_ok=True)
 
+
+def _stub_ensure(
+    mod: Any,
+    *,
+    api_handler: Callable[..., dict],
+    marker: Path,
+) -> list[list[str]]:
+    state_rms: list[list[str]] = []
+
+    def fake_check_call(cmd: list[str], *args, **kwargs) -> None:
+        state_rms.append(cmd)
+
+    mod.api = api_handler  # type: ignore[method-assign]
+    mod.subprocess.check_call = fake_check_call  # type: ignore[method-assign]
+    mod.MARKER = marker
+    marker.unlink(missing_ok=True)
+    return state_rms
+
+
+def _assert_ensure_delete_success(mod: Any) -> None:
+    """Default moved + DELETE ok → state rm + marker, no rename PUT."""
+    orig_marker = mod.MARKER
+    marker = ROOT / ".rehome-vpc-dropped-delete-ok"
+    methods: list[str] = []
+
+    def api_handler(method: str, path: str, body: dict | None = None) -> dict:
+        methods.append(method)
+        if method == "GET" and path == "/vpcs/vpc-dev":
+            return {
+                "vpc": {
+                    "id": "vpc-dev",
+                    "name": "aerodeck-dev-ams3-private",
+                    "default": True,
+                    "description": "",
+                }
+            }
+        if method == "GET" and path == "/vpcs":
+            return {
+                "vpcs": [
+                    {
+                        "id": "vpc-dev",
+                        "region": "ams3",
+                        "name": "aerodeck-dev-ams3-private",
+                        "default": True,
+                    },
+                    {
+                        "id": "vpc-keep",
+                        "region": "ams3",
+                        "name": "default-ams3",
+                        "default": False,
+                        "description": "",
+                    },
+                ]
+            }
+        if method == "PUT" and path == "/vpcs/vpc-keep":
+            return {}
+        if method == "DELETE" and path == "/vpcs/vpc-dev":
+            return {}
+        if method == "PUT" and path == "/vpcs/vpc-dev":
+            raise SystemExit("DELETE path must not rename the stack VPC")
+        raise SystemExit(f"unexpected api call {method} {path}")
+
+    try:
+        state_rms = _stub_ensure(mod, api_handler=api_handler, marker=marker)
+        mod.ensure_not_default(ENTRY)
+        if "DELETE" not in methods:
+            raise SystemExit("ensure_not_default must DELETE after default move")
+        if not state_rms or "rm" not in state_rms[0]:
+            raise SystemExit("successful DELETE must remove_from_state")
+        if not marker.is_file():
+            raise SystemExit("successful DELETE must write marker")
+    finally:
+        mod.MARKER = orig_marker
+        marker.unlink(missing_ok=True)
+
+
+def _assert_ensure_delete_refused(mod: Any) -> None:
+    """Default moved + DELETE refused → leave in state (no state rm)."""
+    orig_marker = mod.MARKER
+    marker = ROOT / ".rehome-vpc-dropped-delete-fail"
+
+    def api_handler(method: str, path: str, body: dict | None = None) -> dict:
+        if method == "GET" and path == "/vpcs/vpc-dev":
+            return {
+                "vpc": {
+                    "id": "vpc-dev",
+                    "name": "aerodeck-dev-ams3-private",
+                    "default": True,
+                    "description": "",
+                }
+            }
+        if method == "GET" and path == "/vpcs":
+            return {
+                "vpcs": [
+                    {
+                        "id": "vpc-dev",
+                        "region": "ams3",
+                        "name": "aerodeck-dev-ams3-private",
+                        "default": True,
+                    },
+                    {
+                        "id": "vpc-keep",
+                        "region": "ams3",
+                        "name": "default-ams3",
+                        "default": False,
+                        "description": "",
+                    },
+                ]
+            }
+        if method == "PUT" and path == "/vpcs/vpc-keep":
+            return {}
+        if method == "DELETE" and path == "/vpcs/vpc-dev":
+            raise mod.ApiError(403, "Can not delete default VPCs")
+        raise SystemExit(f"unexpected api call {method} {path}")
+
+    try:
+        state_rms = _stub_ensure(mod, api_handler=api_handler, marker=marker)
+        mod.ensure_not_default(ENTRY)
+        if state_rms:
+            raise SystemExit("failed DELETE after default move must not state rm")
+        if marker.is_file():
+            raise SystemExit("failed DELETE must not write marker")
+    finally:
+        mod.MARKER = orig_marker
+        marker.unlink(missing_ok=True)
+
+
+def _assert_ensure_default_move_fails(mod: Any) -> None:
+    """set_replacement_default fails → drop_from_state (rename + state rm)."""
+    orig_marker = mod.MARKER
+    marker = ROOT / ".rehome-vpc-dropped-put-fail"
+    puts: list[str] = []
+
+    def api_handler(method: str, path: str, body: dict | None = None) -> dict:
+        if method == "GET" and path == "/vpcs/vpc-dev":
+            return {
+                "vpc": {
+                    "id": "vpc-dev",
+                    "name": "aerodeck-dev-ams3-private",
+                    "default": True,
+                    "description": "",
+                }
+            }
+        if method == "GET" and path == "/vpcs":
+            return {
+                "vpcs": [
+                    {
+                        "id": "vpc-dev",
+                        "region": "ams3",
+                        "name": "aerodeck-dev-ams3-private",
+                        "default": True,
+                    },
+                    {
+                        "id": "vpc-keep",
+                        "region": "ams3",
+                        "name": "default-ams3",
+                        "default": False,
+                        "description": "",
+                    },
+                ]
+            }
+        if method == "PUT" and path == "/vpcs/vpc-keep":
+            raise mod.ApiError(422, "cannot set default")
+        if method == "PUT" and path == "/vpcs/vpc-dev":
+            puts.append(path)
+            return {}
+        raise SystemExit(f"unexpected api call {method} {path}")
+
+    try:
+        state_rms = _stub_ensure(mod, api_handler=api_handler, marker=marker)
+        mod.ensure_not_default(ENTRY)
+        if not puts:
+            raise SystemExit("failed default move must rename via drop_from_state")
+        if not state_rms or "rm" not in state_rms[0]:
+            raise SystemExit("failed default move must state rm")
+        if not marker.is_file():
+            raise SystemExit("failed default move must write marker")
+    finally:
+        mod.MARKER = orig_marker
+        marker.unlink(missing_ok=True)
+
+
+def main() -> None:
+    mod = _load()
+    _assert_entries(mod)
+    _assert_pick_replacement(mod)
+    _assert_cidr_and_names(mod)
+    _assert_rename_failure_exits(mod)
+    _assert_ensure_delete_success(mod)
+    _assert_ensure_delete_refused(mod)
+    _assert_ensure_default_move_fails(mod)
     print("rehome_default_vpc helpers look right")
 
 
