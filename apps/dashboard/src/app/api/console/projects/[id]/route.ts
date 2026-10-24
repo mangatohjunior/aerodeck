@@ -64,6 +64,7 @@ export async function GET(_request: Request, context: RouteContext) {
     const body: ProjectDetail = {
       project,
       environments: [],
+      routes: [],
       source: "mock",
     };
     return NextResponse.json(body);
@@ -78,6 +79,7 @@ export async function GET(_request: Request, context: RouteContext) {
     const body: ProjectDetail = {
       project: detail.project,
       environments: detail.environments,
+      routes: detail.routes,
       source: "control-plane",
     };
     return NextResponse.json(body);

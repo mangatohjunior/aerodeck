@@ -6,6 +6,7 @@ import type {
   EnvironmentOption,
   JobKind,
   Project,
+  ProjectRoute,
   ProvisionJob,
   ProvisionJobStatus,
   Sandbox,
@@ -702,6 +703,7 @@ export async function listControlPlaneEnvironments(
 export type ControlPlaneProjectDetail = {
   project: Project;
   environments: EnvironmentOption[];
+  routes: ProjectRoute[];
 };
 
 export async function getControlPlaneProjectDetail(
@@ -713,8 +715,11 @@ export async function getControlPlaneProjectDetail(
   const fetchImpl = options.fetch ?? fetch;
   const now = options.now ?? Date.now;
   const accessToken = await accessTokenFor(config, fetchImpl, now);
-  const environments = await listProjectEnvironments(config, project, accessToken, fetchImpl);
-  return { project, environments };
+  const [environments, routes] = await Promise.all([
+    listProjectEnvironments(config, project, accessToken, fetchImpl),
+    listProjectRoutes(config, project.id, accessToken, fetchImpl),
+  ]);
+  return { project, environments, routes };
 }
 
 type ControlPlaneResource = "project" | "environment";
@@ -1166,12 +1171,68 @@ async function listProjectSandboxes(
   );
 }
 
+async function listProjectRoutes(
+  config: ControlPlaneConfig,
+  projectId: string,
+  accessToken: string,
+  fetchImpl: typeof fetch,
+): Promise<ProjectRoute[]> {
+  return listPaginatedProjectCollection(
+    config,
+    projectId,
+    accessToken,
+    fetchImpl,
+    "routes",
+    (body) => {
+      if (!body || typeof body !== "object" || !Array.isArray((body as { items?: unknown }).items)) {
+        throw new ControlPlaneError("control plane routes response was not a page");
+      }
+      const record = body as { items: unknown[]; total?: unknown };
+      const pageItems = record.items.map((row) => parseProjectRoute(row, projectId));
+      return {
+        items: pageItems,
+        total: typeof record.total === "number" ? record.total : pageItems.length,
+      };
+    },
+  );
+}
+
+function parseProjectRoute(value: unknown, projectId: string): ProjectRoute {
+  if (!value || typeof value !== "object") {
+    throw new ControlPlaneError("control plane routes response was not a page");
+  }
+  const row = value as Record<string, unknown>;
+  if (
+    typeof row.id !== "string" ||
+    !isControlPlaneUuid(row.id) ||
+    typeof row.project_id !== "string" ||
+    !isControlPlaneUuid(row.project_id) ||
+    row.project_id !== projectId ||
+    typeof row.environment_id !== "string" ||
+    !isControlPlaneUuid(row.environment_id) ||
+    typeof row.hostname !== "string" ||
+    row.hostname.length === 0 ||
+    typeof row.path_prefix !== "string" ||
+    typeof row.enabled !== "boolean"
+  ) {
+    throw new ControlPlaneError("control plane routes response was not a page");
+  }
+  return {
+    id: row.id,
+    project_id: row.project_id,
+    environment_id: row.environment_id,
+    hostname: row.hostname,
+    path_prefix: row.path_prefix,
+    enabled: row.enabled,
+  };
+}
+
 async function listPaginatedProjectCollection<T>(
   config: ControlPlaneConfig,
   projectId: string,
   accessToken: string,
   fetchImpl: typeof fetch,
-  resource: "sandboxes" | "environments",
+  resource: "sandboxes" | "environments" | "routes",
   parsePage: (body: unknown) => { items: T[]; total: number },
 ): Promise<T[]> {
   const items: T[] = [];

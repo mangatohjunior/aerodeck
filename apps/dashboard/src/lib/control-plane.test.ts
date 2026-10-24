@@ -811,16 +811,21 @@ describe("deleteControlPlaneEnvironment", () => {
 });
 
 describe("getControlPlaneProjectDetail", () => {
-  it("loads the project and its environments with one bearer", async () => {
+  it("loads the project, environments, and routes with one bearer", async () => {
     clearControlPlaneTokenCache();
     const projectId = "11111111-1111-4111-8111-111111111111";
     const environmentId = "22222222-2222-4222-8222-222222222222";
+    const routeId = "33333333-3333-4333-8333-333333333333";
     const fetchImpl: typeof fetch = async (input) => {
       const url = String(input);
       if (url.endsWith("/api/v1/auth/token")) {
         return jsonResponse({ access_token: "issued-bearer", expires_in: 900 });
       }
-      if (url.endsWith(`/api/v1/projects/${projectId}`) && !url.includes("/environments")) {
+      if (
+        url.endsWith(`/api/v1/projects/${projectId}`) &&
+        !url.includes("/environments") &&
+        !url.includes("/routes")
+      ) {
         return jsonResponse({
           id: projectId,
           slug: "payments",
@@ -849,6 +854,28 @@ describe("getControlPlaneProjectDetail", () => {
           offset: 0,
         });
       }
+      if (url.includes(`/projects/${projectId}/routes`)) {
+        return jsonResponse({
+          items: [
+            {
+              id: routeId,
+              project_id: projectId,
+              environment_id: environmentId,
+              hostname: "app.example.com",
+              path_prefix: "/",
+              backend_host: "10.0.0.1",
+              backend_port: 80,
+              entrypoint: "web",
+              enabled: true,
+              created_at: "2026-10-19T00:00:00.000Z",
+              updated_at: "2026-10-19T00:00:00.000Z",
+            },
+          ],
+          total: 1,
+          limit: 200,
+          offset: 0,
+        });
+      }
       return jsonResponse({ detail: "unexpected" }, 500);
     };
 
@@ -857,6 +884,65 @@ describe("getControlPlaneProjectDetail", () => {
     assert.equal(detail.environments.length, 1);
     assert.equal(detail.environments[0]?.slug, "prod");
     assert.equal(detail.environments[0]?.project_slug, "payments");
+    assert.equal(detail.routes.length, 1);
+    assert.equal(detail.routes[0]?.hostname, "app.example.com");
+    assert.equal(detail.routes[0]?.enabled, true);
+    assert.equal(JSON.stringify(detail.routes).includes("10.0.0.1"), false);
+  });
+
+  it("rejects a routes page with mismatched project_id", async () => {
+    clearControlPlaneTokenCache();
+    const projectId = "11111111-1111-4111-8111-111111111111";
+    const environmentId = "22222222-2222-4222-8222-222222222222";
+    const fetchImpl: typeof fetch = async (input) => {
+      const url = String(input);
+      if (url.endsWith("/api/v1/auth/token")) {
+        return jsonResponse({ access_token: "issued-bearer", expires_in: 900 });
+      }
+      if (
+        url.endsWith(`/api/v1/projects/${projectId}`) &&
+        !url.includes("/environments") &&
+        !url.includes("/routes")
+      ) {
+        return jsonResponse({
+          id: projectId,
+          slug: "payments",
+          name: "Payments",
+          description: null,
+          created_at: "2026-10-19T00:00:00.000Z",
+          updated_at: "2026-10-19T00:00:00.000Z",
+        });
+      }
+      if (url.includes(`/projects/${projectId}/environments`)) {
+        return jsonResponse({ items: [], total: 0, limit: 200, offset: 0 });
+      }
+      if (url.includes(`/projects/${projectId}/routes`)) {
+        return jsonResponse({
+          items: [
+            {
+              id: "33333333-3333-4333-8333-333333333333",
+              project_id: "44444444-4444-4444-8444-444444444444",
+              environment_id: environmentId,
+              hostname: "app.example.com",
+              path_prefix: "/",
+              enabled: true,
+            },
+          ],
+          total: 1,
+          limit: 200,
+          offset: 0,
+        });
+      }
+      return jsonResponse({ detail: "unexpected" }, 500);
+    };
+    await assert.rejects(
+      () => getControlPlaneProjectDetail(config, projectId, { fetch: fetchImpl }),
+      (cause: unknown) => {
+        assert.ok(cause instanceof ControlPlaneError);
+        assert.match(cause.message, /not a page/);
+        return true;
+      },
+    );
   });
 
   it("maps a missing project without leaking upstream bodies", async () => {

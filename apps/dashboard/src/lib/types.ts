@@ -107,9 +107,21 @@ export type EnvironmentOptionPage = {
   source: ProjectSource;
 };
 
+/** Traefik route declared on a control-plane project (`GET .../routes`). */
+export type ProjectRoute = {
+  id: string;
+  project_id: string;
+  environment_id: string;
+  hostname: string;
+  path_prefix: string;
+  enabled: boolean;
+};
+
 export type ProjectDetail = {
   project: Project;
   environments: EnvironmentOption[];
+  /** Empty on mock; populated from the control plane when enrolled. */
+  routes: ProjectRoute[];
   source: ProjectSource;
 };
 
