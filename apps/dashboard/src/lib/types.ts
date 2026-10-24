@@ -122,7 +122,7 @@ export type ProjectDetail = {
   /** Empty on mock; populated from the control plane when enrolled. */
   routes: ProjectRoute[];
   /** True when the control-plane routes list failed (distinct from an empty list). */
-  routes_unavailable?: boolean;
+  routes_unavailable: boolean;
   source: ProjectSource;
 };
 

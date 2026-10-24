@@ -709,6 +709,9 @@ export type ControlPlaneProjectDetail = {
 };
 
 const ROUTE_HOSTNAME_MAX = 253;
+/** Matches control-plane `Hostname` (lowercase DNS labels). */
+const ROUTE_HOSTNAME_PATTERN =
+  /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*$/;
 
 export async function getControlPlaneProjectDetail(
   config: ControlPlaneConfig,
@@ -1237,9 +1240,15 @@ function parseProjectRoute(value: unknown, projectId: string): ProjectRoute {
     typeof row.environment_id !== "string" ||
     !isControlPlaneUuid(row.environment_id) ||
     typeof row.hostname !== "string" ||
-    row.hostname.length === 0 ||
-    row.hostname.length > ROUTE_HOSTNAME_MAX ||
     typeof row.enabled !== "boolean"
+  ) {
+    throw new ControlPlaneError("control plane route row was invalid");
+  }
+  const hostname = row.hostname.toLowerCase();
+  if (
+    hostname.length === 0 ||
+    hostname.length > ROUTE_HOSTNAME_MAX ||
+    !ROUTE_HOSTNAME_PATTERN.test(hostname)
   ) {
     throw new ControlPlaneError("control plane route row was invalid");
   }
@@ -1247,7 +1256,7 @@ function parseProjectRoute(value: unknown, projectId: string): ProjectRoute {
     id: row.id,
     project_id: row.project_id,
     environment_id: row.environment_id,
-    hostname: row.hostname,
+    hostname,
     enabled: row.enabled,
   };
 }

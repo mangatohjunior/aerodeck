@@ -811,12 +811,27 @@ describe("deleteControlPlaneEnvironment", () => {
 });
 
 describe("getControlPlaneProjectDetail", () => {
-  it("loads the project, environments, and routes with one bearer", async () => {
-    clearControlPlaneTokenCache();
-    const projectId = "11111111-1111-4111-8111-111111111111";
-    const environmentId = "22222222-2222-4222-8222-222222222222";
-    const routeId = "33333333-3333-4333-8333-333333333333";
-    const fetchImpl: typeof fetch = async (input) => {
+  const projectId = "11111111-1111-4111-8111-111111111111";
+  const environmentId = "22222222-2222-4222-8222-222222222222";
+  const routeId = "33333333-3333-4333-8333-333333333333";
+
+  function projectDetailFetchImpl(options: {
+    environments?: unknown[];
+    routes?: unknown[] | Response;
+  }): typeof fetch {
+    const environments = options.environments ?? [
+      {
+        id: environmentId,
+        project_id: projectId,
+        slug: "prod",
+        name: "Production",
+        kind: "prod",
+        region: "ams3",
+        created_at: "2026-10-19T00:00:00.000Z",
+        updated_at: "2026-10-19T00:00:00.000Z",
+      },
+    ];
+    return async (input) => {
       const url = String(input);
       if (url.endsWith("/api/v1/auth/token")) {
         return jsonResponse({ access_token: "issued-bearer", expires_in: 900 });
@@ -837,47 +852,42 @@ describe("getControlPlaneProjectDetail", () => {
       }
       if (url.includes(`/projects/${projectId}/environments`)) {
         return jsonResponse({
-          items: [
-            {
-              id: environmentId,
-              project_id: projectId,
-              slug: "prod",
-              name: "Production",
-              kind: "prod",
-              region: "ams3",
-              created_at: "2026-10-19T00:00:00.000Z",
-              updated_at: "2026-10-19T00:00:00.000Z",
-            },
-          ],
-          total: 1,
+          items: environments,
+          total: environments.length,
           limit: 200,
           offset: 0,
         });
       }
       if (url.includes(`/projects/${projectId}/routes`)) {
-        return jsonResponse({
-          items: [
-            {
-              id: routeId,
-              project_id: projectId,
-              environment_id: environmentId,
-              hostname: "app.example.com",
-              path_prefix: "/",
-              backend_host: "10.0.0.1",
-              backend_port: 80,
-              entrypoint: "web",
-              enabled: true,
-              created_at: "2026-10-19T00:00:00.000Z",
-              updated_at: "2026-10-19T00:00:00.000Z",
-            },
-          ],
-          total: 1,
-          limit: 200,
-          offset: 0,
-        });
+        if (options.routes instanceof Response) {
+          return options.routes;
+        }
+        const items = options.routes ?? [];
+        return jsonResponse({ items, total: items.length, limit: 200, offset: 0 });
       }
       return jsonResponse({ detail: "unexpected" }, 500);
     };
+  }
+
+  it("loads the project, environments, and routes with one bearer", async () => {
+    clearControlPlaneTokenCache();
+    const fetchImpl = projectDetailFetchImpl({
+      routes: [
+        {
+          id: routeId,
+          project_id: projectId,
+          environment_id: environmentId,
+          hostname: "App.Example.com",
+          path_prefix: "/",
+          backend_host: "10.0.0.1",
+          backend_port: 80,
+          entrypoint: "web",
+          enabled: true,
+          created_at: "2026-10-19T00:00:00.000Z",
+          updated_at: "2026-10-19T00:00:00.000Z",
+        },
+      ],
+    });
 
     const detail = await getControlPlaneProjectDetail(config, projectId, { fetch: fetchImpl });
     assert.equal(detail.project.slug, "payments");
@@ -894,64 +904,17 @@ describe("getControlPlaneProjectDetail", () => {
 
   it("keeps environments when routes fail to parse", async () => {
     clearControlPlaneTokenCache();
-    const projectId = "11111111-1111-4111-8111-111111111111";
-    const environmentId = "22222222-2222-4222-8222-222222222222";
-    const fetchImpl: typeof fetch = async (input) => {
-      const url = String(input);
-      if (url.endsWith("/api/v1/auth/token")) {
-        return jsonResponse({ access_token: "issued-bearer", expires_in: 900 });
-      }
-      if (
-        url.endsWith(`/api/v1/projects/${projectId}`) &&
-        !url.includes("/environments") &&
-        !url.includes("/routes")
-      ) {
-        return jsonResponse({
-          id: projectId,
-          slug: "payments",
-          name: "Payments",
-          description: null,
-          created_at: "2026-10-19T00:00:00.000Z",
-          updated_at: "2026-10-19T00:00:00.000Z",
-        });
-      }
-      if (url.includes(`/projects/${projectId}/environments`)) {
-        return jsonResponse({
-          items: [
-            {
-              id: environmentId,
-              project_id: projectId,
-              slug: "prod",
-              name: "Production",
-              kind: "prod",
-              region: "ams3",
-              created_at: "2026-10-19T00:00:00.000Z",
-              updated_at: "2026-10-19T00:00:00.000Z",
-            },
-          ],
-          total: 1,
-          limit: 200,
-          offset: 0,
-        });
-      }
-      if (url.includes(`/projects/${projectId}/routes`)) {
-        return jsonResponse({
-          items: [
-            {
-              id: "33333333-3333-4333-8333-333333333333",
-              project_id: "44444444-4444-4444-8444-444444444444",
-              environment_id: environmentId,
-              hostname: "app.example.com",
-              enabled: true,
-            },
-          ],
-          total: 1,
-          limit: 200,
-          offset: 0,
-        });
-      }
-      return jsonResponse({ detail: "unexpected" }, 500);
-    };
+    const fetchImpl = projectDetailFetchImpl({
+      routes: [
+        {
+          id: routeId,
+          project_id: "44444444-4444-4444-8444-444444444444",
+          environment_id: environmentId,
+          hostname: "app.example.com",
+          enabled: true,
+        },
+      ],
+    });
     const detail = await getControlPlaneProjectDetail(config, projectId, { fetch: fetchImpl });
     assert.equal(detail.environments.length, 1);
     assert.equal(detail.environments[0]?.slug, "prod");
@@ -961,48 +924,37 @@ describe("getControlPlaneProjectDetail", () => {
 
   it("marks routes unavailable when a hostname exceeds 253 characters", async () => {
     clearControlPlaneTokenCache();
-    const projectId = "11111111-1111-4111-8111-111111111111";
-    const environmentId = "22222222-2222-4222-8222-222222222222";
-    const fetchImpl: typeof fetch = async (input) => {
-      const url = String(input);
-      if (url.endsWith("/api/v1/auth/token")) {
-        return jsonResponse({ access_token: "issued-bearer", expires_in: 900 });
-      }
-      if (
-        url.endsWith(`/api/v1/projects/${projectId}`) &&
-        !url.includes("/environments") &&
-        !url.includes("/routes")
-      ) {
-        return jsonResponse({
-          id: projectId,
-          slug: "payments",
-          name: "Payments",
-          description: null,
-          created_at: "2026-10-19T00:00:00.000Z",
-          updated_at: "2026-10-19T00:00:00.000Z",
-        });
-      }
-      if (url.includes(`/projects/${projectId}/environments`)) {
-        return jsonResponse({ items: [], total: 0, limit: 200, offset: 0 });
-      }
-      if (url.includes(`/projects/${projectId}/routes`)) {
-        return jsonResponse({
-          items: [
-            {
-              id: "33333333-3333-4333-8333-333333333333",
-              project_id: projectId,
-              environment_id: environmentId,
-              hostname: `${"a".repeat(250)}.example.com`,
-              enabled: true,
-            },
-          ],
-          total: 1,
-          limit: 200,
-          offset: 0,
-        });
-      }
-      return jsonResponse({ detail: "unexpected" }, 500);
-    };
+    const fetchImpl = projectDetailFetchImpl({
+      environments: [],
+      routes: [
+        {
+          id: routeId,
+          project_id: projectId,
+          environment_id: environmentId,
+          hostname: `${"a".repeat(250)}.example.com`,
+          enabled: true,
+        },
+      ],
+    });
+    const detail = await getControlPlaneProjectDetail(config, projectId, { fetch: fetchImpl });
+    assert.deepEqual(detail.routes, []);
+    assert.equal(detail.routesUnavailable, true);
+  });
+
+  it("marks routes unavailable when a hostname is not a DNS label", async () => {
+    clearControlPlaneTokenCache();
+    const fetchImpl = projectDetailFetchImpl({
+      environments: [],
+      routes: [
+        {
+          id: routeId,
+          project_id: projectId,
+          environment_id: environmentId,
+          hostname: "not a host!",
+          enabled: true,
+        },
+      ],
+    });
     const detail = await getControlPlaneProjectDetail(config, projectId, { fetch: fetchImpl });
     assert.deepEqual(detail.routes, []);
     assert.equal(detail.routesUnavailable, true);
@@ -1010,51 +962,9 @@ describe("getControlPlaneProjectDetail", () => {
 
   it("keeps environments when the routes list returns 503", async () => {
     clearControlPlaneTokenCache();
-    const projectId = "11111111-1111-4111-8111-111111111111";
-    const environmentId = "22222222-2222-4222-8222-222222222222";
-    const fetchImpl: typeof fetch = async (input) => {
-      const url = String(input);
-      if (url.endsWith("/api/v1/auth/token")) {
-        return jsonResponse({ access_token: "issued-bearer", expires_in: 900 });
-      }
-      if (
-        url.endsWith(`/api/v1/projects/${projectId}`) &&
-        !url.includes("/environments") &&
-        !url.includes("/routes")
-      ) {
-        return jsonResponse({
-          id: projectId,
-          slug: "payments",
-          name: "Payments",
-          description: null,
-          created_at: "2026-10-19T00:00:00.000Z",
-          updated_at: "2026-10-19T00:00:00.000Z",
-        });
-      }
-      if (url.includes(`/projects/${projectId}/environments`)) {
-        return jsonResponse({
-          items: [
-            {
-              id: environmentId,
-              project_id: projectId,
-              slug: "prod",
-              name: "Production",
-              kind: "prod",
-              region: "ams3",
-              created_at: "2026-10-19T00:00:00.000Z",
-              updated_at: "2026-10-19T00:00:00.000Z",
-            },
-          ],
-          total: 1,
-          limit: 200,
-          offset: 0,
-        });
-      }
-      if (url.includes(`/projects/${projectId}/routes`)) {
-        return jsonResponse({ detail: "routes down" }, 503);
-      }
-      return jsonResponse({ detail: "unexpected" }, 500);
-    };
+    const fetchImpl = projectDetailFetchImpl({
+      routes: jsonResponse({ detail: "routes down" }, 503),
+    });
     const detail = await getControlPlaneProjectDetail(config, projectId, { fetch: fetchImpl });
     assert.equal(detail.environments.length, 1);
     assert.deepEqual(detail.routes, []);
