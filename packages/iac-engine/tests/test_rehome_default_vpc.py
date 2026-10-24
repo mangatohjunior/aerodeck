@@ -43,6 +43,20 @@ def main() -> None:
     if not picked or picked.get("id") != "vpc-keep":
         raise SystemExit(f"should pick same-region non-managed VPC, got {picked}")
 
+    kept_listed = [
+        {"id": "vpc-dev", "region": "ams3", "name": "aerodeck-dev-ams3-private", "default": True},
+        {
+            "id": "vpc-old",
+            "region": "ams3",
+            "name": "aerodeck-dev-ams3-vpc-kept-default",
+            "default": False,
+        },
+        {"id": "vpc-other", "region": "ams3", "name": "random-ams3", "default": False},
+    ]
+    kept_pick = mod.pick_replacement("vpc-dev", "ams3", kept_listed)
+    if not kept_pick or kept_pick.get("id") != "vpc-old":
+        raise SystemExit(f"should prefer -kept-default leftover, got {kept_pick}")
+
     cidr = mod.unused_cidr(
         [{"region": "nyc3", "ip_range": "10.254.0.0/20"}],
         "nyc3",
@@ -52,10 +66,13 @@ def main() -> None:
     if not cidr.startswith("10.") or not cidr.endswith(".0.0/20"):
         raise SystemExit(f"unexpected placeholder cidr {cidr}")
 
-    if mod.kept_default_name("aerodeck-dev-ams3-private") != "aerodeck-dev-ams3-private-kept-default":
+    expected_kept = f"aerodeck-dev-ams3-private{mod.KEPT_DEFAULT_SUFFIX}"
+    if mod.kept_default_name("aerodeck-dev-ams3-private") != expected_kept:
         raise SystemExit("kept_default_name must free the stack VPC name")
-    if mod.kept_default_name("aerodeck-dev-ams3-private-kept-default") is not None:
+    if mod.kept_default_name(expected_kept) is not None:
         raise SystemExit("already-kept names must not be renamed again")
+    if not mod.is_placeholder_or_kept(f"aerodeck-ams3{mod.PLACEHOLDER_NAME_SUFFIX}"):
+        raise SystemExit("placeholder suffix must match pick_replacement")
 
     print("rehome_default_vpc helpers look right")
 

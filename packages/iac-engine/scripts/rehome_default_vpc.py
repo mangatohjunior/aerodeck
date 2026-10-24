@@ -26,6 +26,10 @@ from pathlib import Path
 
 API = "https://api.digitalocean.com/v2"
 MARKER = Path(".rehome-vpc-dropped")
+# Placeholder created so another VPC can become region default.
+PLACEHOLDER_NAME_SUFFIX = "-default-keep"
+# Renamed stack VPC left in the account after destroy; frees the stack name.
+KEPT_DEFAULT_SUFFIX = "-kept-default"
 
 
 class ApiError(Exception):
@@ -88,14 +92,21 @@ def vpc_entries_from_state(state: dict) -> list[dict[str, str]]:
     return found
 
 
+def is_placeholder_or_kept(name: str) -> bool:
+    return (
+        name.startswith("default-")
+        or name.endswith(PLACEHOLDER_NAME_SUFFIX)
+        or name.endswith(KEPT_DEFAULT_SUFFIX)
+    )
+
+
 def pick_replacement(managed_id: str, region: str, vpcs: list[dict]) -> dict | None:
     same = [v for v in vpcs if v.get("region") == region and v.get("id") != managed_id]
     for v in same:
         if v.get("default"):
             return v
     for v in same:
-        name = str(v.get("name") or "")
-        if name.startswith("default-") or name.endswith("-default-keep"):
+        if is_placeholder_or_kept(str(v.get("name") or "")):
             return v
     return same[0] if same else None
 
@@ -110,17 +121,21 @@ def unused_cidr(vpcs: list[dict], region: str) -> str:
 
 
 def kept_default_name(old: str) -> str | None:
-    if not old or old.endswith("-kept-default"):
+    if not old or old.endswith(KEPT_DEFAULT_SUFFIX):
         return None
-    return f"{old}-kept-default"
+    return f"{old}{KEPT_DEFAULT_SUFFIX}"
 
 
-def release_stack_name(vpc_id: str, current: dict) -> None:
-    """Rename a kept default so the next apply can recreate the stack VPC name."""
+def release_stack_name(vpc_id: str, current: dict) -> bool:
+    """Rename a kept default so the next apply can recreate the stack VPC name.
+
+    Returns False if the API rename failed (caller must fail the job after
+    dropping state so destroy never DELETEs the default).
+    """
     old = str(current.get("name") or "")
     new_name = kept_default_name(old)
     if not new_name:
-        return
+        return True
     body: dict = {
         "name": new_name,
         "description": current.get("description") or "",
@@ -130,19 +145,27 @@ def release_stack_name(vpc_id: str, current: dict) -> None:
     try:
         api("PUT", f"/vpcs/{vpc_id}", body)
         print(f"rehome_default_vpc: renamed {old!r} -> {new_name!r}")
+        return True
     except ApiError as exc:
         print(f"rehome_default_vpc: rename to free stack name failed ({exc})")
+        return False
 
 
 def drop_from_state(address: str, current: dict | None = None) -> None:
+    rename_ok = True
     if current and current.get("id"):
-        release_stack_name(str(current["id"]), current)
+        rename_ok = release_stack_name(str(current["id"]), current)
     print(
         f"rehome_default_vpc: leaving the DigitalOcean default VPC in place; "
         f"removing {address} from Terraform state"
     )
     subprocess.check_call(["terraform", "state", "rm", address])
     MARKER.write_text(address + "\n", encoding="utf-8")
+    if not rename_ok:
+        raise SystemExit(
+            "rehome_default_vpc: dropped default VPC from state but failed to "
+            "rename it; free the stack VPC name before the next apply"
+        )
 
 
 def ensure_not_default(entry: dict[str, str]) -> None:
@@ -163,7 +186,7 @@ def ensure_not_default(entry: dict[str, str]) -> None:
 
     # Never let Terraform DELETE a VPC that is (or was) the region default.
     # PUT default onto another VPC when we can; always drop ours from state.
-    # Rename first so the canonical stack name is free for the next apply.
+    # Rename when dropping from state so the stack name is free for the next apply.
     print(f"rehome_default_vpc: {managed_id} is the {region} default; will not DELETE it")
     try:
         listed = api("GET", "/vpcs").get("vpcs") or []
@@ -172,7 +195,7 @@ def ensure_not_default(entry: dict[str, str]) -> None:
 
     replacement = pick_replacement(managed_id, region, listed)
     if replacement is None:
-        name = f"aerodeck-{region}-default-keep"
+        name = f"aerodeck-{region}{PLACEHOLDER_NAME_SUFFIX}"
         cidr = unused_cidr(listed, region)
         print(f"rehome_default_vpc: creating placeholder {name} {cidr}")
         try:
