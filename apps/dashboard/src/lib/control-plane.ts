@@ -715,9 +715,18 @@ export async function getControlPlaneProjectDetail(
   const fetchImpl = options.fetch ?? fetch;
   const now = options.now ?? Date.now;
   const accessToken = await accessTokenFor(config, fetchImpl, now);
+  // Environments stay required; routes are best-effort so a routes outage does not hide the project.
   const [environments, routes] = await Promise.all([
     listProjectEnvironments(config, project, accessToken, fetchImpl),
-    listProjectRoutes(config, project.id, accessToken, fetchImpl),
+    listProjectRoutes(config, project.id, accessToken, fetchImpl).catch((cause: unknown) => {
+      const detail = cause instanceof ControlPlaneError ? cause.message : "request failed";
+      console.error(
+        "event=control_plane_project_routes_failed project_id=%s detail=%s",
+        projectId,
+        detail,
+      );
+      return [] as ProjectRoute[];
+    }),
   ]);
   return { project, environments, routes };
 }
@@ -1108,17 +1117,7 @@ async function listProjectEnvironments(
     accessToken,
     fetchImpl,
     "environments",
-    (body) => {
-      if (!body || typeof body !== "object" || !Array.isArray((body as { items?: unknown }).items)) {
-        throw new ControlPlaneError("control plane environments response was not a page");
-      }
-      const record = body as { items: unknown[]; total?: unknown };
-      const pageItems = record.items.map((row) => parseEnvironmentOption(row, project));
-      return {
-        items: pageItems,
-        total: typeof record.total === "number" ? record.total : pageItems.length,
-      };
-    },
+    (body) => parseItemsPage(body, "environments", (row) => parseEnvironmentOption(row, project)),
   );
 }
 
@@ -1183,18 +1182,24 @@ async function listProjectRoutes(
     accessToken,
     fetchImpl,
     "routes",
-    (body) => {
-      if (!body || typeof body !== "object" || !Array.isArray((body as { items?: unknown }).items)) {
-        throw new ControlPlaneError("control plane routes response was not a page");
-      }
-      const record = body as { items: unknown[]; total?: unknown };
-      const pageItems = record.items.map((row) => parseProjectRoute(row, projectId));
-      return {
-        items: pageItems,
-        total: typeof record.total === "number" ? record.total : pageItems.length,
-      };
-    },
+    (body) => parseItemsPage(body, "routes", (row) => parseProjectRoute(row, projectId)),
   );
+}
+
+function parseItemsPage<T>(
+  body: unknown,
+  label: string,
+  mapRow: (row: unknown) => T,
+): { items: T[]; total: number } {
+  if (!body || typeof body !== "object" || !Array.isArray((body as { items?: unknown }).items)) {
+    throw new ControlPlaneError(`control plane ${label} response was not a page`);
+  }
+  const record = body as { items: unknown[]; total?: unknown };
+  const pageItems = record.items.map(mapRow);
+  return {
+    items: pageItems,
+    total: typeof record.total === "number" ? record.total : pageItems.length,
+  };
 }
 
 function parseProjectRoute(value: unknown, projectId: string): ProjectRoute {
@@ -1212,7 +1217,6 @@ function parseProjectRoute(value: unknown, projectId: string): ProjectRoute {
     !isControlPlaneUuid(row.environment_id) ||
     typeof row.hostname !== "string" ||
     row.hostname.length === 0 ||
-    typeof row.path_prefix !== "string" ||
     typeof row.enabled !== "boolean"
   ) {
     throw new ControlPlaneError("control plane routes response was not a page");
@@ -1222,7 +1226,6 @@ function parseProjectRoute(value: unknown, projectId: string): ProjectRoute {
     project_id: row.project_id,
     environment_id: row.environment_id,
     hostname: row.hostname,
-    path_prefix: row.path_prefix,
     enabled: row.enabled,
   };
 }

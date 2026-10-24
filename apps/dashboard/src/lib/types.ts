@@ -113,7 +113,6 @@ export type ProjectRoute = {
   project_id: string;
   environment_id: string;
   hostname: string;
-  path_prefix: string;
   enabled: boolean;
 };
 
