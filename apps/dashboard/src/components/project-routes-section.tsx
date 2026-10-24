@@ -1,5 +1,3 @@
-"use client";
-
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import type { ProjectRoute, ProjectSource } from "@/lib/types";
@@ -43,12 +41,7 @@ export function ProjectRoutesSection({
                 key={route.id}
                 className="flex flex-wrap items-start justify-between gap-3 py-4 first:pt-4"
               >
-                <div className="min-w-0">
-                  <p className="font-mono text-sm break-all">{route.hostname}</p>
-                  <p className="mt-1 font-mono text-xs text-muted-foreground">
-                    {route.path_prefix}
-                  </p>
-                </div>
+                <p className="min-w-0 font-mono text-sm break-all">{route.hostname}</p>
                 <Badge variant={route.enabled ? "default" : "secondary"}>
                   {route.enabled ? "Enabled" : "Disabled"}
                 </Badge>
