@@ -17,3 +17,9 @@ def test_writes_bash_quoted_env_and_passes_dash_e_not_env_file() -> None:
     assert "curl -fsS --max-time 2 -o /dev/null http://127.0.0.1:8000/healthz 2>/dev/null" in TEXT
     assert 'CERT_KEY_DIR=/var/lib/aerodeck/certs' in TEXT
     assert '-v "${CERT_KEY_DIR}:${CERT_KEY_DIR}"' in TEXT
+
+
+def test_migrate_container_receives_aerodeck_env_to_override_dockerfile_production_default() -> None:
+    migrate_block = TEXT.split("--name aerodeck-migrate", 1)[1].split("alembic upgrade head", 1)[0]
+    assert "-e AERODECK_ENV" in migrate_block
+    assert '"${DOCKER_ENV_FLAGS[@]}"' in migrate_block

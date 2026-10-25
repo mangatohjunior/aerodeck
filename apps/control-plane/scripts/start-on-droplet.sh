@@ -104,8 +104,10 @@ fi
 echo "migrating with ${IMAGE}"
 docker_env_flags
 docker run --rm --network host --name aerodeck-migrate \
+  -e AERODECK_ENV \
   -e AERODECK_AUTH_SIGNING_KEY \
   -e AERODECK_DATABASE_URL \
+  "${DOCKER_ENV_FLAGS[@]}" \
   "${IMAGE}" alembic upgrade head
 
 docker rm -f aerodeck-api aerodeck-worker >/dev/null 2>&1 || true
