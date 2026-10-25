@@ -10,12 +10,12 @@ from typing import Callable
 import urllib.error
 import urllib.request
 
-DEFAULT_MODEL = "gemini-2.0-flash"
+DEFAULT_MODEL = "gemini-flash-latest"
 GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta/models"
 MAX_FILE_CONTEXT_BYTES = 120_000
 MAX_SINGLE_FILE_BYTES = 24_000
 HTTP_TIMEOUT_SECONDS = 180
-MAX_ATTEMPTS = 3
+MAX_MODEL_ATTEMPTS = 6
 RETRYABLE_STATUS_CODES = frozenset({429, 500, 502, 503, 504})
 REVIEW_HEADER = "## AeroDeck AI Review"
 EXCLUDED_MODEL_TOKENS = (
@@ -30,6 +30,9 @@ EXCLUDED_MODEL_TOKENS = (
     "robotics",
     "computer-use",
     "live",
+    "omni",
+    "customtools",
+    "pro-preview-03",
 )
 
 SUPPORTING_RULE_FILES = (
@@ -177,32 +180,45 @@ def parse_gemini_response(payload: dict[str, object], duration_ms: int) -> Revie
     return ReviewResult(summary=summary, total_tokens=total_tokens, duration_ms=duration_ms)
 
 
-def select_supported_model(models_payload: dict[str, object], failed_model: str) -> str | None:
-    """Pick the best available text generateContent Gemini model from /v1beta/models."""
+def _model_rank(short_name: str) -> tuple[bool, bool, bool, bool, str]:
+    is_flash = "flash" in short_name
+    is_latest_alias = short_name in ("gemini-flash-latest", "gemini-flash-lite-latest")
+    is_stable = "preview" not in short_name and "exp" not in short_name
+    is_numbered = any(short_name.startswith(f"gemini-{n}") for n in ("3", "2", "1"))
+    return (is_latest_alias, is_flash, is_stable, is_numbered, short_name)
+
+
+def select_supported_models(
+    models_payload: dict[str, object], excluded: set[str]
+) -> list[str]:
+    """Return prioritized text generateContent Gemini models from /v1beta/models."""
     entries = models_payload.get("models")
     if not isinstance(entries, list):
-        return None
+        return []
     candidates: list[str] = []
     for item in entries:
         if not isinstance(item, dict):
             continue
-        raw_name = str(item.get("name") or "")
-        short = raw_name.removeprefix("models/")
+        short = str(item.get("name") or "").removeprefix("models/")
         methods = item.get("supportedGenerationMethods")
-        if not short.startswith("gemini-") or short == failed_model:
+        if not short.startswith("gemini-") or short in excluded:
             continue
         if not isinstance(methods, list) or "generateContent" not in methods:
             continue
         if any(token in short for token in EXCLUDED_MODEL_TOKENS):
             continue
         candidates.append(short)
-    if not candidates:
-        return None
-    candidates.sort(key=lambda m: ("flash" in m, "preview" not in m, m), reverse=True)
-    return candidates[0]
+    candidates.sort(key=_model_rank, reverse=True)
+    return candidates
 
 
-def _discover_fallback_model(api_key: str, failed_model: str) -> str | None:
+def select_supported_model(models_payload: dict[str, object], failed_model: str) -> str | None:
+    """Pick the top available text generateContent Gemini model from /v1beta/models."""
+    ranked = select_supported_models(models_payload, {failed_model})
+    return ranked[0] if ranked else None
+
+
+def _discover_fallback_models(api_key: str, tried: set[str]) -> list[str]:
     request = urllib.request.Request(
         GEMINI_API_BASE,
         headers={"x-goog-api-key": api_key},
@@ -213,8 +229,8 @@ def _discover_fallback_model(api_key: str, failed_model: str) -> str | None:
             parsed = json.loads(response.read().decode("utf-8", errors="replace"))
     except (urllib.error.URLError, ValueError) as exc:
         print(f"Model discovery failed: {exc}", file=sys.stderr)
-        return None
-    return select_supported_model(parsed, failed_model) if isinstance(parsed, dict) else None
+        return []
+    return select_supported_models(parsed, tried) if isinstance(parsed, dict) else []
 
 
 def _post_gemini_json(url: str, api_key: str, body: bytes) -> dict[str, object]:
@@ -242,8 +258,11 @@ def call_gemini_with_retry(
     user_prompt: str,
     transport: Callable[[str, str, bytes], dict[str, object]] = _post_gemini_json,
 ) -> ReviewResult:
-    """Invoke Gemini generateContent with retries and 404 model fallback."""
+    """Invoke Gemini generateContent with model fallback on 404/429 and retries."""
     active_model = model.removeprefix("models/")
+    tried: set[str] = set()
+    fallbacks: list[str] = []
+    discovered = False
     body = json.dumps(
         {
             "systemInstruction": {"parts": [{"text": system_instruction}]},
@@ -253,24 +272,29 @@ def call_gemini_with_retry(
     ).encode("utf-8")
 
     start = time.monotonic()
-    for attempt in range(1, MAX_ATTEMPTS + 1):
+    for attempt in range(1, MAX_MODEL_ATTEMPTS + 1):
+        tried.add(active_model)
         url = f"{GEMINI_API_BASE}/{active_model}:generateContent"
         try:
             payload = transport(url, api_key, body)
             elapsed_ms = int((time.monotonic() - start) * 1000)
             return parse_gemini_response(payload, elapsed_ms)
         except urllib.error.HTTPError as exc:
-            if exc.code == 404 and attempt == 1:
-                fallback = _discover_fallback_model(api_key, active_model)
-                if fallback:
-                    print(f"Model {active_model} returned 404; falling back to {fallback}")
-                    active_model = fallback
+            if exc.code in (404, 429):
+                if not discovered:
+                    fallbacks = _discover_fallback_models(api_key, tried)
+                    discovered = True
+                fallbacks = [m for m in fallbacks if m not in tried]
+                if fallbacks:
+                    next_model = fallbacks.pop(0)
+                    print(f"Model {active_model} returned {exc.code}; trying {next_model}")
+                    active_model = next_model
                     continue
-            if exc.code not in RETRYABLE_STATUS_CODES or attempt == MAX_ATTEMPTS:
+            if exc.code not in RETRYABLE_STATUS_CODES or attempt == MAX_MODEL_ATTEMPTS:
                 raise RuntimeError(f"Gemini API HTTP {exc.code} (model={active_model})") from exc
             time.sleep(2 * attempt)
         except urllib.error.URLError as exc:
-            if attempt == MAX_ATTEMPTS:
+            if attempt == MAX_MODEL_ATTEMPTS:
                 raise RuntimeError(f"Gemini API network error: {exc.reason}") from exc
             time.sleep(2 * attempt)
     raise RuntimeError("Gemini API retry loop exhausted")
