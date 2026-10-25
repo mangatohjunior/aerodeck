@@ -32,6 +32,13 @@ export const ROUTE_DNS_UNAVAILABLE =
   "DigitalOcean DNS is not configured on the control plane.";
 export const ROUTE_DNS_FAILED =
   "DigitalOcean DNS rejected the record. Check the domain zone and token on the control plane.";
+export const ROUTE_CERTIFICATE_NOT_FOUND = "Certificate was not found for this route.";
+export const ROUTE_CERTIFICATE_ALREADY_ISSUED =
+  "Certificate is already issued for this hostname.";
+export const ROUTE_CERTIFICATE_UNAVAILABLE =
+  "ACME / DNS-01 certificate issuer is not configured on the control plane.";
+export const ROUTE_CERTIFICATE_ISSUE_FAILED =
+  "Certificate issuance failed during the ACME DNS-01 challenge.";
 
 export function isValidRouteHostname(hostname: string): boolean {
   return (

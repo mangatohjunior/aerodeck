@@ -117,7 +117,11 @@ DNS-01 provider, then stores the cert. The public PEM stays on the certificate
 row. The private key is a file under `AERODECK_CERTIFICATE_KEY_DIR`
 (default `/var/lib/aerodeck/certs`, mode `0600`), not `certificates.private_key_pem`.
 `GET` on that certificate never returns PEM or the private key. Traefik still
-receives both on `GET /api/v1/edge/traefik`, read from that directory.
+receives both on `GET /api/v1/edge/traefik`, read from that directory. In the
+operator console ([dashboard-console.md](dashboard-console.md)), project route
+rows read `GET /api/console/projects/{id}/routes/{routeId}/certificate` and
+trigger `POST /api/console/projects/{id}/routes/{routeId}/certificate/issue`,
+exposing only `status` and `not_after` to the browser and never logging private keys.
 
 On the Droplet the start script bind-mounts `/var/lib/aerodeck/certs` into
 the API container and `chown`s it to uid `10001`. `docker rm` does not delete
