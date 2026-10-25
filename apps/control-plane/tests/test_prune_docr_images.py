@@ -97,7 +97,9 @@ def test_prune_repository_deletes_tags_and_digests() -> None:
             return 201, b"{}"
         raise AssertionError(f"unexpected call {method} {url}")
 
-    deleted = mod.prune_repository(fake_send, "aerodeck", "control-plane", keep=2)
+    deleted = mod.prune_repository(
+        fake_send, "aerodeck", "control-plane", keep=2, run_gc=True
+    )
     assert deleted == ["sha256:111"]
     assert any(method == "DELETE" and "tags/old1" in url for method, url in calls)
     assert any(
@@ -107,6 +109,40 @@ def test_prune_repository_deletes_tags_and_digests() -> None:
         method == "POST" and url.endswith("/garbage-collection")
         for method, url in calls
     )
+
+
+def test_prune_repository_skips_gc_by_default() -> None:
+    mod = _load_script()
+    calls: list[tuple[str, str]] = []
+
+    def fake_send(
+        method: str, url: str, body: bytes | None = None
+    ) -> tuple[int, bytes]:
+        _ = body
+        calls.append((method, url))
+        if method == "GET":
+            payload = {
+                "manifests": [
+                    {
+                        "digest": "sha256:111",
+                        "updated_at": "2026-10-21T00:00:00Z",
+                        "tags": ["old1"],
+                    },
+                    {
+                        "digest": "sha256:222",
+                        "updated_at": "2026-10-23T00:00:00Z",
+                        "tags": ["main"],
+                    },
+                ]
+            }
+            return 200, json.dumps(payload).encode("utf-8")
+        if method == "DELETE":
+            return 204, b""
+        raise AssertionError(f"unexpected call {method} {url}")
+
+    deleted = mod.prune_repository(fake_send, "aerodeck", "control-plane", keep=1)
+    assert deleted == ["sha256:111"]
+    assert not any(url.endswith("/garbage-collection") for _, url in calls)
 
 
 def test_delete_repository_digest_handles_412_precondition_failed() -> None:
