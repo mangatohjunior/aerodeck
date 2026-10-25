@@ -137,8 +137,11 @@ def test_workflow_and_guardrail_files() -> None:
     """Verifies workflow security invariants and presence of GEMINI.md + .cursor rules."""
     code = _code_lines(WORKFLOW)
     assert "pull_request_target" not in code
-    assert "PunGrumpy/cursor-action" not in code
+    assert "vars.AI_REVIEW_GEMINI" in code
+    assert "vars.AI_REVIEW_CURSOR" in code
     assert "secrets.GEMINI_API_KEY" in code
+    assert "secrets.CURSOR_API_KEY" in code
+    assert "PunGrumpy/cursor-action@6d67266c53512c6f9093691731e0ac1b61c04952" in code
     assert "<!-- aerodeck-ai-pr-review -->" in WORKFLOW
     assert "python3 .github/scripts/gemini_pr_review.py" in code
 
