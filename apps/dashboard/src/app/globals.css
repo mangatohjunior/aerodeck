@@ -51,6 +51,7 @@
 
 :root {
   /* Flight-deck navy, ion cyan, runway amber — used in dark class too. */
+  color-scheme: dark;
   --background: oklch(0.145 0.035 252);
   --foreground: oklch(0.96 0.012 220);
   --card: oklch(0.188 0.032 250);
@@ -87,6 +88,7 @@
 }
 
 .dark {
+  color-scheme: dark;
   --background: oklch(0.145 0.035 252);
   --foreground: oklch(0.96 0.012 220);
   --card: oklch(0.188 0.032 250);
@@ -130,6 +132,10 @@
   }
   html {
     @apply font-sans;
+  }
+  select option {
+    background-color: var(--popover);
+    color: var(--popover-foreground);
   }
 }
 
