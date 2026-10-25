@@ -1,0 +1,68 @@
+name: Configure IaC Worker
+
+# Configure the tenant IaC Terraform engine on the Celery worker (aerodeck-worker)
+# on the control plane Droplet. Runs on the self-hosted runner and connects
+# to the Droplet via SSH.
+
+on:
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: "Apply Terraform plans (true = real apply, false = dry-run plan only)"
+        required: true
+        type: boolean
+        default: true
+      enable:
+        description: "Enable IaC worker (true = real TerraformProvisioner, false = NoopProvisioner)"
+        required: true
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: configure-iac-worker-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  configure:
+    name: configure IaC worker on Droplet
+    runs-on: self-hosted
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Configure and restart aerodeck-worker on Droplet
+        shell: bash
+        env:
+          MSYS_NO_PATHCONV: "1"
+          CONTROL_DROPLET_HOST: ${{ vars.CONTROL_DROPLET_HOST }}
+          CONTROL_SSH_KEY_PATH: ${{ vars.CONTROL_SSH_KEY_PATH }}
+          DIGITALOCEAN_TOKEN: ${{ secrets.DIGITALOCEAN_TOKEN }}
+          SPACES_ACCESS_KEY_ID: ${{ secrets.SPACES_ACCESS_KEY_ID }}
+          SPACES_SECRET_ACCESS_KEY: ${{ secrets.SPACES_SECRET_ACCESS_KEY }}
+          INPUT_APPLY: ${{ inputs.apply }}
+          INPUT_ENABLE: ${{ inputs.enable }}
+        run: |
+          set -euo pipefail
+          if [ -z "${CONTROL_DROPLET_HOST:-}" ]; then
+            echo "::error::CONTROL_DROPLET_HOST variable is not set."
+            exit 1
+          fi
+          key_path="${CONTROL_SSH_KEY_PATH:-$HOME/.ssh/aerodeck_ed25519}"
+          ssh_opts=(-i "${key_path}" -o StrictHostKeyChecking=accept-new -o ServerAliveInterval=15)
+
+          echo "copying configure-iac-worker.sh to Droplet..."
+          ssh "${ssh_opts[@]}" "root@${CONTROL_DROPLET_HOST}" "mkdir -p /root/aerodeck"
+          scp "${ssh_opts[@]}" \
+            apps/control-plane/scripts/configure-iac-worker.sh \
+            "root@${CONTROL_DROPLET_HOST}:/root/aerodeck/configure-iac-worker.sh"
+
+          echo "configuring IaC worker on Droplet..."
+          ssh "${ssh_opts[@]}" "root@${CONTROL_DROPLET_HOST}" \
+            "sed -i 's/\r$//' /root/aerodeck/configure-iac-worker.sh && chmod +x /root/aerodeck/configure-iac-worker.sh && AERODECK_SPACES_ACCESS_ID='${SPACES_ACCESS_KEY_ID}' AERODECK_SPACES_SECRET_KEY='${SPACES_SECRET_ACCESS_KEY}' AERODECK_DIGITALOCEAN_TOKEN='${DIGITALOCEAN_TOKEN}' bash /root/aerodeck/configure-iac-worker.sh --enable='${INPUT_ENABLE}' --apply='${INPUT_APPLY}'"
+

@@ -147,6 +147,12 @@ echo
 curl -fsS http://127.0.0.1:8000/readyz
 echo
 
+if [[ "${AERODECK_IAC_WORKER:-false}" == "true" ]]; then
+  echo "starting aerodeck-worker with tenant IaC provisioning enabled (apply=${AERODECK_IAC_APPLY:-false})"
+else
+  echo "starting aerodeck-worker (tenant IaC provisioning disabled)"
+fi
+
 docker run -d --name aerodeck-worker --network host --restart unless-stopped \
   "${DOCKER_ENV_FLAGS[@]}" \
   "${IMAGE}" \
