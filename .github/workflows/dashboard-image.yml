@@ -135,6 +135,7 @@ jobs:
       - name: Pull image and restart aerodeck-dashboard on Droplet
         shell: bash
         env:
+          MSYS_NO_PATHCONV: "1"
           DOCR_TOKEN: ${{ secrets.DOCR_TOKEN }}
           DIGITALOCEAN_TOKEN: ${{ secrets.DIGITALOCEAN_TOKEN }}
           CONTROL_DROPLET_HOST: ${{ vars.CONTROL_DROPLET_HOST }}
