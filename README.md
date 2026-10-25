@@ -41,12 +41,13 @@ then [docs/runbooks/deploy.md](docs/runbooks/deploy.md).
 
 ## Guardrails
 
-- `.cursor/rules/fastapi-architecture.mdc` — Pydantic V2, async sessions,
+- `GEMINI.md` — workspace overview, issue workflow, and PR review rubric for Gemini / Antigravity.
+- `apps/control-plane/GEMINI.md` (`.cursor/rules/fastapi-architecture.mdc`) — Pydantic V2, async sessions,
   Celery/Redis, SSE logs, router → service → repository.
-- `.cursor/rules/nextjs-dashboard.mdc` — App Router, shadcn/ui, mock-first UI.
-- `.cursor/rules/terraform-digitalocean.mdc` — DigitalOcean only, Spaces
+- `apps/dashboard/GEMINI.md` (`.cursor/rules/nextjs-dashboard.mdc`) — App Router, shadcn/ui, mock-first UI.
+- `packages/iac-engine/GEMINI.md` (`.cursor/rules/terraform-digitalocean.mdc`) — DigitalOcean only, Spaces
   backend, no AWS/GCP modules.
-- `.cursor/rules/pr-review-standards.mdc` — rubric for the AI PR reviewer.
+- `.cursor/rules/pr-review-standards.mdc` — rubric for the Gemini AI PR reviewer (`GEMINI_API_KEY`).
 
 ## Status
 
