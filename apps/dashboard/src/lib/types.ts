@@ -116,6 +116,24 @@ export type ProjectRoute = {
   enabled: boolean;
 };
 
+export type DnsRecordType = "A" | "AAAA" | "CNAME";
+
+export const DNS_RECORD_TYPES = new Set<DnsRecordType>(["A", "AAAA", "CNAME"]);
+
+export type DnsRecordStatus = "published" | "unpublished";
+
+export const DNS_RECORD_STATUSES = new Set<DnsRecordStatus>(["published", "unpublished"]);
+
+/** Public DNS guidance for a project route (`GET .../routes/{route_id}/dns`). */
+export type RouteDnsRecord = {
+  route_id: string;
+  hostname: string;
+  record_type: DnsRecordType;
+  data: string;
+  ttl: number;
+  status: DnsRecordStatus;
+};
+
 export type ProjectDetail = {
   project: Project;
   environments: EnvironmentOption[];

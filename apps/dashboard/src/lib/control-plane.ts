@@ -3,15 +3,23 @@ import type {
   AcceptedJob,
   Deployment,
   DeploymentStatus,
+  DnsRecordStatus,
+  DnsRecordType,
   EnvironmentOption,
   JobKind,
   Project,
   ProjectRoute,
   ProvisionJob,
   ProvisionJobStatus,
+  RouteDnsRecord,
   Sandbox,
 } from "./types";
-import { JOB_KINDS, PROVISION_JOB_STATUSES } from "./types";
+import {
+  DNS_RECORD_STATUSES,
+  DNS_RECORD_TYPES,
+  JOB_KINDS,
+  PROVISION_JOB_STATUSES,
+} from "./types";
 
 export { isControlPlaneUuid } from "./control-plane-uuid";
 
@@ -55,17 +63,20 @@ export class ControlPlaneError extends Error {
   readonly status?: number;
   /** Set when a deployment row was created but a later step (e.g. provision) failed. */
   readonly deploymentId?: string;
+  /** Upstream error code when safely allowlisted (for example dns_record_failed). */
+  readonly code?: string;
 
   constructor(
     message: string,
     status?: number,
     deploymentId?: string,
-    options?: ErrorOptions,
+    options?: ErrorOptions & { code?: string },
   ) {
     super(message, options);
     this.name = "ControlPlaneError";
     this.status = status;
     this.deploymentId = deploymentId;
+    this.code = options?.code;
   }
 }
 
@@ -753,6 +764,163 @@ async function loadProjectRoutesBestEffort(
     );
     return { routes: [], routesUnavailable: true };
   }
+}
+
+export type CreateControlPlaneRouteInput = {
+  projectId: string;
+  environmentId: string;
+  hostname: string;
+  backendHost: string;
+  backendPort: number;
+  pathPrefix: string;
+};
+
+export async function createControlPlaneRoute(
+  config: ControlPlaneConfig,
+  input: CreateControlPlaneRouteInput,
+  options: ListOptions = {},
+): Promise<ProjectRoute> {
+  if (!isControlPlaneUuid(input.projectId) || !isControlPlaneUuid(input.environmentId)) {
+    throw new ControlPlaneError("control plane route ids were not uuids");
+  }
+  const fetchImpl = options.fetch ?? fetch;
+  const now = options.now ?? Date.now;
+  const accessToken = await accessTokenFor(config, fetchImpl, now);
+  const response = await fetchImpl(
+    `${config.baseUrl}/api/v1/projects/${encodeURIComponent(input.projectId)}/routes`,
+    {
+      method: "POST",
+      headers: {
+        accept: "application/json",
+        authorization: `Bearer ${accessToken}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        environment_id: input.environmentId,
+        hostname: input.hostname,
+        path_prefix: input.pathPrefix,
+        backend_host: input.backendHost,
+        backend_port: input.backendPort,
+      }),
+      cache: "no-store",
+    },
+  );
+  await throwIfRouteOrDnsResponseFailed(response, "route");
+  return parseProjectRoute(await response.json(), input.projectId);
+}
+
+export async function getControlPlaneRouteDns(
+  config: ControlPlaneConfig,
+  projectId: string,
+  routeId: string,
+  options: ListOptions = {},
+): Promise<RouteDnsRecord> {
+  if (!isControlPlaneUuid(projectId) || !isControlPlaneUuid(routeId)) {
+    throw new ControlPlaneError("control plane route dns ids were not uuids");
+  }
+  const fetchImpl = options.fetch ?? fetch;
+  const now = options.now ?? Date.now;
+  const accessToken = await accessTokenFor(config, fetchImpl, now);
+  const response = await fetchImpl(
+    `${config.baseUrl}/api/v1/projects/${encodeURIComponent(projectId)}/routes/${encodeURIComponent(routeId)}/dns`,
+    {
+      headers: {
+        accept: "application/json",
+        authorization: `Bearer ${accessToken}`,
+      },
+      cache: "no-store",
+    },
+  );
+  await throwIfRouteOrDnsResponseFailed(response, "route dns");
+  return parseRouteDnsRecord(await response.json(), routeId);
+}
+
+async function throwIfRouteOrDnsResponseFailed(
+  response: Response,
+  operation: "route" | "route dns",
+): Promise<void> {
+  if (response.status === 404) {
+    await discardResponseBody(response);
+    throw new ControlPlaneError(`control plane ${operation} target was not found (404)`, 404);
+  }
+  if (response.status === 409) {
+    await discardResponseBody(response);
+    throw new ControlPlaneError(`control plane ${operation} conflict (409)`, 409);
+  }
+  if (response.status === 422) {
+    await discardResponseBody(response);
+    throw new ControlPlaneError(`control plane ${operation} rejected (422)`, 422);
+  }
+  if (response.status === 503) {
+    await discardResponseBody(response);
+    throw new ControlPlaneError(
+      `control plane ${operation} dns unavailable (503)`,
+      503,
+      undefined,
+      { code: "dns_record_unavailable" },
+    );
+  }
+  if (response.status === 502) {
+    const code = await errorCode(response);
+    if (code === "dns_record_failed" || code === "dns01_failed") {
+      throw new ControlPlaneError(
+        `control plane ${operation} dns failed (502)`,
+        502,
+        undefined,
+        { code: "dns_record_failed" },
+      );
+    }
+    throw new ControlPlaneError(`control plane ${operation} request failed (502)`, 502);
+  }
+  if (!response.ok) {
+    await discardResponseBody(response);
+    throw new ControlPlaneError(
+      `control plane ${operation} request failed (${response.status})`,
+      response.status,
+    );
+  }
+}
+
+function parseRouteDnsRecord(value: unknown, expectedRouteId: string): RouteDnsRecord {
+  if (!value || typeof value !== "object") {
+    throw new ControlPlaneError("control plane route dns response was invalid");
+  }
+  const row = value as Record<string, unknown>;
+  if (
+    typeof row.route_id !== "string" ||
+    !isControlPlaneUuid(row.route_id) ||
+    row.route_id !== expectedRouteId ||
+    typeof row.hostname !== "string" ||
+    typeof row.record_type !== "string" ||
+    !DNS_RECORD_TYPES.has(row.record_type as DnsRecordType) ||
+    typeof row.data !== "string" ||
+    typeof row.ttl !== "number" ||
+    !Number.isInteger(row.ttl) ||
+    row.ttl <= 0 ||
+    typeof row.status !== "string" ||
+    !DNS_RECORD_STATUSES.has(row.status as DnsRecordStatus)
+  ) {
+    throw new ControlPlaneError("control plane route dns response was invalid");
+  }
+  const hostname = row.hostname.toLowerCase();
+  const data = row.data.trim();
+  if (
+    hostname.length === 0 ||
+    hostname.length > ROUTE_HOSTNAME_MAX ||
+    !ROUTE_HOSTNAME_PATTERN.test(hostname) ||
+    data.length === 0 ||
+    data.length > ROUTE_HOSTNAME_MAX + 1
+  ) {
+    throw new ControlPlaneError("control plane route dns response was invalid");
+  }
+  return {
+    route_id: row.route_id,
+    hostname,
+    record_type: row.record_type as DnsRecordType,
+    data,
+    ttl: row.ttl,
+    status: row.status as DnsRecordStatus,
+  };
 }
 
 type ControlPlaneResource = "project" | "environment";

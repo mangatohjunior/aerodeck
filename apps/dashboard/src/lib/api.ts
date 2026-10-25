@@ -9,9 +9,11 @@ import {
   type Project,
   type ProjectDetail,
   type ProjectPage,
+  type ProjectRoute,
   type ProjectSource,
   type ProvisionJob,
   type PublicUser,
+  type RouteDnsRecord,
   type SandboxPage,
 } from "@/lib/types";
 
@@ -149,6 +151,49 @@ export async function queueEnvironmentReconcile(
     {
       method: "POST",
       credentials: "same-origin",
+    },
+  );
+  return readJson(response);
+}
+
+export async function createProjectRoute(input: {
+  projectId: string;
+  environmentId: string;
+  hostname: string;
+  backendHost: string;
+  backendPort: number;
+  pathPrefix?: string;
+}): Promise<ProjectRoute> {
+  const body: Record<string, string | number> = {
+    environment_id: input.environmentId,
+    hostname: input.hostname,
+    backend_host: input.backendHost,
+    backend_port: input.backendPort,
+  };
+  if (input.pathPrefix !== undefined) {
+    body.path_prefix = input.pathPrefix;
+  }
+  const response = await fetch(
+    `/api/console/projects/${encodeURIComponent(input.projectId)}/routes`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "same-origin",
+      body: JSON.stringify(body),
+    },
+  );
+  return readJson(response);
+}
+
+export async function fetchRouteDns(
+  projectId: string,
+  routeId: string,
+): Promise<RouteDnsRecord> {
+  const response = await fetch(
+    `/api/console/projects/${encodeURIComponent(projectId)}/routes/${encodeURIComponent(routeId)}/dns`,
+    {
+      credentials: "same-origin",
+      cache: "no-store",
     },
   );
   return readJson(response);

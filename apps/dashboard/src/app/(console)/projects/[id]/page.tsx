@@ -12,7 +12,13 @@ import { ProjectRoutesSection } from "@/components/project-routes-section";
 import { Card, CardContent } from "@/components/ui/card";
 import { fetchProjectDetail } from "@/lib/api";
 import { mergeEnvironmentsById } from "@/lib/environment-list";
-import type { EnvironmentOption, Project, ProjectDetail } from "@/lib/types";
+import { mergeRoutesById } from "@/lib/route-input";
+import type {
+  EnvironmentOption,
+  Project,
+  ProjectDetail,
+  ProjectRoute,
+} from "@/lib/types";
 
 export default function ProjectDetailPage() {
   const params = useParams<{ id: string }>();
@@ -115,6 +121,19 @@ export default function ProjectDetailPage() {
     });
   }
 
+  function handleRouteCreated(route: ProjectRoute) {
+    setDetail((current) => {
+      if (!current || current.source !== "control-plane") {
+        return current;
+      }
+      return {
+        ...current,
+        routes: mergeRoutesById([route], current.routes),
+        routes_unavailable: false,
+      };
+    });
+  }
+
   const project = detail?.project;
   const environments = detail?.environments ?? [];
   const routes = detail?.routes ?? [];
@@ -205,11 +224,14 @@ export default function ProjectDetailPage() {
         )}
       </section>
       <ProjectRoutesSection
+        projectId={project?.id}
+        environments={environments}
         routes={routes}
         source={detail?.source}
         loading={loading}
         projectUnavailable={Boolean(error && !project)}
         routesUnavailable={detail?.routes_unavailable ?? false}
+        onRouteCreated={handleRouteCreated}
       />
     </div>
   );
