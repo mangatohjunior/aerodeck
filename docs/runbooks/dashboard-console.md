@@ -155,9 +155,44 @@ Until that apply finishes, Traefik cannot open the console.
 
 ## 3. Build and run the dashboard
 
-Build off the Droplet. The `s-1vcpu-1gb` host will not finish `next build`.
+### Option A: Build and restart directly on the Droplet (recommended)
 
-From Git Bash, build in `apps/dashboard`, then copy a tar. Do not pipe `docker save` into `ssh` on Windows; Git Bash corrupts the stream and `docker load` reports `unrecognized image format`.
+The `s-1vcpu-1gb` host needs a 2 GB swapfile so `next build` does not hit the
+1 GB RAM limit. Once swap is active, you can `git fetch` and `docker build`
+directly on `aerodeck-dev-control` without transferring a `.tar` over SSH:
+
+```bash
+if ! swapon --show | grep -q '/swapfile'; then
+  fallocate -l 2G /swapfile
+  chmod 600 /swapfile
+  mkswap /swapfile
+  swapon /swapfile
+  grep -q '/swapfile' /etc/fstab || echo '/swapfile none swap sw 0 0' >> /etc/fstab
+fi
+
+if [ ! -d /root/aerodeck-repo/.git ]; then
+  git clone https://github.com/mangatohjunior/aerodeck.git /root/aerodeck-repo
+fi
+cd /root/aerodeck-repo
+git fetch origin
+git checkout -f origin/main
+docker build -t aerodeck/dashboard:dev /root/aerodeck-repo/apps/dashboard
+
+docker rm -f aerodeck-dashboard
+docker run -d --name aerodeck-dashboard --network host --restart unless-stopped \
+  --env-file /etc/aerodeck/dashboard.env \
+  -e HOSTNAME=0.0.0.0 \
+  aerodeck/dashboard:dev
+for i in {1..15}; do
+  code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3000/login || true)
+  if [ "$code" = "200" ]; then echo "200"; break; fi
+  sleep 1
+done
+```
+
+### Option B: Build locally and copy a tar
+
+If building locally from Git Bash in `apps/dashboard`, copy a tar file (do not pipe `docker save` into `ssh` on Windows; Git Bash corrupts the stream and `docker load` reports `unrecognized image format`):
 
 ```bash
 cd /c/Users/bonito/Desktop/aerodeck/aerodeck/apps/dashboard
