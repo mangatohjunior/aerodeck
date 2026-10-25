@@ -1,4 +1,6 @@
-"""CI publishes the control-plane image to DigitalOcean Container Registry."""
+"""CI publishes control-plane and dashboard images to DigitalOcean Container Registry."""
+
+from __future__ import annotations
 
 import re
 from pathlib import Path
@@ -8,7 +10,13 @@ REPO = IAC.parents[1]
 WORKFLOW = (REPO / ".github" / "workflows" / "control-plane-image.yml").read_text(
     encoding="utf-8"
 )
+DASHBOARD_WORKFLOW = (
+    REPO / ".github" / "workflows" / "dashboard-image.yml"
+).read_text(encoding="utf-8")
 DOCKERFILE = (REPO / "apps" / "control-plane" / "Dockerfile").read_text(encoding="utf-8")
+DASHBOARD_DOCKERFILE = (REPO / "apps" / "dashboard" / "Dockerfile").read_text(
+    encoding="utf-8"
+)
 VARS = (IAC / "variables.tf").read_text(encoding="utf-8")
 OUTPUTS = (IAC / "outputs.tf").read_text(encoding="utf-8")
 MAIN = (IAC / "main.tf").read_text(encoding="utf-8")
@@ -31,60 +39,73 @@ def _code_lines(text: str) -> str:
     return "\n".join(lines)
 
 
-def main() -> None:
-    if "pull_request_target" in WORKFLOW:
-        raise SystemExit("control-plane-image.yml must not use pull_request_target")
-    if "ghcr.io" in WORKFLOW or "ghcr.io" in VARS:
-        raise SystemExit("publish to DigitalOcean Container Registry, not GHCR")
-
-    _must(WORKFLOW, "apps/control-plane/**", "control-plane-image.yml")
-    _must(WORKFLOW, "docker build", "control-plane-image.yml")
-    _must(WORKFLOW, "registry.digitalocean.com", "control-plane-image.yml")
-    _must(WORKFLOW, "docker push", "control-plane-image.yml")
-    _must(WORKFLOW, 'github.event_name != \'pull_request\'', "control-plane-image.yml")
-    _must(WORKFLOW, "github.ref == 'refs/heads/main'", "control-plane-image.yml")
-    _must(WORKFLOW, "${GITHUB_SHA}", "control-plane-image.yml")
-    _must(WORKFLOW, "${image}:main", "control-plane-image.yml")
-    _must(WORKFLOW, "secrets.DIGITALOCEAN_TOKEN", "control-plane-image.yml")
-    _must(WORKFLOW, "prune_docr_images.py", "control-plane-image.yml")
-    _must(WORKFLOW, "permissions:", "control-plane-image.yml")
-    _must(WORKFLOW, "contents: read", "control-plane-image.yml")
-
-    build_job, push_job = WORKFLOW.split("name: push to DigitalOcean Container Registry", 1)
+def _check_docr_workflow(text: str, name: str, path_glob: str) -> None:
+    if "pull_request_target" in text:
+        raise SystemExit(f"{name} must not use pull_request_target")
+    if "ghcr.io" in text:
+        raise SystemExit(f"{name} must publish to DOCR, not GHCR")
+    for required in (
+        path_glob,
+        "docker build",
+        "registry.digitalocean.com",
+        "docker push",
+        "github.event_name != 'pull_request'",
+        "github.ref == 'refs/heads/main'",
+        "${GITHUB_SHA}",
+        "${image}:main",
+        "secrets.DOCR_TOKEN",
+        "secrets.DIGITALOCEAN_TOKEN",
+        "prune_docr_images.py",
+        "permissions:",
+        "contents: read",
+    ):
+        _must(text, required, name)
+    build_job, push_job = text.split("name: push to DigitalOcean Container Registry", 1)
     if "docker push" in build_job:
-        raise SystemExit("docker push must not run in the build job")
+        raise SystemExit(f"{name}: docker push must not run in the build job")
     job_header = push_job.split("steps:")[0]
     if "github.event_name != 'pull_request'" not in job_header:
-        raise SystemExit("push job must skip pull_request before docker push")
-
-    uses = re.findall(r"(?m)^\s+uses:\s+(\S+)", _code_lines(WORKFLOW))
+        raise SystemExit(f"{name}: push job must skip pull_request before docker push")
+    uses = re.findall(r"(?m)^\s+uses:\s+(\S+)", _code_lines(text))
     if not uses:
-        raise SystemExit("control-plane-image.yml must pin actions with uses:")
+        raise SystemExit(f"{name} must pin actions with uses:")
     for spec in uses:
-        if "@" not in spec:
-            raise SystemExit(f"action {spec} must be pinned to a git SHA")
-        digest = spec.split("@", 1)[1]
-        if not re.fullmatch(r"[0-9a-f]{40}", digest):
-            raise SystemExit(f"action {spec} must be SHA-pinned (40 hex chars), not a floating tag")
+        if "@" not in spec or not re.fullmatch(r"[0-9a-f]{40}", spec.split("@", 1)[1]):
+            raise SystemExit(f"{name}: action {spec} must be SHA-pinned (40 hex chars)")
 
-    secret_arg = re.search(
-        r"(?im)^ARG\s+\w*(TOKEN|SECRET|PASSWORD|KEY|CREDENTIAL)",
-        DOCKERFILE,
-    )
-    secret_env = re.search(
-        r"(?im)^ENV\s+\w*(TOKEN|SECRET|PASSWORD|KEY|CREDENTIAL)",
-        DOCKERFILE,
-    )
-    if secret_arg or secret_env:
-        raise SystemExit("Dockerfile must not put secrets in ARG or ENV")
+
+def _check_dockerfiles() -> None:
+    for label, text in (
+        ("control-plane Dockerfile", DOCKERFILE),
+        ("dashboard Dockerfile", DASHBOARD_DOCKERFILE),
+    ):
+        secret_arg = re.search(
+            r"(?im)^ARG\s+\w*(TOKEN|SECRET|PASSWORD|KEY|CREDENTIAL)", text
+        )
+        secret_env = re.search(
+            r"(?im)^ENV\s+\w*(TOKEN|SECRET|PASSWORD|KEY|CREDENTIAL)", text
+        )
+        if secret_arg or secret_env:
+            raise SystemExit(f"{label} must not put secrets in ARG or ENV")
+        _must(text, "HEALTHCHECK", label)
+
+
+def main() -> None:
+    if "ghcr.io" in VARS:
+        raise SystemExit("publish to DigitalOcean Container Registry, not GHCR")
+    _check_docr_workflow(WORKFLOW, "control-plane-image.yml", "apps/control-plane/**")
+    _check_docr_workflow(DASHBOARD_WORKFLOW, "dashboard-image.yml", "apps/dashboard/**")
+    _check_dockerfiles()
+
     _must(DOCKERFILE, "USER aerodeck", "Dockerfile")
-    _must(DOCKERFILE, "HEALTHCHECK", "Dockerfile")
     _must(DOCKERFILE, "packages/iac-engine/stacks/tenant", "Dockerfile")
     _must(DOCKERFILE, "packages/iac-engine/backend.hcl", "Dockerfile")
     if "packages/iac-engine /opt" in DOCKERFILE:
         raise SystemExit("copy only stacks/tenant plus backend.hcl, not the platform root module")
     _must(DOCKERFILE, "terraform", "Dockerfile")
     _must(WORKFLOW, "--file apps/control-plane/Dockerfile", "control-plane-image.yml")
+    _must(DASHBOARD_WORKFLOW, "--file apps/dashboard/Dockerfile", "dashboard-image.yml")
+
     contexts = re.findall(
         r"docker build\s+\\?\s+--file apps/control-plane/Dockerfile[\s\S]*?((?:apps/control-plane)|\.)\s*$",
         WORKFLOW,
@@ -100,7 +121,7 @@ def main() -> None:
     _must(CLOUD_INIT, "/etc/aerodeck/control-plane-image", "cloud-init.yaml")
     _must(OUTPUTS, 'output "control_plane_image"', "outputs.tf")
 
-    print("control-plane image workflow, Dockerfile, and Terraform reference look right")
+    print("control-plane and dashboard image workflows, Dockerfiles, and Terraform reference look right")
 
 
 if __name__ == "__main__":

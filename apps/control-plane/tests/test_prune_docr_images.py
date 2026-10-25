@@ -103,7 +103,7 @@ def test_prune_repository_deletes_old_digests_and_triggers_gc() -> None:
         method == "DELETE" and "sha256%3A111" in url for method, url in calls
     )
     assert any(
-        method == "POST" and url.endswith("/registry/aerodeck/garbage-collection")
+        method == "POST" and url.endswith("/garbage-collection")
         for method, url in calls
     )
 
@@ -130,6 +130,7 @@ def test_prune_repository_handles_missing_repo_and_busy_gc() -> None:
 
 def test_main_skips_when_token_unset(monkeypatch: pytest.MonkeyPatch) -> None:
     mod = _load_script()
+    monkeypatch.delenv("DOCR_TOKEN", raising=False)
     monkeypatch.delenv("DIGITALOCEAN_TOKEN", raising=False)
     monkeypatch.delenv("AERODECK_DIGITALOCEAN_TOKEN", raising=False)
     assert mod.main(["--repository", "dashboard", "--keep", "2"]) == 0
