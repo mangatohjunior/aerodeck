@@ -126,17 +126,19 @@ replaces the whole `AERODECK_AUTH_CLIENTS` map with the `console` client. The
 start script keeps the other keys already in the control-plane env file.
 Google setup is [google-sign-in.md](google-sign-in.md).
 
-Extract `enroll-console-client.sh`, `dashboard_env.py`, and
-`publish-console-route.py` from the control-plane image (or copy them from the
-repo if not yet extracted in [startup-control-plane.md](startup-control-plane.md)):
+Extract `enroll-console-client.sh`, `dashboard_env.py`,
+`start-dashboard-on-droplet.sh`, and `publish-console-route.py` from the
+control-plane image (or copy them from the repo if not yet extracted in
+[startup-control-plane.md](startup-control-plane.md)):
 
 ```bash
 IMAGE=$(tr -d ' \t\r\n' < /etc/aerodeck/control-plane-image)
 mkdir -p /root/aerodeck
 docker run --rm --entrypoint cat "$IMAGE" /app/scripts/enroll-console-client.sh > /root/enroll-console-client.sh
 docker run --rm --entrypoint cat "$IMAGE" /app/scripts/dashboard_env.py > /root/dashboard_env.py
+docker run --rm --entrypoint cat "$IMAGE" /app/scripts/start-dashboard-on-droplet.sh > /root/start-dashboard-on-droplet.sh
 docker run --rm --entrypoint cat "$IMAGE" /app/scripts/publish-console-route.py > /root/aerodeck/publish-console-route.py
-chmod +x /root/enroll-console-client.sh
+chmod +x /root/enroll-console-client.sh /root/start-dashboard-on-droplet.sh
 sudo bash /root/enroll-console-client.sh
 ```
 
@@ -155,11 +157,51 @@ Until that apply finishes, Traefik cannot open the console.
 
 ## 3. Build and run the dashboard
 
-### Option A: Build and restart directly on the Droplet (recommended)
+### Option A: Pull from DigitalOcean Container Registry (`start-dashboard-on-droplet.sh`)
 
-The `s-1vcpu-1gb` host needs a 2 GB swapfile so `next build` does not hit the
-1 GB RAM limit. Once swap is active, you can `git fetch` and `docker build`
-directly on `aerodeck-dev-control` without transferring a `.tar` over SSH:
+Every merge to `main` touching `apps/dashboard/**` builds `apps/dashboard/Dockerfile`
+in GitHub Actions (`.github/workflows/dashboard-image.yml`), runs
+`apps/control-plane/scripts/prune_docr_images.py` (`--keep 1` before push and
+`--keep 2` after push so the 5-image Starter registry never fills up), and
+pushes `registry.digitalocean.com/aerodeck/dashboard:main` (and `:<sha>`).
+
+On `aerodeck-dev-control`, pull the latest image from DOCR, recreate
+`aerodeck-dashboard`, prune dangling layers, and wait for `:3000/login` → `200`
+with one command:
+
+```bash
+sudo bash /root/start-dashboard-on-droplet.sh
+```
+
+(`start-dashboard-on-droplet.sh` reads `DOCR_TOKEN`, `DIGITALOCEAN_TOKEN`, or
+`AERODECK_DIGITALOCEAN_TOKEN` from `/etc/aerodeck/control-plane.env` to log in
+to `registry.digitalocean.com`, pulls `registry.digitalocean.com/aerodeck/dashboard:main`
+or `/etc/aerodeck/dashboard-image`, tags it `aerodeck/dashboard:dev`, and
+restarts `aerodeck-dashboard`.)
+
+### Option B: Automatic deploy from GitHub Actions via a local self-hosted runner
+
+Because `aerodeck-dev-control` restricts SSH port `22` to your local machine's
+`/32` IP (`operator_ssh_cidrs`), registering your local machine as a
+self-hosted runner lets `.github/workflows/dashboard-image.yml` automatically
+SSH into the Droplet and run `/root/start-dashboard-on-droplet.sh` after every
+`main` image push:
+
+1. In GitHub: **Settings → Actions → Runners → New self-hosted runner**.
+   Choose **Windows** (or Linux/WSL) and run the shown `config` and `run`
+   commands on your local machine (ensure Git Bash `bash`, `ssh`, and `scp` are
+   on `PATH`, and `~/.ssh/aerodeck_ed25519` is present).
+2. In GitHub: **Settings → Secrets and variables → Actions → Variables**, add:
+   - `DEPLOY_DASHBOARD_SELF_HOSTED` = `true`
+   - `CONTROL_DROPLET_HOST` = `<control-public-ipv4>` (for example `188.166.67.201`)
+   - *(Optional)* `CONTROL_SSH_KEY_PATH` if your key is not at `~/.ssh/aerodeck_ed25519`.
+3. When `DEPLOY_DASHBOARD_SELF_HOSTED` is unset or `false`, the `deploy` job
+   skips cleanly so CI never waits when your laptop is offline.
+
+### Option C: Build directly on the Droplet with a swapfile
+
+If building directly from git on the `s-1vcpu-1gb` Droplet without DOCR, enable
+a 2 GB swapfile once so `next build` does not hit the 1 GB RAM limit:
 
 ```bash
 if ! swapon --show | grep -q '/swapfile'; then
@@ -190,7 +232,7 @@ for i in {1..15}; do
 done
 ```
 
-### Option B: Build locally and copy a tar
+### Option D: Build locally and copy a tar
 
 If building locally from Git Bash in `apps/dashboard`, copy a tar file (do not pipe `docker save` into `ssh` on Windows; Git Bash corrupts the stream and `docker load` reports `unrecognized image format`):
 

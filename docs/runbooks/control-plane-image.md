@@ -85,4 +85,5 @@ Start the API and worker: [startup-control-plane.md](startup-control-plane.md).
 
 - #33 — this runbook.
 - #32 — Droplet + Postgres + Redis ([platform-runtime.md](platform-runtime.md)).
+- #169, #170, #171, #172, #173 — DOCR 5-image retention pruning (`prune_docr_images.py`), dashboard DOCR image workflow (`dashboard-image.yml`), and `start-dashboard-on-droplet.sh`.
 - Local image: [control-plane.md](control-plane.md) Docker section.
