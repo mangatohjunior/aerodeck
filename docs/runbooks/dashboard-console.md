@@ -8,7 +8,11 @@ Overview and Projects read `GET /api/v1/projects`. Project detail uses
 `GET /api/v1/projects/{id}` plus that project's environments and routes through
 `GET /api/console/projects/{id}` (routes from `GET /api/v1/projects/{id}/routes`;
 seed detail with empty env and route lists when the console client is unset).
-The Routes section shows hostname and enabled state only. Creating a project uses `POST /api/v1/projects`
+The Routes section shows hostname and enabled state only; when the console
+client is set, operators can also declare a route (`POST /api/console/projects/{id}/routes`
+→ `POST /api/v1/projects/{id}/routes`) and inspect DNS target/CNAME guidance
+(`GET /api/console/projects/{id}/routes/{routeId}/dns` → `GET /api/v1/projects/{id}/routes/{routeId}/dns`).
+Without the client, both return 404 and mock routes never call DigitalOcean DNS. Creating a project uses `POST /api/v1/projects`
 through `POST /api/console/projects` when the console client is set; the
 Projects form is hidden and create returns 404 when it is not, so the seed
 list stays unchanged. Creating an environment uses
