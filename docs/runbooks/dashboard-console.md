@@ -161,9 +161,10 @@ Until that apply finishes, Traefik cannot open the console.
 
 Every merge to `main` touching `apps/dashboard/**` builds `apps/dashboard/Dockerfile`
 in GitHub Actions (`.github/workflows/dashboard-image.yml`), runs
-`apps/control-plane/scripts/prune_docr_images.py` (`--keep 1` before push and
-`--keep 2` after push so the 5-image Starter registry never fills up), and
-pushes `registry.digitalocean.com/aerodeck/dashboard:main` (and `:<sha>`).
+`apps/control-plane/scripts/prune_docr_images.py` (`--keep 2` so the 1-repository /
+5-image Starter registry never fills up), and pushes
+`registry.digitalocean.com/aerodeck/control-plane:dashboard-main` (and
+`:dashboard-<sha>`).
 
 On `aerodeck-dev-control`, pull the latest image from DOCR, recreate
 `aerodeck-dashboard`, prune dangling layers, and wait for `:3000/login` → `200`
@@ -175,8 +176,9 @@ sudo bash /root/start-dashboard-on-droplet.sh
 
 (`start-dashboard-on-droplet.sh` reads `DOCR_TOKEN`, `DIGITALOCEAN_TOKEN`, or
 `AERODECK_DIGITALOCEAN_TOKEN` from `/etc/aerodeck/control-plane.env` to log in
-to `registry.digitalocean.com`, pulls `registry.digitalocean.com/aerodeck/dashboard:main`
-or `/etc/aerodeck/dashboard-image`, tags it `aerodeck/dashboard:dev`, and
+to `registry.digitalocean.com`, pulls
+`registry.digitalocean.com/aerodeck/control-plane:dashboard-main` or
+`/etc/aerodeck/dashboard-image`, tags it `aerodeck/dashboard:dev`, and
 restarts `aerodeck-dashboard`.)
 
 ### Option B: Automatic deploy from GitHub Actions via a local self-hosted runner

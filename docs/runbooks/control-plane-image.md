@@ -16,11 +16,12 @@ Do not publish to GHCR. DigitalOcean only.
 | `<git sha>` | every successful push to `main` | pin a Droplet to one build |
 | `main` | same push, floating | default `control_plane_image` in Terraform |
 
-Image names:
+Image names (sharing the single `control-plane` Starter repository):
 
 ```
 registry.digitalocean.com/<registry>/control-plane:<tag>
-registry.digitalocean.com/<registry>/dashboard:<tag>
+registry.digitalocean.com/<registry>/control-plane:dashboard-main
+registry.digitalocean.com/<registry>/control-plane:dashboard-<sha>
 ```
 
 Default registry name is `aerodeck`. Override with repo variable `DOCR_NAME`.

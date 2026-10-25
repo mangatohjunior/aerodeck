@@ -13,7 +13,7 @@ fi
 DASHBOARD_ENV="/etc/aerodeck/dashboard.env"
 CONTROL_ENV="/etc/aerodeck/control-plane.env"
 IMAGE_FILE="/etc/aerodeck/dashboard-image"
-DEFAULT_IMAGE="registry.digitalocean.com/aerodeck/dashboard:main"
+DEFAULT_IMAGE="registry.digitalocean.com/aerodeck/control-plane:dashboard-main"
 
 if [[ ! -f "${DASHBOARD_ENV}" ]]; then
   echo "missing ${DASHBOARD_ENV}; run enroll-console-client.sh first" >&2

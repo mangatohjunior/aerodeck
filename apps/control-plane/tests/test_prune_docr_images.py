@@ -43,7 +43,7 @@ def test_select_digests_keeps_main_and_newest() -> None:
         mod.ManifestInfo(
             digest="sha256:second-newest",
             updated_at="2026-10-24T10:00:00Z",
-            tags=("ccc3333",),
+            tags=("dashboard-main", "ccc3333"),
         ),
         mod.ManifestInfo(
             digest="sha256:newest",
@@ -52,7 +52,7 @@ def test_select_digests_keeps_main_and_newest() -> None:
         ),
     ]
     deleted = mod.select_digests_to_delete(manifests, keep=2)
-    assert deleted == ["sha256:second-newest", "sha256:oldest"]
+    assert deleted == ["sha256:newest", "sha256:oldest"]
 
 
 def test_select_digests_rejects_keep_below_one() -> None:

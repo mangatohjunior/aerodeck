@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Prune old DigitalOcean Container Registry (DOCR) image digests and start GC.
 
-Starter registries have a strict ~5-image capacity. Running this script in CI
-keeps `main` plus the newest `--keep` digests per repository and triggers
-online garbage collection when old digests are removed.
+Starter registries allow only 1 repository and ~5 images total. Both
+`control-plane` (`:main`) and `dashboard` (`:dashboard-main`) share the
+`control-plane` repository; this script keeps protected tags (`main`,
+`dashboard-main`) plus the newest `--keep` digests and starts online GC.
 """
 
 from __future__ import annotations
@@ -20,6 +21,7 @@ import urllib.request
 
 DO_API_BASE = "https://api.digitalocean.com/v2"
 DEFAULT_KEEP = 2
+PROTECTED_TAGS = ("main", "dashboard-main")
 
 
 @dataclass(frozen=True)
@@ -101,21 +103,25 @@ def list_repository_manifests(
     return [m for item in raw_list if (m := _parse_manifest(item)) is not None]
 
 
+def _has_protected_tag(item: ManifestInfo) -> bool:
+    return any(tag in PROTECTED_TAGS for tag in item.tags)
+
+
 def select_digests_to_delete(
     manifests: list[ManifestInfo],
     keep: int,
 ) -> list[str]:
-    """Keep `main`-tagged manifests and the newest manifests up to `keep`."""
+    """Keep `main` / `dashboard-main` manifests and newest manifests up to `keep`."""
     if keep < 1:
         raise ValueError("keep must be >= 1")
     ordered = sorted(
         manifests,
-        key=lambda item: ("main" in item.tags, item.updated_at, item.digest),
+        key=lambda item: (_has_protected_tag(item), item.updated_at, item.digest),
         reverse=True,
     )
     retained = {item.digest for item in ordered[:keep]}
     for item in ordered:
-        if "main" in item.tags:
+        if _has_protected_tag(item):
             retained.add(item.digest)
     return [item.digest for item in ordered if item.digest not in retained]
 
@@ -198,7 +204,7 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--repository",
         required=True,
-        help="Repository name inside the registry (e.g. control-plane, dashboard)",
+        help="Repository name inside the registry (e.g. control-plane)",
     )
     parser.add_argument(
         "--keep",

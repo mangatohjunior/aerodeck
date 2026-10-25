@@ -17,7 +17,10 @@ def test_start_dashboard_on_droplet_script_contract() -> None:
     assert "set -euo pipefail" in text
     assert 'DASHBOARD_ENV="/etc/aerodeck/dashboard.env"' in text
     assert 'IMAGE_FILE="/etc/aerodeck/dashboard-image"' in text
-    assert 'DEFAULT_IMAGE="registry.digitalocean.com/aerodeck/dashboard:main"' in text
+    assert (
+        'DEFAULT_IMAGE="registry.digitalocean.com/aerodeck/control-plane:dashboard-main"'
+        in text
+    )
     assert "docker login registry.digitalocean.com" in text
     assert 'docker pull "${DASHBOARD_IMAGE}"' in text
     assert 'docker tag "${DASHBOARD_IMAGE}" aerodeck/dashboard:dev' in text

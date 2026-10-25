@@ -1,8 +1,9 @@
 name: Dashboard image
 
 # Build apps/dashboard on every PR that touches it. Push to DigitalOcean
-# Container Registry only from main: an immutable git-SHA tag plus a floating
-# `main` tag, pruning older digests so the Starter registry stays within its
+# Container Registry only from main inside the single Starter repository
+# (`control-plane`), tagged as `dashboard-<git-sha>` and `dashboard-main`,
+# pruning older digests so the Starter registry stays within its 1-repository /
 # 5-image cap. When DEPLOY_DASHBOARD_SELF_HOSTED=true and CONTROL_DROPLET_HOST
 # are set, a self-hosted runner on the operator machine pulls the image on the
 # control Droplet and restarts aerodeck-dashboard.
@@ -32,7 +33,7 @@ concurrency:
 
 env:
   DOCR_NAME: ${{ vars.DOCR_NAME }}
-  IMAGE_REPO: dashboard
+  IMAGE_REPO: control-plane
   DOCKER_BUILDKIT: "1"
 
 jobs:
@@ -54,7 +55,7 @@ jobs:
           set -euo pipefail
           docker build \
             --file apps/dashboard/Dockerfile \
-            --tag "aerodeck/${IMAGE_REPO}:${GITHUB_SHA}" \
+            --tag "aerodeck/dashboard:${GITHUB_SHA}" \
             apps/dashboard
 
   push:
@@ -87,7 +88,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Build, tag, and push SHA + main
+      - name: Build, tag, and push dashboard-SHA + dashboard-main
         if: steps.creds.outputs.ready == 'true'
         env:
           DOCR_TOKEN: ${{ secrets.DOCR_TOKEN }}
@@ -99,8 +100,8 @@ jobs:
           image="registry.digitalocean.com/${registry}/${IMAGE_REPO}"
           docker build \
             --file apps/dashboard/Dockerfile \
-            --tag "${image}:${GITHUB_SHA}" \
-            --tag "${image}:main" \
+            --tag "${image}:dashboard-${GITHUB_SHA}" \
+            --tag "${image}:dashboard-main" \
             apps/dashboard
           echo "${token}" | docker login registry.digitalocean.com \
             --username "${token}" \
@@ -108,9 +109,9 @@ jobs:
           python3 apps/control-plane/scripts/prune_docr_images.py \
             --registry "${registry}" \
             --repository "${IMAGE_REPO}" \
-            --keep 1
-          docker push "${image}:${GITHUB_SHA}"
-          docker push "${image}:main"
+            --keep 2
+          docker push "${image}:dashboard-${GITHUB_SHA}"
+          docker push "${image}:dashboard-main"
           python3 apps/control-plane/scripts/prune_docr_images.py \
             --registry "${registry}" \
             --repository "${IMAGE_REPO}" \
@@ -144,7 +145,7 @@ jobs:
           set -euo pipefail
           token="${DOCR_TOKEN:-${DIGITALOCEAN_TOKEN:-}}"
           registry="${DOCR_NAME:-aerodeck}"
-          image="registry.digitalocean.com/${registry}/${IMAGE_REPO}:main"
+          image="registry.digitalocean.com/${registry}/${IMAGE_REPO}:dashboard-main"
           key_path="${CONTROL_SSH_KEY_PATH:-$HOME/.ssh/aerodeck_ed25519}"
           ssh_opts=(-i "${key_path}" -o StrictHostKeyChecking=accept-new -o ServerAliveInterval=15)
           scp "${ssh_opts[@]}" \
