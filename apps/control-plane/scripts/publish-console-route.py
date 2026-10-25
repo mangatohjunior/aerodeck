@@ -15,15 +15,16 @@ a staging issuer (or when --renew is passed).
 """
 
 import json
+import os
 from pathlib import Path
 import sys
 import urllib.error
 import urllib.request
 
-API = "http://127.0.0.1:8000"
-ENV_FILE = Path("/etc/aerodeck/dashboard.env")
+API = os.environ.get("CONTROL_PLANE_URL") or "http://127.0.0.1:8000"
+ENV_FILE = Path(os.environ.get("AERODECK_DASHBOARD_ENV") or "/etc/aerodeck/dashboard.env")
 HOSTNAME = "dev.app.aero-deck.app"
-BACKEND_HOST = "10.41.0.2"
+BACKEND_HOST = os.environ.get("AERODECK_CONTROL_PRIVATE_IP") or "10.41.0.2"
 BACKEND_PORT = 3000
 PROJECT_SLUG = "console"
 ENVIRONMENT_SLUG = "dev"
