@@ -4,6 +4,7 @@ import type { ProjectRoute, RouteDnsRecord } from "@/lib/types";
 export const ROUTE_HOSTNAME_MAX = 253;
 export const ROUTE_BACKEND_HOST_MAX = 253;
 export const ROUTE_PATH_PREFIX_MAX = 200;
+export const DEFAULT_ROUTE_BACKEND_HOST = "10.41.0.2";
 export const DEFAULT_ROUTE_BACKEND_PORT = 8080;
 export const DEFAULT_ROUTE_PATH_PREFIX = "/";
 
@@ -90,7 +91,7 @@ export type RouteCreateFields = {
   projectId: string;
   environmentId: string;
   hostname: string;
-  backendHost: string;
+  backendHost?: string;
   backendPort: string | number;
   pathPrefix?: string;
 };
@@ -125,7 +126,8 @@ export function parseRouteCreateFields(input: RouteCreateFields): RouteCreatePar
   if (!isValidRouteHostname(hostname)) {
     return { ok: false, error: ROUTE_HOSTNAME_INVALID, code: "invalid_hostname" };
   }
-  const backendHost = input.backendHost.trim();
+  const rawBackendHost = typeof input.backendHost === "string" ? input.backendHost.trim() : "";
+  const backendHost = rawBackendHost.length > 0 ? rawBackendHost : DEFAULT_ROUTE_BACKEND_HOST;
   if (!isValidBackendHost(backendHost)) {
     return { ok: false, error: ROUTE_BACKEND_HOST_INVALID, code: "invalid_backend_host" };
   }

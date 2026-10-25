@@ -4,6 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { nativeSelectClassName } from "@/lib/native-select";
 import {
+  DEFAULT_ROUTE_BACKEND_HOST,
   ROUTE_BACKEND_HOST_MAX,
   ROUTE_HOSTNAME_MAX,
   ROUTE_PATH_PREFIX_MAX,
@@ -100,7 +101,12 @@ export function RouteBackendFields({
   return (
     <>
       <div className="grid gap-2">
-        <Label htmlFor="route-backend-host">Backend host (VPC IP or service)</Label>
+        <div className="flex items-center justify-between">
+          <Label htmlFor="route-backend-host">Backend host (VPC IP or service)</Label>
+          <span className="text-xs text-muted-foreground font-mono">
+            Default: {DEFAULT_ROUTE_BACKEND_HOST}
+          </span>
+        </div>
         <Input
           id="route-backend-host"
           name="backend_host"
@@ -108,11 +114,14 @@ export function RouteBackendFields({
           maxLength={ROUTE_BACKEND_HOST_MAX}
           autoComplete="off"
           spellCheck={false}
-          placeholder="10.10.1.20"
+          placeholder={DEFAULT_ROUTE_BACKEND_HOST}
           className="font-mono text-sm"
           disabled={disabled}
           onChange={(event) => onChange.backendHost(event.currentTarget.value)}
         />
+        <p className="text-xs text-muted-foreground">
+          Control Droplet VPC IP ({DEFAULT_ROUTE_BACKEND_HOST}) is used by default.
+        </p>
       </div>
       <div className="grid grid-cols-2 gap-3">
         <div className="grid gap-2">
