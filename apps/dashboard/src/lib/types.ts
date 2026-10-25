@@ -134,6 +134,25 @@ export type RouteDnsRecord = {
   status: DnsRecordStatus;
 };
 
+export type RouteCertificateStatus = "pending" | "issued" | "failed";
+
+export const ROUTE_CERTIFICATE_STATUSES = new Set<RouteCertificateStatus>([
+  "pending",
+  "issued",
+  "failed",
+]);
+
+/**
+ * Public TLS certificate status for a project route (`GET .../routes/{route_id}/certificate`).
+ * Never contains PEM, private key material, or raw provider errors.
+ */
+export type RouteCertificate = {
+  route_id: string;
+  hostname: string;
+  status: RouteCertificateStatus;
+  not_after: string | null;
+};
+
 export type ProjectDetail = {
   project: Project;
   environments: EnvironmentOption[];

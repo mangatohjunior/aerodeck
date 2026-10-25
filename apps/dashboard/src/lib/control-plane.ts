@@ -11,6 +11,8 @@ import type {
   ProjectRoute,
   ProvisionJob,
   ProvisionJobStatus,
+  RouteCertificate,
+  RouteCertificateStatus,
   RouteDnsRecord,
   Sandbox,
 } from "./types";
@@ -19,6 +21,7 @@ import {
   DNS_RECORD_TYPES,
   JOB_KINDS,
   PROVISION_JOB_STATUSES,
+  ROUTE_CERTIFICATE_STATUSES,
 } from "./types";
 
 export { isControlPlaneUuid } from "./control-plane-uuid";
@@ -835,9 +838,56 @@ export async function getControlPlaneRouteDns(
   return parseRouteDnsRecord(await response.json(), routeId);
 }
 
+export async function getControlPlaneRouteCertificate(
+  config: ControlPlaneConfig,
+  projectId: string,
+  routeId: string,
+  options: ListOptions = {},
+): Promise<RouteCertificate> {
+  return requestControlPlaneRouteCertificate(config, projectId, routeId, "GET", options);
+}
+
+export async function issueControlPlaneRouteCertificate(
+  config: ControlPlaneConfig,
+  projectId: string,
+  routeId: string,
+  options: ListOptions = {},
+): Promise<RouteCertificate> {
+  return requestControlPlaneRouteCertificate(config, projectId, routeId, "POST", options);
+}
+
+async function requestControlPlaneRouteCertificate(
+  config: ControlPlaneConfig,
+  projectId: string,
+  routeId: string,
+  method: "GET" | "POST",
+  options: ListOptions = {},
+): Promise<RouteCertificate> {
+  if (!isControlPlaneUuid(projectId) || !isControlPlaneUuid(routeId)) {
+    throw new ControlPlaneError("control plane route certificate ids were not uuids");
+  }
+  const fetchImpl = options.fetch ?? fetch;
+  const now = options.now ?? Date.now;
+  const accessToken = await accessTokenFor(config, fetchImpl, now);
+  const suffix = method === "POST" ? "/certificate/issue" : "/certificate";
+  const response = await fetchImpl(
+    `${config.baseUrl}/api/v1/projects/${encodeURIComponent(projectId)}/routes/${encodeURIComponent(routeId)}${suffix}`,
+    {
+      method,
+      headers: {
+        accept: "application/json",
+        authorization: `Bearer ${accessToken}`,
+      },
+      cache: "no-store",
+    },
+  );
+  await throwIfRouteOrDnsResponseFailed(response, "route certificate");
+  return parseRouteCertificate(await response.json(), routeId);
+}
+
 async function throwIfRouteOrDnsResponseFailed(
   response: Response,
-  operation: "route" | "route dns",
+  operation: "route" | "route dns" | "route certificate",
 ): Promise<void> {
   if (response.status === 404) {
     await discardResponseBody(response);
@@ -852,22 +902,36 @@ async function throwIfRouteOrDnsResponseFailed(
     throw new ControlPlaneError(`control plane ${operation} rejected (422)`, 422);
   }
   if (response.status === 503) {
-    await discardResponseBody(response);
+    const code = await errorCode(response);
+    const mappedCode =
+      code === "acme_unavailable" || code === "dns01_unavailable"
+        ? "certificate_unavailable"
+        : "dns_record_unavailable";
     throw new ControlPlaneError(
-      `control plane ${operation} dns unavailable (503)`,
+      `control plane ${operation} unavailable (503)`,
       503,
       undefined,
-      { code: "dns_record_unavailable" },
+      { code: mappedCode },
     );
   }
   if (response.status === 502) {
     const code = await errorCode(response);
+    if (code === "issuer_failed") {
+      throw new ControlPlaneError(
+        `control plane ${operation} failed (502)`,
+        502,
+        undefined,
+        { code: "certificate_issue_failed" },
+      );
+    }
     if (code === "dns_record_failed" || code === "dns01_failed") {
+      const mappedCode =
+        operation === "route certificate" ? "certificate_issue_failed" : "dns_record_failed";
       throw new ControlPlaneError(
         `control plane ${operation} dns failed (502)`,
         502,
         undefined,
-        { code: "dns_record_failed" },
+        { code: mappedCode },
       );
     }
     throw new ControlPlaneError(`control plane ${operation} request failed (502)`, 502);
@@ -879,6 +943,38 @@ async function throwIfRouteOrDnsResponseFailed(
       response.status,
     );
   }
+}
+
+function parseRouteCertificate(value: unknown, expectedRouteId: string): RouteCertificate {
+  if (!value || typeof value !== "object") {
+    throw new ControlPlaneError("control plane route certificate response was invalid");
+  }
+  const row = value as Record<string, unknown>;
+  if (
+    typeof row.route_id !== "string" ||
+    !isControlPlaneUuid(row.route_id) ||
+    row.route_id !== expectedRouteId ||
+    typeof row.hostname !== "string" ||
+    typeof row.status !== "string" ||
+    !ROUTE_CERTIFICATE_STATUSES.has(row.status as RouteCertificateStatus) ||
+    (row.not_after !== undefined && row.not_after !== null && typeof row.not_after !== "string")
+  ) {
+    throw new ControlPlaneError("control plane route certificate response was invalid");
+  }
+  const hostname = row.hostname.toLowerCase();
+  if (
+    hostname.length === 0 ||
+    hostname.length > ROUTE_HOSTNAME_MAX ||
+    !ROUTE_HOSTNAME_PATTERN.test(hostname)
+  ) {
+    throw new ControlPlaneError("control plane route certificate response was invalid");
+  }
+  return {
+    route_id: row.route_id,
+    hostname,
+    status: row.status as RouteCertificateStatus,
+    not_after: typeof row.not_after === "string" ? row.not_after : null,
+  };
 }
 
 function parseRouteDnsRecord(value: unknown, expectedRouteId: string): RouteDnsRecord {

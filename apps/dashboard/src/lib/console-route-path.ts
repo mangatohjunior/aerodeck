@@ -3,6 +3,9 @@ import { NextResponse } from "next/server";
 import { ControlPlaneError, isControlPlaneUuid } from "@/lib/control-plane";
 import { jsonError } from "@/lib/mock-http";
 import {
+  ROUTE_CERTIFICATE_ALREADY_ISSUED,
+  ROUTE_CERTIFICATE_ISSUE_FAILED,
+  ROUTE_CERTIFICATE_UNAVAILABLE,
   ROUTE_DNS_FAILED,
   ROUTE_DNS_UNAVAILABLE,
   ROUTE_FIELDS_INVALID,
@@ -56,24 +59,34 @@ export async function requireEnrolledRouteIds(
   return { projectId, routeId };
 }
 
-/** Map control-plane route and DNS failures to BFF JSON responses. */
+/** Map control-plane route, DNS, and certificate failures to BFF JSON responses. */
 export function jsonRouteControlPlaneError(
   cause: unknown,
   event: string,
   notFoundDetail: string,
+  options: { conflictKind?: "hostname" | "certificate" } = {},
 ): NextResponse {
   if (cause instanceof ControlPlaneError) {
     if (cause.status === 404) {
       return jsonError(404, notFoundDetail, "not_found");
     }
     if (cause.status === 409) {
+      if (options.conflictKind === "certificate") {
+        return jsonError(409, ROUTE_CERTIFICATE_ALREADY_ISSUED, "certificate_already_issued");
+      }
       return jsonError(409, ROUTE_HOSTNAME_TAKEN, "hostname_taken");
     }
     if (cause.status === 422) {
       return jsonError(400, ROUTE_FIELDS_INVALID, "invalid_fields");
     }
+    if (cause.status === 503 && cause.code === "certificate_unavailable") {
+      return jsonError(503, ROUTE_CERTIFICATE_UNAVAILABLE, "certificate_unavailable");
+    }
     if (cause.status === 503 || cause.code === "dns_record_unavailable") {
       return jsonError(503, ROUTE_DNS_UNAVAILABLE, "dns_unavailable");
+    }
+    if (cause.status === 502 && cause.code === "certificate_issue_failed") {
+      return jsonError(502, ROUTE_CERTIFICATE_ISSUE_FAILED, "certificate_issue_failed");
     }
     if (cause.status === 502 && cause.code === "dns_record_failed") {
       return jsonError(502, ROUTE_DNS_FAILED, "dns_record_failed");

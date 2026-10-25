@@ -13,6 +13,7 @@ import {
   type ProjectSource,
   type ProvisionJob,
   type PublicUser,
+  type RouteCertificate,
   type RouteDnsRecord,
   type SandboxPage,
 } from "@/lib/types";
@@ -194,6 +195,34 @@ export async function fetchRouteDns(
     {
       credentials: "same-origin",
       cache: "no-store",
+    },
+  );
+  return readJson(response);
+}
+
+export async function fetchRouteCertificate(
+  projectId: string,
+  routeId: string,
+): Promise<RouteCertificate> {
+  const response = await fetch(
+    `/api/console/projects/${encodeURIComponent(projectId)}/routes/${encodeURIComponent(routeId)}/certificate`,
+    {
+      credentials: "same-origin",
+      cache: "no-store",
+    },
+  );
+  return readJson(response);
+}
+
+export async function issueRouteCertificate(
+  projectId: string,
+  routeId: string,
+): Promise<RouteCertificate> {
+  const response = await fetch(
+    `/api/console/projects/${encodeURIComponent(projectId)}/routes/${encodeURIComponent(routeId)}/certificate/issue`,
+    {
+      method: "POST",
+      credentials: "same-origin",
     },
   );
   return readJson(response);

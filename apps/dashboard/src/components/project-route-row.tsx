@@ -3,6 +3,7 @@
 import { Globe, Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
 
+import { RouteCertificatePanel } from "@/components/route-certificate-panel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { fetchRouteDns } from "@/lib/api";
@@ -95,6 +96,9 @@ export function ProjectRouteRow({
           </Badge>
         </div>
       </div>
+      {canInspectDns ? (
+        <RouteCertificatePanel projectId={route.project_id} routeId={route.id} />
+      ) : null}
       {dns ? (
         <div
           className="rounded-md border border-border bg-muted/40 px-3 py-2 text-xs"
