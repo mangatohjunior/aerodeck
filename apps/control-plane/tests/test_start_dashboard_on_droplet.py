@@ -26,6 +26,8 @@ def test_start_dashboard_on_droplet_script_contract() -> None:
     assert 'docker tag "${DASHBOARD_IMAGE}" aerodeck/dashboard:dev' in text
     assert "--name aerodeck-dashboard --network host --restart unless-stopped" in text
     assert "http://127.0.0.1:3000/login" in text
+    assert "publish_console_route_if_present" in text
+    assert "publish-console-route.py" in text
 
 
 def test_dashboard_workflow_self_hosted_deploy_job() -> None:
@@ -35,3 +37,5 @@ def test_dashboard_workflow_self_hosted_deploy_job() -> None:
     assert "vars.DEPLOY_DASHBOARD_SELF_HOSTED == 'true'" in workflow
     assert "vars.CONTROL_DROPLET_HOST != ''" in workflow
     assert "start-dashboard-on-droplet.sh" in workflow
+    assert "publish-console-route.py" in workflow
+    assert "mkdir -p /root/aerodeck" in workflow

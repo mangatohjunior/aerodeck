@@ -13,6 +13,7 @@ on:
     paths:
       - "apps/dashboard/**"
       - "apps/control-plane/scripts/prune_docr_images.py"
+      - "apps/control-plane/scripts/publish-console-route.py"
       - "apps/control-plane/scripts/start-dashboard-on-droplet.sh"
       - ".github/workflows/dashboard-image.yml"
       - "packages/iac-engine/tests/test_image_publish.py"
@@ -21,6 +22,7 @@ on:
     paths:
       - "apps/dashboard/**"
       - "apps/control-plane/scripts/prune_docr_images.py"
+      - "apps/control-plane/scripts/publish-console-route.py"
       - "apps/control-plane/scripts/start-dashboard-on-droplet.sh"
       - ".github/workflows/dashboard-image.yml"
       - "packages/iac-engine/tests/test_image_publish.py"
@@ -150,6 +152,10 @@ jobs:
           image="registry.digitalocean.com/${registry}/${IMAGE_REPO}:dashboard-main"
           key_path="${CONTROL_SSH_KEY_PATH:-$HOME/.ssh/aerodeck_ed25519}"
           ssh_opts=(-i "${key_path}" -o StrictHostKeyChecking=accept-new -o ServerAliveInterval=15)
+          ssh "${ssh_opts[@]}" "root@${CONTROL_DROPLET_HOST}" "mkdir -p /root/aerodeck"
+          scp "${ssh_opts[@]}" \
+            apps/control-plane/scripts/publish-console-route.py \
+            "root@${CONTROL_DROPLET_HOST}:/root/aerodeck/publish-console-route.py"
           scp "${ssh_opts[@]}" \
             apps/control-plane/scripts/start-dashboard-on-droplet.sh \
             "root@${CONTROL_DROPLET_HOST}:/root/start-dashboard-on-droplet.sh"

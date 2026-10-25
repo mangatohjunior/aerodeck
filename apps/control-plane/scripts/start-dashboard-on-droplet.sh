@@ -73,3 +73,16 @@ wait_for_dashboard() {
 }
 
 wait_for_dashboard
+
+publish_console_route_if_present() {
+  local script="/root/aerodeck/publish-console-route.py"
+  if [[ ! -f "${script}" && -f "/root/publish-console-route.py" ]]; then
+    script="/root/publish-console-route.py"
+  fi
+  if [[ -f "${script}" && -f "${DASHBOARD_ENV}" ]]; then
+    echo "ensuring console route and certificate at dev.app.aero-deck.app"
+    python3 "${script}" || echo "warning: publish-console-route.py returned non-zero status" >&2
+  fi
+}
+
+publish_console_route_if_present

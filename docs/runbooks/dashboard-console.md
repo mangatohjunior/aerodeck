@@ -279,10 +279,11 @@ has the DigitalOcean DNS and Let's Encrypt settings configured ([edge-routing.md
 otherwise the route stays in memory and issues a self-signed `AeroDeck Fake CA` certificate.
 
 Operator scripts live in `/root/aerodeck` on the control Droplet.
-`apps/control-plane/scripts/publish-console-route.py` creates the
-console project, the dev environment, and the route to the control private
-IPv4 (`10.41.0.2`, or `AERODECK_CONTROL_PRIVATE_IP`) port 3000, then issues or
-renews the certificate. If the route was previously created with an older
+`start-dashboard-on-droplet.sh` automatically copies and invokes
+`apps/control-plane/scripts/publish-console-route.py` during deployment once
+`:3000/login` responds 200. It creates the console project, the dev environment,
+and the route to the control private IPv4 (`10.41.0.2`, or `AERODECK_CONTROL_PRIVATE_IP`)
+port 3000, then issues or renews the certificate. If the route was previously created with an older
 `backend_host` or a fake/staging certificate (`AeroDeck Fake CA` or staging),
 re-running the script updates `backend_host` and automatically calls
 `/certificate/renew` (or pass `--renew` to force renewal). The client secret
