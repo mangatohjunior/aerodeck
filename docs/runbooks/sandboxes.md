@@ -32,6 +32,30 @@ not a Docker tag and not a filesystem path. Path separators are rejected.
 `GET /api/v1/projects/{id}/sandboxes` lists them. `hypervisor_vm_id` is never
 returned. Every call needs a token ([control-plane.md](control-plane.md)).
 
+### From the operator console (`/sandboxes`)
+
+When the console client is enrolled ([dashboard-console.md](dashboard-console.md)),
+operators can also boot and inspect sandboxes on `/sandboxes`:
+
+- **Create:** Submitting **New sandbox** (`project`, `image`, `vcpu` `1–8`,
+  `memory_mib` `32–4096`, `ttl_seconds` `30–86400`) POSTs `/api/console/sandboxes`
+  → `POST /api/v1/projects/{project_id}/sandboxes`. The console strips
+  `host_id` and `hypervisor_vm_id`.
+- **List & expiry:** `/sandboxes` groups guests by project and shows each row's
+  UTC `expires_at` timestamp (`YYYY-MM-DD HH:MM:SS UTC`). When no sandboxes
+  exist yet, an empty-state CTA links directly to **New sandbox** (or
+  `/projects` if no project exists yet).
+- **Unavailable host (`503 sandbox_unavailable`):** When
+  `AERODECK_SANDBOX_HYPERVISOR=firecracker` and no active host is enrolled via
+  `POST /api/v1/sandbox-hosts`, console create surfaces
+  `No enrolled Firecracker sandbox host is available.` (`503`,
+  `code: "sandbox_unavailable"`). If the hypervisor rejects the boot, the
+  console surfaces `Hypervisor failed to boot the sandbox microVM.` (`502`,
+  `code: "sandbox_failed"`).
+- **Mock / local seed:** When `CONTROL_PLANE_URL` is unset, `/sandboxes` renders
+  the local seed, hides the create form, returns `404` on
+  `POST /api/console/sandboxes`, and never boots real microVMs.
+
 ## Destroy on TTL
 
 A running sandbox whose `expires_at` is in the past is torn down when you GET
@@ -89,3 +113,4 @@ enrolled.
 - #15 — destroy on TTL.
 - #16 — enroll sandbox hosts (this section).
 - #37 — scheduled reap (this section).
+- #145, #146, #147 — console sandbox boot, project grouping + expiry, and runbook.

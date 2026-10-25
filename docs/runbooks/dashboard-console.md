@@ -214,3 +214,42 @@ That publishes a CNAME `dev.app` to `edge.aero-deck.app`. Open
 ([edge-routing.md](edge-routing.md)). Sign in there. The session cookie is
 `Secure` in this container, so sign-in is on HTTPS. `app.aero-deck.app` stays
 unused until the production console exists.
+
+## 5. Boot sandboxes from the console
+
+Open `/sandboxes` in the operator console ([sandboxes.md](sandboxes.md)):
+
+1. When the console client (`CONTROL_PLANE_URL`, `CONTROL_PLANE_CLIENT_ID`,
+   `CONTROL_PLANE_CLIENT_SECRET`) is set, `/sandboxes` renders the **New
+   sandbox** card above the project-grouped guest list.
+2. Select a project, enter a declared guest image name (for example
+   `alpine-3.20`; lowercase letters, digits, `.`, `_`, `-` with no path
+   separators), and set `vcpu` (`1–8`, default `1`), `memory_mib` (`32–4096`,
+   default `128`), and `ttl_seconds` (`30–86400`, default `3600`), then click
+   **Boot sandbox**.
+3. The browser POSTs `/api/console/sandboxes`, which calls
+   `POST /api/v1/projects/{project_id}/sandboxes` with the enrolled bearer and
+   returns only `{ id, project_id, image, vcpu, memory_mib, ttl_seconds, status, expires_at, created_at }`
+   (`host_id` and `hypervisor_vm_id` are never exposed to the browser).
+4. The new guest is prepended to its project group on `/sandboxes`, showing its
+   UTC `expires_at` timestamp (`YYYY-MM-DD HH:MM:SS UTC`) and `running` status
+   (with a `TTL elapsed` badge if `expires_at` has passed before the next reap).
+
+### Memory vs Firecracker hypervisor and unavailable hosts
+
+- **`AERODECK_SANDBOX_HYPERVISOR=memory` (default on laptop/CI and dev until a
+  KVM host is enrolled):** Boots succeed in-memory without an enrolled KVM host.
+- **`AERODECK_SANDBOX_HYPERVISOR=firecracker` with no enrolled KVM host:**
+  `POST /api/v1/projects/{project_id}/sandboxes` returns `503` with
+  `{"code":"sandbox_unavailable"}`, which `POST /api/console/sandboxes` maps to
+  `503` `{"error":"No enrolled Firecracker sandbox host is available.","code":"sandbox_unavailable"}`.
+  The **New sandbox** form displays `No enrolled Firecracker sandbox host is available.`
+  Enroll an out-of-band bare-metal KVM host with `POST /api/v1/sandbox-hosts`
+  ([sandboxes.md](sandboxes.md)); never `terraform apply` Firecracker hosts from
+  this repository ([ADR 0001](../adr/0001-sandbox-runtime-outside-iac.md)).
+- **Hypervisor boot failure (`502`):** Returns `502`
+  `{"error":"Hypervisor failed to boot the sandbox microVM.","code":"sandbox_failed"}`
+  without leaking upstream hypervisor URLs or host details.
+- **Mock / local seed (`CONTROL_PLANE_URL` unset):** `/sandboxes` shows only the
+  in-memory seed grouped by project, hides the **New sandbox** form, returns
+  `404` from `POST /api/console/sandboxes`, and never boots real microVMs.
