@@ -96,7 +96,7 @@ export function NewSandboxForm({ projects, onCreated }: NewSandboxFormProps) {
     ttlSeconds.trim().length > 0;
 
   return (
-    <Card className="mb-6 overflow-hidden ring-primary/15">
+    <Card id="new-sandbox" className="mb-6 overflow-hidden ring-primary/15">
       <div className="h-1 bg-gradient-to-r from-primary via-runway to-primary/40" />
       <CardHeader className="border-b">
         <CardTitle>New sandbox</CardTitle>
