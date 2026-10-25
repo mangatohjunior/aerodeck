@@ -37,6 +37,35 @@ On `aerodeck-worker` (in addition to the API env from
 
 Do not set `AERODECK_IAC_WORKER` on a laptop.
 
+### Configuration via GitHub Actions (Recommended)
+
+Trigger the **Configure IaC Worker** workflow (`.github/workflows/configure-iac-worker.yml`):
+
+```bash
+gh workflow run configure-iac-worker.yml -f apply=true -f enable=true
+```
+
+This runs on the self-hosted runner, securely transfers Spaces credentials from GitHub Secrets to `/etc/aerodeck/control-plane.env` with `umask 077`, and restarts `aerodeck-worker`.
+
+### Configuration via Helper Script on Droplet
+
+On the Droplet as root:
+
+```bash
+sudo bash /root/aerodeck/configure-iac-worker.sh \
+  --spaces-access-id "<SPACES_ACCESS_KEY_ID>" \
+  --spaces-secret-key "<SPACES_SECRET_ACCESS_KEY>" \
+  --do-token "<DIGITALOCEAN_TOKEN>" \
+  --apply
+```
+
+Or pass via environment:
+
+```bash
+sudo AERODECK_SPACES_ACCESS_ID="..." AERODECK_SPACES_SECRET_KEY="..." AERODECK_DIGITALOCEAN_TOKEN="..." \
+  bash /root/aerodeck/configure-iac-worker.sh --apply
+```
+
 ## 3. Enqueue and poll
 
 Need an enrolled client ([control-plane.md](control-plane.md) token steps).
