@@ -27,7 +27,9 @@ can PATCH/DELETE the project (`/api/console/projects/{id}`) and its environments
 (`/api/console/projects/{id}/environments/{environmentId}`) when the console client
 is set; deletes clear deployment links on the control plane. Mock stays read-only.
 Sandboxes read `GET /api/v1/projects/{id}/sandboxes` through
-`GET /api/console/sandboxes` and, when the console client is set, boot new
+`GET /api/console/sandboxes` (grouped by project on `/sandboxes` with each
+guest's UTC `expires_at` timestamp and an empty-state CTA to boot when
+enrolled) and, when the console client is set, boot new
 microVMs through `POST /api/console/sandboxes` (→
 `POST /api/v1/projects/{id}/sandboxes`, returning `id`, `project_id`, `image`,
 `vcpu`, `memory_mib`, `status`, `expires_at`, and `created_at`, never `host_id`
