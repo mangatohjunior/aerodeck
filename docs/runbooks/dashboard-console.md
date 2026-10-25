@@ -111,12 +111,17 @@ replaces the whole `AERODECK_AUTH_CLIENTS` map with the `console` client. The
 start script keeps the other keys already in the control-plane env file.
 Google setup is [google-sign-in.md](google-sign-in.md).
 
-Copy `enroll-console-client.sh` and `dashboard_env.py` into the same directory
-on the Droplet (the image does not include them until the next control-plane
-image build), then:
+Extract `enroll-console-client.sh`, `dashboard_env.py`, and
+`publish-console-route.py` from the control-plane image (or copy them from the
+repo if not yet extracted in [startup-control-plane.md](startup-control-plane.md)):
 
 ```bash
-sed -i 's/\r$//' /root/enroll-console-client.sh /root/dashboard_env.py
+IMAGE=$(tr -d ' \t\r\n' < /etc/aerodeck/control-plane-image)
+mkdir -p /root/aerodeck
+docker run --rm --entrypoint cat "$IMAGE" /app/scripts/enroll-console-client.sh > /root/enroll-console-client.sh
+docker run --rm --entrypoint cat "$IMAGE" /app/scripts/dashboard_env.py > /root/dashboard_env.py
+docker run --rm --entrypoint cat "$IMAGE" /app/scripts/publish-console-route.py > /root/aerodeck/publish-console-route.py
+chmod +x /root/enroll-console-client.sh
 sudo bash /root/enroll-console-client.sh
 ```
 
@@ -147,16 +152,19 @@ scp -i ~/.ssh/aerodeck_ed25519 dashboard.tar root@<control-public-ipv4>:/tmp/das
 ssh -i ~/.ssh/aerodeck_ed25519 root@<control-public-ipv4> "docker load -i /tmp/dashboard.tar && rm /tmp/dashboard.tar"
 ```
 
-On the Droplet:
+On the Droplet (wait a few seconds for Next.js to bind port 3000 before probing `/login`):
 
 ```bash
-docker rm -f aerodeck-dashboard
 docker rm -f aerodeck-dashboard
 docker run -d --name aerodeck-dashboard --network host --restart unless-stopped \
   --env-file /etc/aerodeck/dashboard.env \
   -e HOSTNAME=0.0.0.0 \
   aerodeck/dashboard:dev
-curl -fsS -o /dev/null -w '%{http_code}\n' http://127.0.0.1:3000/login
+for i in {1..15}; do
+  code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3000/login || true)
+  if [ "$code" = "200" ]; then echo "200"; break; fi
+  sleep 1
+done
 ```
 
 `200` means the console is listening. Port 3000 does not answer from your
@@ -165,11 +173,19 @@ laptop. `--network host` is what lets the server reach the API on
 
 ## 4. Publish dev.app.aero-deck.app
 
-Operator scripts live in `/root/aerodeck` on the control Droplet. Copy
-`apps/control-plane/scripts/publish-console-route.py` there. It creates the
+Before running `publish-console-route.py`, ensure `/etc/aerodeck/control-plane.env`
+has the DigitalOcean DNS and Let's Encrypt settings configured ([edge-routing.md](edge-routing.md)),
+otherwise the route stays in memory and issues a self-signed `AeroDeck Fake CA` certificate.
+
+Operator scripts live in `/root/aerodeck` on the control Droplet.
+`apps/control-plane/scripts/publish-console-route.py` creates the
 console project, the dev environment, and the route to the control private
-IPv4 port 3000, then issues the certificate. The client secret stays in
-`/etc/aerodeck/dashboard.env`.
+IPv4 (`10.41.0.2`, or `AERODECK_CONTROL_PRIVATE_IP`) port 3000, then issues or
+renews the certificate. If the route was previously created with an older
+`backend_host` or a fake/staging certificate (`AeroDeck Fake CA` or staging),
+re-running the script updates `backend_host` and automatically calls
+`/certificate/renew` (or pass `--renew` to force renewal). The client secret
+stays in `/etc/aerodeck/dashboard.env`.
 
 ```bash
 mkdir -p /root/aerodeck

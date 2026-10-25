@@ -155,16 +155,43 @@ VPC. Cloud-init runs pinned Traefik v3 (`--network host`) polling
 `http://<control private ipv4>:8000/api/v1/edge/traefik`. Terraform also
 creates the `edge.aero-deck.app` **A** record.
 
-Apply from CI only ([iac-apply.md](iac-apply.md)). After apply:
+Apply from CI only ([iac-apply.md](iac-apply.md)). Because `traefik_provider_token`
+is marked sensitive in Terraform outputs, read it directly from `/etc/aerodeck/traefik.yml`
+on the Edge Droplet (`ssh root@<edge-public-ipv4>`):
 
 ```bash
-terraform output -raw traefik_provider_token
-terraform output edge_ipv4
+grep Authorization /etc/aerodeck/traefik.yml
 ```
 
-Put the token on the control plane as `AERODECK_TRAEFIK_PROVIDER_TOKEN`
-(`/etc/aerodeck/control-plane.env`, then
-[startup-control-plane.md](startup-control-plane.md)). Do not commit it.
+Then on the control-plane Droplet (`ssh root@<control-public-ipv4>`), configure
+Traefik provider authentication, DigitalOcean DNS record publishing, and
+browser-trusted Let's Encrypt production certificates in `/etc/aerodeck/control-plane.env`:
+
+```bash
+if [ ! -f /etc/aerodeck/acme-account.key ]; then
+  openssl genrsa -out /etc/aerodeck/acme-account.key 2048
+  chmod 600 /etc/aerodeck/acme-account.key
+fi
+ACME_KEY_ESCAPED=$(awk '{printf "%s\\n", $0}' /etc/aerodeck/acme-account.key)
+
+cat <<EOF >> /etc/aerodeck/control-plane.env
+AERODECK_TRAEFIK_PROVIDER_TOKEN="<token-from-edge-traefik-yml>"
+AERODECK_DIGITALOCEAN_TOKEN="<digitalocean-api-token>"
+AERODECK_DNS_RECORDS_PROVIDER="digitalocean"
+AERODECK_DNS_RECORD_TARGET="edge.aero-deck.app"
+AERODECK_DNS01_PROVIDER="digitalocean"
+AERODECK_ACME_ISSUER="letsencrypt"
+AERODECK_ACME_DIRECTORY_URL="https://acme-v02.api.letsencrypt.org/directory"
+AERODECK_ACME_ACCOUNT_EMAIL="<your-email>"
+AERODECK_ACME_ACCOUNT_KEY="${ACME_KEY_ESCAPED}"
+EOF
+
+sudo bash /root/start-on-droplet.sh
+```
+
+`start-on-droplet.sh` deduplicates `/etc/aerodeck/control-plane.env` (last assignment wins)
+and restarts the API with the new settings ([startup-control-plane.md](startup-control-plane.md)).
+Do not commit `/etc/aerodeck/control-plane.env` or `/etc/aerodeck/acme-account.key`.
 
 ## What this does not do
 
