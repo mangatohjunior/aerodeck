@@ -10,7 +10,7 @@ Workloads never use the region's default VPC. Declared in
 | Resource | Name | Notes |
 | -------- | ---- | ----- |
 | Project | `aerodeck-<env>` | `is_default = false`. Attach later Droplets, databases, and clusters with `digitalocean_project_resources`. |
-| VPC | `aerodeck-<env>-<region>-vpc` | Private RFC1918 range (name includes region; DigitalOcean VPC names are account-wide). Set `vpc_uuid` on Droplets, databases, and clusters. |
+| VPC | `aerodeck-<env>-<region>-private` | Private RFC1918 range (name includes region; DigitalOcean VPC names are account-wide). Set `vpc_uuid` on Droplets, databases, and clusters. |
 
 DigitalOcean Projects cannot own a VPC. Supported project members are Droplets,
 databases, Kubernetes clusters, load balancers, volumes, Spaces, domains,
@@ -22,7 +22,7 @@ CIDRs (must not overlap in the same region):
 
 | Environment | `vpc_ip_range` | DigitalOcean project label |
 | ----------- | -------------- | -------------------------- |
-| dev | `10.40.0.0/16` | Development |
+| dev | `10.41.0.0/16` | Development |
 | staging | `10.50.0.0/16` | Staging |
 | prod | `10.60.0.0/16` | Production |
 
@@ -61,12 +61,22 @@ to a project. Compute and databases are a separate module
 Do **not** `terraform apply` from a laptop. Procedure:
 [iac-apply.md](iac-apply.md).
 
+## Name or CIDR changes
+
+Changing `digitalocean_vpc.platform` `name` or `vpc_ip_range` ForceNew-replaces
+the VPC. Only do that when Terraform state has **no** `digitalocean_vpc`
+(`terraform state list` shows none) and any undeletable region-default is an
+**account-side leftover only** (not in state). If the stack VPC is still in
+state and is the region default, ForceNew apply will 403 on DELETE — run
+[destroy rehome](iac-destroy.md) or `terraform state rm` first. Do not rename
+or bump CIDR while Droplet/Postgres still use the old VPC.
+
 ## After a future apply, verify
 
 In the DigitalOcean console:
 
 1. Project `aerodeck-<env>` exists and is not the account default.
-2. VPC `aerodeck-<env>-ams3-vpc` exists in `ams3` with the CIDR above.
+2. VPC `aerodeck-<env>-ams3-private` exists in `ams3` with the CIDR above.
 3. The VPC is listed under Networking → VPC, not as a project member. That is
    expected.
 4. `terraform output vpc_id` is a UUID later stacks pass as `vpc_uuid`.

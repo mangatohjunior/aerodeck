@@ -30,7 +30,7 @@ def main() -> None:
 
     _must(MODULE, 'resource "digitalocean_project" "platform"', "modules/network/main.tf")
     _must(MODULE, 'resource "digitalocean_vpc" "platform"', "modules/network/main.tf")
-    _must(MODULE, "${var.name_prefix}-${var.region}-vpc", "modules/network/main.tf")
+    _must(MODULE, "${var.name_prefix}-${var.region}-private", "modules/network/main.tf")
     if not re.search(r"is_default\s*=\s*false", MODULE):
         raise SystemExit("project must set is_default = false")
     if 'resource "digitalocean_project_resources"' in CHILD:

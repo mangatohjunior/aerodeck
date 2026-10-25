@@ -10,14 +10,30 @@ from typing import Callable
 import urllib.error
 import urllib.request
 
-DEFAULT_MODEL = "gemini-2.5-flash"
+DEFAULT_MODEL = "gemini-flash-lite-latest"
 GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta/models"
-MAX_FILE_CONTEXT_BYTES = 120_000
-MAX_SINGLE_FILE_BYTES = 24_000
-HTTP_TIMEOUT_SECONDS = 180
-MAX_ATTEMPTS = 3
+MAX_FILE_CONTEXT_BYTES = 32_000
+MAX_SINGLE_FILE_BYTES = 10_000
+HTTP_TIMEOUT_SECONDS = 90
+MAX_MODEL_ATTEMPTS = 6
 RETRYABLE_STATUS_CODES = frozenset({429, 500, 502, 503, 504})
 REVIEW_HEADER = "## AeroDeck AI Review"
+EXCLUDED_MODEL_TOKENS = (
+    "embedding",
+    "imagen",
+    "veo",
+    "tts",
+    "audio",
+    "image",
+    "vision",
+    "aqa",
+    "robotics",
+    "computer-use",
+    "live",
+    "omni",
+    "customtools",
+    "pro-preview-03",
+)
 
 SUPPORTING_RULE_FILES = (
     ".cursor/rules/fastapi-architecture.mdc",
@@ -164,6 +180,59 @@ def parse_gemini_response(payload: dict[str, object], duration_ms: int) -> Revie
     return ReviewResult(summary=summary, total_tokens=total_tokens, duration_ms=duration_ms)
 
 
+def _model_rank(short_name: str) -> tuple[bool, bool, bool, bool, str]:
+    is_latest_alias = short_name in ("gemini-flash-lite-latest", "gemini-flash-latest")
+    is_flash_lite = "flash-lite" in short_name
+    is_flash = "flash" in short_name
+    is_stable = "preview" not in short_name and "exp" not in short_name
+    return (is_latest_alias, is_flash_lite, is_flash, is_stable, short_name)
+
+
+def select_supported_models(
+    models_payload: dict[str, object], excluded: set[str]
+) -> list[str]:
+    """Return prioritized text generateContent Gemini models from /v1beta/models."""
+    entries = models_payload.get("models")
+    if not isinstance(entries, list):
+        return []
+    candidates: list[str] = []
+    for item in entries:
+        if not isinstance(item, dict):
+            continue
+        short = str(item.get("name") or "").removeprefix("models/")
+        methods = item.get("supportedGenerationMethods")
+        if not short.startswith("gemini-") or short in excluded:
+            continue
+        if not isinstance(methods, list) or "generateContent" not in methods:
+            continue
+        if any(token in short for token in EXCLUDED_MODEL_TOKENS):
+            continue
+        candidates.append(short)
+    candidates.sort(key=_model_rank, reverse=True)
+    return candidates
+
+
+def select_supported_model(models_payload: dict[str, object], failed_model: str) -> str | None:
+    """Pick the top available text generateContent Gemini model from /v1beta/models."""
+    ranked = select_supported_models(models_payload, {failed_model})
+    return ranked[0] if ranked else None
+
+
+def _discover_fallback_models(api_key: str, tried: set[str]) -> list[str]:
+    request = urllib.request.Request(
+        GEMINI_API_BASE,
+        headers={"x-goog-api-key": api_key},
+        method="GET",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            parsed = json.loads(response.read().decode("utf-8", errors="replace"))
+    except (urllib.error.URLError, TimeoutError, ValueError) as exc:
+        print(f"Model discovery failed: {exc}", file=sys.stderr, flush=True)
+        return []
+    return select_supported_models(parsed, tried) if isinstance(parsed, dict) else []
+
+
 def _post_gemini_json(url: str, api_key: str, body: bytes) -> dict[str, object]:
     request = urllib.request.Request(
         url,
@@ -189,8 +258,11 @@ def call_gemini_with_retry(
     user_prompt: str,
     transport: Callable[[str, str, bytes], dict[str, object]] = _post_gemini_json,
 ) -> ReviewResult:
-    """Invoke Gemini generateContent with retries on transient HTTP errors."""
-    url = f"{GEMINI_API_BASE}/{model}:generateContent"
+    """Invoke Gemini generateContent with model fallback on 404/429/timeout."""
+    active_model = model.removeprefix("models/")
+    tried: set[str] = set()
+    fallbacks: list[str] = []
+    discovered = False
     body = json.dumps(
         {
             "systemInstruction": {"parts": [{"text": system_instruction}]},
@@ -200,18 +272,39 @@ def call_gemini_with_retry(
     ).encode("utf-8")
 
     start = time.monotonic()
-    for attempt in range(1, MAX_ATTEMPTS + 1):
+    for attempt in range(1, MAX_MODEL_ATTEMPTS + 1):
+        tried.add(active_model)
+        url = f"{GEMINI_API_BASE}/{active_model}:generateContent"
         try:
             payload = transport(url, api_key, body)
             elapsed_ms = int((time.monotonic() - start) * 1000)
             return parse_gemini_response(payload, elapsed_ms)
         except urllib.error.HTTPError as exc:
-            if exc.code not in RETRYABLE_STATUS_CODES or attempt == MAX_ATTEMPTS:
-                raise RuntimeError(f"Gemini API HTTP {exc.code}") from exc
+            if exc.code in (404, 429):
+                if not discovered:
+                    fallbacks = _discover_fallback_models(api_key, tried)
+                    discovered = True
+                fallbacks = [m for m in fallbacks if m not in tried]
+                if fallbacks:
+                    next_model = fallbacks.pop(0)
+                    print(f"Model {active_model} HTTP {exc.code}; trying {next_model}", flush=True)
+                    active_model = next_model
+                    continue
+            if exc.code not in RETRYABLE_STATUS_CODES or attempt == MAX_MODEL_ATTEMPTS:
+                raise RuntimeError(f"Gemini API HTTP {exc.code} (model={active_model})") from exc
             time.sleep(2 * attempt)
-        except urllib.error.URLError as exc:
-            if attempt == MAX_ATTEMPTS:
-                raise RuntimeError(f"Gemini API network error: {exc.reason}") from exc
+        except (urllib.error.URLError, TimeoutError) as exc:
+            if not discovered:
+                fallbacks = _discover_fallback_models(api_key, tried)
+                discovered = True
+            fallbacks = [m for m in fallbacks if m not in tried]
+            if fallbacks and attempt < MAX_MODEL_ATTEMPTS:
+                next_model = fallbacks.pop(0)
+                print(f"Model {active_model} timed out/failed; trying {next_model}", flush=True)
+                active_model = next_model
+                continue
+            if attempt == MAX_MODEL_ATTEMPTS:
+                raise RuntimeError(f"Gemini API network/timeout error ({active_model}): {exc}") from exc
             time.sleep(2 * attempt)
     raise RuntimeError("Gemini API retry loop exhausted")
 
@@ -251,7 +344,7 @@ def main() -> int:
         result = call_gemini_with_retry(api_key, model, system_instruction, user_prompt)
     except Exception as exc:
         write_github_outputs(gh_output, {"status": "error"})
-        print(f"::error::Gemini PR review failed: {exc}", file=sys.stderr)
+        print(f"::error::Gemini PR review failed: {exc}", file=sys.stderr, flush=True)
         return 1
 
     review_file = review_dir / "review.md"
@@ -265,7 +358,7 @@ def main() -> int:
             "duration-ms": str(result.duration_ms),
         },
     )
-    print(f"Gemini review completed ({result.total_tokens} tokens, {result.duration_ms} ms)")
+    print(f"Gemini review completed ({result.total_tokens} tokens, {result.duration_ms} ms)", flush=True)
     return 0
 
 

@@ -137,8 +137,11 @@ def test_workflow_and_guardrail_files() -> None:
     """Verifies workflow security invariants and presence of GEMINI.md + .cursor rules."""
     code = _code_lines(WORKFLOW)
     assert "pull_request_target" not in code
-    assert "PunGrumpy/cursor-action" not in code
+    assert "vars.AI_REVIEW_GEMINI" in code
+    assert "vars.AI_REVIEW_CURSOR" in code
     assert "secrets.GEMINI_API_KEY" in code
+    assert "secrets.CURSOR_API_KEY" in code
+    assert "PunGrumpy/cursor-action@6d67266c53512c6f9093691731e0ac1b61c04952" in code
     assert "<!-- aerodeck-ai-pr-review -->" in WORKFLOW
     assert "python3 .github/scripts/gemini_pr_review.py" in code
 
@@ -158,12 +161,35 @@ def test_workflow_and_guardrail_files() -> None:
             raise AssertionError(f"Expected non-empty guardrail file at {rel}")
 
 
+def test_select_supported_model() -> None:
+    """Selects a generateContent-capable text Gemini model and skips non-text models."""
+    payload: dict[str, object] = {
+        "models": [
+            {
+                "name": "models/gemini-embedding-001",
+                "supportedGenerationMethods": ["embedContent"],
+            },
+            {
+                "name": "models/gemini-2.5-flash-tts",
+                "supportedGenerationMethods": ["generateContent"],
+            },
+            {
+                "name": "models/gemini-2.0-flash",
+                "supportedGenerationMethods": ["generateContent", "countTokens"],
+            },
+        ]
+    }
+    chosen = reviewer.select_supported_model(payload, failed_model="gemini-2.5-flash")
+    assert chosen == "gemini-2.0-flash"
+
+
 def main() -> None:
     """Run all unit checks."""
     test_normalize_review_markdown()
     test_parse_gemini_response()
     test_collect_changed_file_context_and_prompts()
     test_call_gemini_with_retry()
+    test_select_supported_model()
     test_workflow_and_guardrail_files()
     print("Gemini PR review script and guardrails verified")
 

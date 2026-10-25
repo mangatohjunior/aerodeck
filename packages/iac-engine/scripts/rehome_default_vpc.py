@@ -3,8 +3,11 @@
 
 DELETE /v2/vpcs/:id returns 403 "Can not delete default VPCs". The default
 flag cannot be unset; another VPC in the same region must be set default=true.
-If that is refused (the first VPC in a region is often immutable), drop the
-VPC from Terraform state and leave it in the account. VPCs are free.
+When that succeeds, try to DELETE the former stack VPC (frees name and CIDR).
+If DELETE fails but the VPC is confirmed non-default, leave it in state for
+Terraform. If it still reports default=true (Terraform DELETE would 403),
+rename to …-kept-default, drop from state, and bump vpc_ip_range before the
+next apply (VPCs are free but CIDRs stay reserved).
 
 Writes .rehome-vpc-dropped when state is changed so ci.sh can re-plan; a
 stored plan taken *before* the drop still contains the doomed DELETE.
@@ -26,6 +29,10 @@ from pathlib import Path
 
 API = "https://api.digitalocean.com/v2"
 MARKER = Path(".rehome-vpc-dropped")
+# Placeholder created so another VPC can become region default.
+PLACEHOLDER_NAME_SUFFIX = "-default-keep"
+# Renamed stack VPC left in the account after destroy; frees the stack name.
+KEPT_DEFAULT_SUFFIX = "-kept-default"
 
 
 class ApiError(Exception):
@@ -88,14 +95,21 @@ def vpc_entries_from_state(state: dict) -> list[dict[str, str]]:
     return found
 
 
+def is_placeholder_or_kept(name: str) -> bool:
+    return (
+        name.startswith("default-")
+        or name.endswith(PLACEHOLDER_NAME_SUFFIX)
+        or name.endswith(KEPT_DEFAULT_SUFFIX)
+    )
+
+
 def pick_replacement(managed_id: str, region: str, vpcs: list[dict]) -> dict | None:
     same = [v for v in vpcs if v.get("region") == region and v.get("id") != managed_id]
     for v in same:
         if v.get("default"):
             return v
     for v in same:
-        name = str(v.get("name") or "")
-        if name.startswith("default-") or name.endswith("-default-keep"):
+        if is_placeholder_or_kept(str(v.get("name") or "")):
             return v
     return same[0] if same else None
 
@@ -109,13 +123,148 @@ def unused_cidr(vpcs: list[dict], region: str) -> str:
     raise SystemExit("rehome_default_vpc: no free 10.x.0.0/20 for a placeholder VPC")
 
 
-def drop_from_state(address: str) -> None:
+def kept_default_name(old: str) -> str | None:
+    if not old or old.endswith(KEPT_DEFAULT_SUFFIX):
+        return None
+    return f"{old}{KEPT_DEFAULT_SUFFIX}"
+
+
+def release_stack_name(vpc_id: str, current: dict) -> bool:
+    """Rename a kept default so the next apply can recreate the stack VPC name.
+
+    Returns False if the API rename failed (caller must fail the job after
+    dropping state so destroy never DELETEs the default).
+    """
+    old = str(current.get("name") or "")
+    new_name = kept_default_name(old)
+    if not new_name:
+        return True
+    body: dict = {
+        "name": new_name,
+        "description": current.get("description") or "",
+    }
+    if current.get("default"):
+        body["default"] = True
+    try:
+        api("PUT", f"/vpcs/{vpc_id}", body)
+        print(f"rehome_default_vpc: renamed {old!r} -> {new_name!r}")
+        return True
+    except ApiError as exc:
+        print(f"rehome_default_vpc: rename to free stack name failed ({exc})")
+        return False
+
+
+def remove_from_state(address: str) -> None:
+    subprocess.check_call(["terraform", "state", "rm", address])
+    MARKER.write_text(address + "\n", encoding="utf-8")
+
+
+def drop_from_state(address: str, current: dict | None = None) -> None:
+    rename_ok = True
+    if current and current.get("id"):
+        rename_ok = release_stack_name(str(current["id"]), current)
     print(
         f"rehome_default_vpc: leaving the DigitalOcean default VPC in place; "
         f"removing {address} from Terraform state"
     )
-    subprocess.check_call(["terraform", "state", "rm", address])
-    MARKER.write_text(address + "\n", encoding="utf-8")
+    remove_from_state(address)
+    if not rename_ok:
+        raise SystemExit(
+            "rehome_default_vpc: dropped default VPC from state but failed to "
+            "rename it; free the stack VPC name before the next apply"
+        )
+    if current and current.get("id"):
+        print(
+            "rehome_default_vpc: kept VPC still reserves its ip_range in the region; "
+            "bump vpc_ip_range in envs/<env>.tfvars before the next apply"
+        )
+
+
+def create_placeholder(region: str, listed: list[dict]) -> dict | None:
+    name = f"aerodeck-{region}{PLACEHOLDER_NAME_SUFFIX}"
+    cidr = unused_cidr(listed, region)
+    print(f"rehome_default_vpc: creating placeholder {name} {cidr}")
+    try:
+        created = api(
+            "POST",
+            "/vpcs",
+            {
+                "name": name,
+                "region": region,
+                "description": "Region default so Terraform can delete stack VPCs",
+                "ip_range": cidr,
+            },
+        )
+    except ApiError as exc:
+        print(f"rehome_default_vpc: POST /vpcs failed ({exc})")
+        return None
+    return created.get("vpc") or {}
+
+
+def set_replacement_default(replacement: dict) -> bool:
+    rid = replacement.get("id")
+    rname = replacement.get("name")
+    if not rid or not rname:
+        return False
+    try:
+        api(
+            "PUT",
+            f"/vpcs/{rid}",
+            {
+                "name": rname,
+                "description": replacement.get("description") or "",
+                "default": True,
+            },
+        )
+        print(f"rehome_default_vpc: set {rid} ({rname}) as region default")
+        return True
+    except ApiError as exc:
+        print(f"rehome_default_vpc: PUT default failed ({exc})")
+        return False
+
+
+def try_delete_vpc(vpc_id: str) -> bool:
+    try:
+        api("DELETE", f"/vpcs/{vpc_id}")
+        print(f"rehome_default_vpc: deleted former stack VPC {vpc_id}")
+        return True
+    except ApiError as exc:
+        print(f"rehome_default_vpc: DELETE {vpc_id} failed ({exc})")
+        return False
+
+
+# Outcomes of try_delete_after_default_move (second value is re-GET attrs when set).
+DELETE_OK = "deleted"
+STILL_DEFAULT = "still_default"
+UNDELETABLE = "undeletable"
+
+
+def try_delete_after_default_move(vpc_id: str) -> tuple[str, dict | None]:
+    """DELETE after moving default; re-GET and retry once if the first call fails.
+
+    Returns (DELETE_OK, None) when gone; (STILL_DEFAULT, attrs) when it must be
+    rename+dropped; (UNDELETABLE, None) when confirmed non-default but DELETE
+    still fails (leave in state for Terraform).
+    """
+    if try_delete_vpc(vpc_id):
+        return DELETE_OK, None
+    try:
+        again = (api("GET", f"/vpcs/{vpc_id}").get("vpc") or {})
+    except ApiError as exc:
+        print(f"rehome_default_vpc: GET /vpcs/{vpc_id} after DELETE failed ({exc})")
+        # Unknown — do not risk a Terraform DELETE on a possible default.
+        return STILL_DEFAULT, {"id": vpc_id, "name": "", "default": True, "description": ""}
+    leftover = {**again, "id": vpc_id}
+    if again.get("default"):
+        print(
+            f"rehome_default_vpc: {vpc_id} still reports default=true after move; "
+            "will rename and drop from state (Terraform DELETE would 403)"
+        )
+        return STILL_DEFAULT, leftover
+    print(f"rehome_default_vpc: {vpc_id} confirmed non-default; retrying DELETE")
+    if try_delete_vpc(vpc_id):
+        return DELETE_OK, None
+    return UNDELETABLE, None
 
 
 def ensure_not_default(entry: dict[str, str]) -> None:
@@ -134,9 +283,10 @@ def ensure_not_default(entry: dict[str, str]) -> None:
         print(f"rehome_default_vpc: {managed_id} is not the region default")
         return
 
-    # Never let Terraform DELETE a VPC that is (or was) the region default.
-    # PUT default onto another VPC when we can; always drop ours from state.
-    print(f"rehome_default_vpc: {managed_id} is the {region} default; will not DELETE it")
+    # Never Terraform-DELETE while this VPC is still the region default.
+    # After a successful default move: API-DELETE (or leave in state) so the
+    # CIDR is freed. Rename+drop only when it must remain.
+    print(f"rehome_default_vpc: {managed_id} is the {region} default; will not DELETE it yet")
     try:
         listed = api("GET", "/vpcs").get("vpcs") or []
     except ApiError as exc:
@@ -144,44 +294,31 @@ def ensure_not_default(entry: dict[str, str]) -> None:
 
     replacement = pick_replacement(managed_id, region, listed)
     if replacement is None:
-        name = f"aerodeck-{region}-default-keep"
-        cidr = unused_cidr(listed, region)
-        print(f"rehome_default_vpc: creating placeholder {name} {cidr}")
-        try:
-            created = api(
-                "POST",
-                "/vpcs",
-                {
-                    "name": name,
-                    "region": region,
-                    "description": "Region default so Terraform can delete stack VPCs",
-                    "ip_range": cidr,
-                },
-            )
-        except ApiError as exc:
-            print(f"rehome_default_vpc: POST /vpcs failed ({exc}); dropping from state")
-            drop_from_state(address)
+        replacement = create_placeholder(region, listed)
+        if replacement is None:
+            drop_from_state(address, {**current, "id": managed_id})
             return
-        replacement = created.get("vpc") or {}
 
-    rid = replacement.get("id")
-    rname = replacement.get("name")
-    if rid and rname:
-        try:
-            api(
-                "PUT",
-                f"/vpcs/{rid}",
-                {
-                    "name": rname,
-                    "description": replacement.get("description") or "",
-                    "default": True,
-                },
-            )
-            print(f"rehome_default_vpc: set {rid} ({rname}) as {region} default")
-        except ApiError as exc:
-            print(f"rehome_default_vpc: PUT default failed ({exc})")
+    if not set_replacement_default(replacement):
+        drop_from_state(address, {**current, "id": managed_id})
+        return
 
-    drop_from_state(address)
+    outcome, leftover = try_delete_after_default_move(managed_id)
+    if outcome == DELETE_OK:
+        print(
+            f"rehome_default_vpc: removing {address} from Terraform state after DELETE"
+        )
+        remove_from_state(address)
+        return
+    if outcome == STILL_DEFAULT:
+        drop_from_state(address, leftover or {**current, "id": managed_id})
+        return
+
+    # Confirmed non-default but DELETE refused (e.g. members still attached).
+    print(
+        f"rehome_default_vpc: {managed_id} is non-default but undeletable; "
+        "leaving in state for Terraform DELETE"
+    )
 
 
 def main() -> None:
