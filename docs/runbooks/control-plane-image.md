@@ -1,10 +1,11 @@
 # Control-plane image (DigitalOcean Container Registry)
 
-CI builds `apps/control-plane` on every pull request that touches it. A push
-to `main` publishes the image to **DigitalOcean Container Registry**, tagged
-with the git SHA (immutable) and a floating `main` tag. Pull requests never
-push `main`. Workflow:
-`.github/workflows/control-plane-image.yml`.
+CI builds `apps/control-plane` and `apps/dashboard` on every pull request that
+touches them. A push to `main` publishes the images to **DigitalOcean Container
+Registry**, tagged with the git SHA (immutable) and a floating `main` tag. Pull
+requests never push `main`. Workflows:
+`.github/workflows/control-plane-image.yml` and
+`.github/workflows/dashboard-image.yml`.
 
 Do not publish to GHCR. DigitalOcean only.
 
@@ -15,10 +16,11 @@ Do not publish to GHCR. DigitalOcean only.
 | `<git sha>` | every successful push to `main` | pin a Droplet to one build |
 | `main` | same push, floating | default `control_plane_image` in Terraform |
 
-Image name:
+Image names:
 
 ```
 registry.digitalocean.com/<registry>/control-plane:<tag>
+registry.digitalocean.com/<registry>/dashboard:<tag>
 ```
 
 Default registry name is `aerodeck`. Override with repo variable `DOCR_NAME`.
@@ -41,8 +43,10 @@ Account, token, and registry click-by-click:
 
 1. In DigitalOcean: **Container Registry** → create `aerodeck` (Starter is
    enough). One registry per account; it is not per environment.
-2. Repo secret `DIGITALOCEAN_TOKEN` already used by plan/apply. It must be
-   able to push to that registry.
+2. Repo secret `DOCR_TOKEN` (dedicated token with **Container Registry → Read &
+   Write** scope) or `DIGITALOCEAN_TOKEN` (if it already includes Container
+   Registry Write scope). The workflows prefer `DOCR_TOKEN` and fall back to
+   `DIGITALOCEAN_TOKEN`.
 3. Optional repo **variable** `DOCR_NAME` if the registry is not `aerodeck`.
 
 Until the token is set, the push job **skips** and pull requests stay green.

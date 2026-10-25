@@ -21,6 +21,7 @@ on:
       - ".github/workflows/control-plane-image.yml"
       - "packages/iac-engine/tests/test_image_publish.py"
       - "packages/iac-engine/stacks/tenant/**"
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -69,12 +70,14 @@ jobs:
       - name: Check registry credentials
         id: creds
         env:
+          DOCR_TOKEN: ${{ secrets.DOCR_TOKEN }}
           DIGITALOCEAN_TOKEN: ${{ secrets.DIGITALOCEAN_TOKEN }}
         run: |
           set -euo pipefail
-          if [ -z "${DIGITALOCEAN_TOKEN}" ]; then
+          token="${DOCR_TOKEN:-${DIGITALOCEAN_TOKEN:-}}"
+          if [ -z "${token}" ]; then
             echo "ready=false" >> "${GITHUB_OUTPUT}"
-            echo "::notice::DIGITALOCEAN_TOKEN is not set; skipping image push. See docs/runbooks/control-plane-image.md"
+            echo "::notice::DOCR_TOKEN / DIGITALOCEAN_TOKEN is not set; skipping image push. See docs/runbooks/control-plane-image.md"
             exit 0
           fi
           echo "ready=true" >> "${GITHUB_OUTPUT}"
@@ -88,9 +91,11 @@ jobs:
       - name: Build, tag, and push SHA + main
         if: steps.creds.outputs.ready == 'true'
         env:
+          DOCR_TOKEN: ${{ secrets.DOCR_TOKEN }}
           DIGITALOCEAN_TOKEN: ${{ secrets.DIGITALOCEAN_TOKEN }}
         run: |
           set -euo pipefail
+          token="${DOCR_TOKEN:-${DIGITALOCEAN_TOKEN}}"
           registry="${DOCR_NAME:-aerodeck}"
           image="registry.digitalocean.com/${registry}/${IMAGE_REPO}"
           docker build \
@@ -98,8 +103,8 @@ jobs:
             --tag "${image}:${GITHUB_SHA}" \
             --tag "${image}:main" \
             .
-          echo "${DIGITALOCEAN_TOKEN}" | docker login registry.digitalocean.com \
-            --username "${DIGITALOCEAN_TOKEN}" \
+          echo "${token}" | docker login registry.digitalocean.com \
+            --username "${token}" \
             --password-stdin
           python3 apps/control-plane/scripts/prune_docr_images.py \
             --registry "${registry}" \

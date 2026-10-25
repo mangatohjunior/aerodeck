@@ -1,0 +1,113 @@
+name: Dashboard image
+
+# Build apps/dashboard on every PR that touches it. Push to DigitalOcean
+# Container Registry only from main: an immutable git-SHA tag plus a floating
+# `main` tag, pruning older digests so the Starter registry stays within its
+# 5-image cap. Pull requests never push `main` (or any other tag).
+
+on:
+  pull_request:
+    paths:
+      - "apps/dashboard/**"
+      - ".github/workflows/dashboard-image.yml"
+      - "packages/iac-engine/tests/test_image_publish.py"
+  push:
+    branches: [main]
+    paths:
+      - "apps/dashboard/**"
+      - ".github/workflows/dashboard-image.yml"
+      - "packages/iac-engine/tests/test_image_publish.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dashboard-image-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DOCR_NAME: ${{ vars.DOCR_NAME }}
+  IMAGE_REPO: dashboard
+  DOCKER_BUILDKIT: "1"
+
+jobs:
+  build:
+    name: build dashboard image
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Workflow and Dockerfile shape
+        run: python packages/iac-engine/tests/test_image_publish.py
+
+      - name: Build
+        run: |
+          set -euo pipefail
+          docker build \
+            --file apps/dashboard/Dockerfile \
+            --tag "aerodeck/${IMAGE_REPO}:${GITHUB_SHA}" \
+            apps/dashboard
+
+  push:
+    name: push to DigitalOcean Container Registry
+    needs: build
+    if: >-
+      github.event_name != 'pull_request'
+      && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check registry credentials
+        id: creds
+        env:
+          DOCR_TOKEN: ${{ secrets.DOCR_TOKEN }}
+          DIGITALOCEAN_TOKEN: ${{ secrets.DIGITALOCEAN_TOKEN }}
+        run: |
+          set -euo pipefail
+          token="${DOCR_TOKEN:-${DIGITALOCEAN_TOKEN:-}}"
+          if [ -z "${token}" ]; then
+            echo "ready=false" >> "${GITHUB_OUTPUT}"
+            echo "::notice::DOCR_TOKEN / DIGITALOCEAN_TOKEN is not set; skipping image push."
+            exit 0
+          fi
+          echo "ready=true" >> "${GITHUB_OUTPUT}"
+
+      - name: Checkout
+        if: steps.creds.outputs.ready == 'true'
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Build, tag, and push SHA + main
+        if: steps.creds.outputs.ready == 'true'
+        env:
+          DOCR_TOKEN: ${{ secrets.DOCR_TOKEN }}
+          DIGITALOCEAN_TOKEN: ${{ secrets.DIGITALOCEAN_TOKEN }}
+        run: |
+          set -euo pipefail
+          token="${DOCR_TOKEN:-${DIGITALOCEAN_TOKEN}}"
+          registry="${DOCR_NAME:-aerodeck}"
+          image="registry.digitalocean.com/${registry}/${IMAGE_REPO}"
+          docker build \
+            --file apps/dashboard/Dockerfile \
+            --tag "${image}:${GITHUB_SHA}" \
+            --tag "${image}:main" \
+            apps/dashboard
+          echo "${token}" | docker login registry.digitalocean.com \
+            --username "${token}" \
+            --password-stdin
+          python3 apps/control-plane/scripts/prune_docr_images.py \
+            --registry "${registry}" \
+            --repository "${IMAGE_REPO}" \
+            --keep 1
+          docker push "${image}:${GITHUB_SHA}"
+          docker push "${image}:main"
+          python3 apps/control-plane/scripts/prune_docr_images.py \
+            --registry "${registry}" \
+            --repository "${IMAGE_REPO}" \
+            --keep 2

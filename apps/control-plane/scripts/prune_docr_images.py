@@ -78,8 +78,16 @@ def list_repository_manifests(
     """Return all manifests in `registry/repository` (empty list on 404)."""
     reg = urllib.parse.quote(registry, safe="")
     repo = urllib.parse.quote(repository, safe="")
-    url = f"{DO_API_BASE}/registry/{reg}/repositories/{repo}/digests?per_page=200"
-    status, payload = send("GET", url, None)
+    urls = (
+        f"{DO_API_BASE}/registries/{reg}/repositories/{repo}/digests?per_page=200",
+        f"{DO_API_BASE}/registry/{reg}/repositories/{repo}/digests?per_page=200",
+    )
+    status = 404
+    payload = b"{}"
+    for url in urls:
+        status, payload = send("GET", url, None)
+        if status != 404:
+            break
     if status == 404:
         return []
     if status != 200:
@@ -90,12 +98,7 @@ def list_repository_manifests(
     raw_list = parsed.get("manifests") if isinstance(parsed, dict) else None
     if not isinstance(raw_list, list):
         return []
-    manifests: list[ManifestInfo] = []
-    for item in raw_list:
-        entry = _parse_manifest(item)
-        if entry is not None:
-            manifests.append(entry)
-    return manifests
+    return [m for item in raw_list if (m := _parse_manifest(item)) is not None]
 
 
 def select_digests_to_delete(
@@ -127,8 +130,15 @@ def delete_repository_digest(
     reg = urllib.parse.quote(registry, safe="")
     repo = urllib.parse.quote(repository, safe="")
     dig = urllib.parse.quote(digest, safe="")
-    url = f"{DO_API_BASE}/registry/{reg}/repositories/{repo}/digests/{dig}"
-    status, _ = send("DELETE", url, None)
+    urls = (
+        f"{DO_API_BASE}/registries/{reg}/repositories/{repo}/digests/{dig}",
+        f"{DO_API_BASE}/registry/{reg}/repositories/{repo}/digests/{dig}",
+    )
+    status = 404
+    for url in urls:
+        status, _ = send("DELETE", url, None)
+        if status != 404:
+            break
     if status == 404:
         return False
     if status not in (200, 202, 204):
@@ -141,11 +151,18 @@ def delete_repository_digest(
 def trigger_garbage_collection(send: HttpMethod, registry: str) -> bool:
     """Start online garbage collection on `registry`; ignores 409/422 if busy."""
     reg = urllib.parse.quote(registry, safe="")
-    url = f"{DO_API_BASE}/registry/{reg}/garbage-collection"
+    urls = (
+        f"{DO_API_BASE}/registries/{reg}/garbage-collection",
+        f"{DO_API_BASE}/registry/{reg}/garbage-collection",
+    )
     body = json.dumps({"type": "untagged manifests and unreferenced blobs"}).encode(
         "utf-8"
     )
-    status, _ = send("POST", url, body)
+    status = 404
+    for url in urls:
+        status, _ = send("POST", url, body)
+        if status != 404:
+            break
     if status in (200, 201, 202):
         return True
     if status in (400, 404, 409, 422):
@@ -196,12 +213,13 @@ def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
     registry = (args.registry or "aerodeck").strip() or "aerodeck"
     token = (
-        os.environ.get("DIGITALOCEAN_TOKEN")
+        os.environ.get("DOCR_TOKEN")
+        or os.environ.get("DIGITALOCEAN_TOKEN")
         or os.environ.get("AERODECK_DIGITALOCEAN_TOKEN")
         or ""
     ).strip()
     if not token:
-        print("DIGITALOCEAN_TOKEN is not set; skipping DOCR prune.")
+        print("DOCR_TOKEN / DIGITALOCEAN_TOKEN is not set; skipping DOCR prune.")
         return 0
     send = _make_http_sender(token)
     deleted = prune_repository(send, registry, args.repository, args.keep)
