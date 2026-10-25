@@ -46,6 +46,7 @@ def main() -> None:
     _must(WORKFLOW, "${GITHUB_SHA}", "control-plane-image.yml")
     _must(WORKFLOW, "${image}:main", "control-plane-image.yml")
     _must(WORKFLOW, "secrets.DIGITALOCEAN_TOKEN", "control-plane-image.yml")
+    _must(WORKFLOW, "prune_docr_images.py", "control-plane-image.yml")
     _must(WORKFLOW, "permissions:", "control-plane-image.yml")
     _must(WORKFLOW, "contents: read", "control-plane-image.yml")
 
