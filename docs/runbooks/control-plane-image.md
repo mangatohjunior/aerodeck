@@ -27,6 +27,13 @@ The platform stack writes that reference to
 `/etc/aerodeck/control-plane-image` on the Droplet. It does **not** log in to
 the registry or start the container (no token on the host).
 
+Because the DigitalOcean Container Registry Starter tier stores at most ~5
+images across the registry, CI runs
+`apps/control-plane/scripts/prune_docr_images.py` before (`--keep 1`) and after
+(`--keep 2`) pushing so each repository keeps `main` plus the newest SHA digest
+and triggers online garbage collection (`/v2/registry/{registry}/garbage-collection`)
+when older digests are removed.
+
 ## Operator setup (once)
 
 Account, token, and registry click-by-click:

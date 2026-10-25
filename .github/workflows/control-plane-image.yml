@@ -101,5 +101,13 @@ jobs:
           echo "${DIGITALOCEAN_TOKEN}" | docker login registry.digitalocean.com \
             --username "${DIGITALOCEAN_TOKEN}" \
             --password-stdin
+          python3 apps/control-plane/scripts/prune_docr_images.py \
+            --registry "${registry}" \
+            --repository "${IMAGE_REPO}" \
+            --keep 1
           docker push "${image}:${GITHUB_SHA}"
           docker push "${image}:main"
+          python3 apps/control-plane/scripts/prune_docr_images.py \
+            --registry "${registry}" \
+            --repository "${IMAGE_REPO}" \
+            --keep 2
