@@ -27,7 +27,13 @@ can PATCH/DELETE the project (`/api/console/projects/{id}`) and its environments
 (`/api/console/projects/{id}/environments/{environmentId}`) when the console client
 is set; deletes clear deployment links on the control plane. Mock stays read-only.
 Sandboxes read `GET /api/v1/projects/{id}/sandboxes` through
-`GET /api/console/sandboxes`. Creating a deployment uses
+`GET /api/console/sandboxes` and, when the console client is set, boot new
+microVMs through `POST /api/console/sandboxes` (→
+`POST /api/v1/projects/{id}/sandboxes`, returning `id`, `project_id`, `image`,
+`vcpu`, `memory_mib`, `status`, `expires_at`, and `created_at`, never `host_id`
+or `hypervisor_vm_id`). When no Firecracker host is enrolled, `503`
+`sandbox_unavailable` surfaces a clear operator message; without the client,
+sandbox create returns 404 and the form stays hidden. Creating a deployment uses
 `POST /api/v1/deployments` through `POST /api/console/deployments` when the
 console client is set, and stays on `/api/mock/v1/deployments` when it is not
 ([dashboard-mock.md](dashboard-mock.md)). With the console client, Deploy also

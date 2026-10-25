@@ -422,6 +422,86 @@ export async function listControlPlaneSandboxes(
   return { items, total: items.length };
 }
 
+export type CreateControlPlaneSandboxInput = {
+  projectId: string;
+  image: string;
+  vcpu: number;
+  memoryMib: number;
+  ttlSeconds: number;
+};
+
+export async function createControlPlaneSandbox(
+  config: ControlPlaneConfig,
+  input: CreateControlPlaneSandboxInput,
+  options: ListOptions = {},
+): Promise<Sandbox> {
+  if (!isControlPlaneUuid(input.projectId)) {
+    throw new ControlPlaneError("control plane sandbox project id was not a uuid");
+  }
+  const fetchImpl = options.fetch ?? fetch;
+  const now = options.now ?? Date.now;
+  const accessToken = await accessTokenFor(config, fetchImpl, now);
+  const response = await fetchImpl(
+    `${config.baseUrl}/api/v1/projects/${encodeURIComponent(input.projectId)}/sandboxes`,
+    {
+      method: "POST",
+      headers: {
+        accept: "application/json",
+        authorization: `Bearer ${accessToken}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        image: input.image,
+        vcpu: input.vcpu,
+        memory_mib: input.memoryMib,
+        ttl_seconds: input.ttlSeconds,
+      }),
+      cache: "no-store",
+    },
+  );
+  await throwIfSandboxResponseFailed(response);
+  return parseSandbox(await response.json());
+}
+
+async function throwIfSandboxResponseFailed(response: Response): Promise<void> {
+  if (response.status === 404) {
+    await discardResponseBody(response);
+    throw new ControlPlaneError("control plane sandbox project was not found (404)", 404);
+  }
+  if (response.status === 422) {
+    await discardResponseBody(response);
+    throw new ControlPlaneError("control plane sandbox rejected (422)", 422);
+  }
+  if (response.status === 503) {
+    await discardResponseBody(response);
+    throw new ControlPlaneError(
+      "control plane sandbox host unavailable (503)",
+      503,
+      undefined,
+      { code: "sandbox_unavailable" },
+    );
+  }
+  if (response.status === 502) {
+    const code = await errorCode(response);
+    if (code === "sandbox_failed") {
+      throw new ControlPlaneError(
+        "control plane sandbox boot failed (502)",
+        502,
+        undefined,
+        { code: "sandbox_failed" },
+      );
+    }
+    throw new ControlPlaneError("control plane sandbox request failed (502)", 502);
+  }
+  if (!response.ok) {
+    await discardResponseBody(response);
+    throw new ControlPlaneError(
+      `control plane sandbox request failed (${response.status})`,
+      response.status,
+    );
+  }
+}
+
 export async function openControlPlaneDeploymentLogs(
   config: ControlPlaneConfig,
   deploymentId: string,

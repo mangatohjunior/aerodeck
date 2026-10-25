@@ -15,6 +15,7 @@ import {
   type PublicUser,
   type RouteCertificate,
   type RouteDnsRecord,
+  type Sandbox,
   type SandboxPage,
 } from "@/lib/types";
 
@@ -253,6 +254,28 @@ export async function fetchSandboxPage(): Promise<SandboxPage> {
   const response = await fetch("/api/console/sandboxes", {
     credentials: "same-origin",
     cache: "no-store",
+  });
+  return readJson(response);
+}
+
+export async function createSandbox(input: {
+  projectId: string;
+  image: string;
+  vcpu: number;
+  memoryMib: number;
+  ttlSeconds: number;
+}): Promise<Sandbox> {
+  const response = await fetch("/api/console/sandboxes", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "same-origin",
+    body: JSON.stringify({
+      project_id: input.projectId,
+      image: input.image,
+      vcpu: input.vcpu,
+      memory_mib: input.memoryMib,
+      ttl_seconds: input.ttlSeconds,
+    }),
   });
   return readJson(response);
 }
