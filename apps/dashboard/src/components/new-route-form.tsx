@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/card";
 import { createProjectRoute } from "@/lib/api";
 import {
+  DEFAULT_ROUTE_BACKEND_HOST,
   DEFAULT_ROUTE_BACKEND_PORT,
   DEFAULT_ROUTE_PATH_PREFIX,
   parseRouteCreateFields,
@@ -34,7 +35,7 @@ type NewRouteFormProps = {
 export function NewRouteForm({ projectId, environments, onCreated }: NewRouteFormProps) {
   const [environmentId, setEnvironmentId] = useState(environments[0]?.id ?? "");
   const [hostname, setHostname] = useState("");
-  const [backendHost, setBackendHost] = useState("");
+  const [backendHost, setBackendHost] = useState(DEFAULT_ROUTE_BACKEND_HOST);
   const [backendPort, setBackendPort] = useState(String(DEFAULT_ROUTE_BACKEND_PORT));
   const [pathPrefix, setPathPrefix] = useState(DEFAULT_ROUTE_PATH_PREFIX);
   const [error, setError] = useState<string | null>(null);
@@ -52,7 +53,7 @@ export function NewRouteForm({ projectId, environments, onCreated }: NewRouteFor
 
   function resetFields() {
     setHostname("");
-    setBackendHost("");
+    setBackendHost(DEFAULT_ROUTE_BACKEND_HOST);
     setBackendPort(String(DEFAULT_ROUTE_BACKEND_PORT));
     setPathPrefix(DEFAULT_ROUTE_PATH_PREFIX);
   }

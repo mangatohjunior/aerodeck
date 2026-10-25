@@ -35,12 +35,12 @@ export async function POST(request: Request, context: RouteContext) {
   if (
     typeof payload.environment_id !== "string" ||
     typeof payload.hostname !== "string" ||
-    typeof payload.backend_host !== "string" ||
+    (payload.backend_host !== undefined && typeof payload.backend_host !== "string") ||
     (typeof payload.backend_port !== "number" && typeof payload.backend_port !== "string")
   ) {
     return jsonError(
       400,
-      "environment_id, hostname, backend_host, and backend_port are required.",
+      "environment_id, hostname, and backend_port are required.",
       "missing_fields",
     );
   }
@@ -54,7 +54,7 @@ export async function POST(request: Request, context: RouteContext) {
     projectId: gated.projectId,
     environmentId: payload.environment_id,
     hostname: payload.hostname,
-    backendHost: payload.backend_host,
+    backendHost: typeof payload.backend_host === "string" ? payload.backend_host : undefined,
     backendPort: payload.backend_port,
     pathPrefix: pathPrefix.value,
   });

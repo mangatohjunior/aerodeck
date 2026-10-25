@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import {
+  DEFAULT_ROUTE_BACKEND_HOST,
   formatDnsGuidance,
   formatDnsTarget,
   mergeRoutesById,
@@ -51,6 +52,31 @@ describe("parseRouteCreateFields", () => {
     if (parsed.ok) {
       assert.equal(parsed.value.pathPrefix, "/");
       assert.equal(parsed.value.backendPort, 3000);
+    }
+  });
+
+  it("defaults backendHost to 10.41.0.2 when omitted or blank", () => {
+    const omitted = parseRouteCreateFields({
+      projectId,
+      environmentId,
+      hostname: "payments.aero-deck.app",
+      backendPort: 8080,
+    });
+    assert.equal(omitted.ok, true);
+    if (omitted.ok) {
+      assert.equal(omitted.value.backendHost, DEFAULT_ROUTE_BACKEND_HOST);
+    }
+
+    const blank = parseRouteCreateFields({
+      projectId,
+      environmentId,
+      hostname: "payments.aero-deck.app",
+      backendHost: "   ",
+      backendPort: 8080,
+    });
+    assert.equal(blank.ok, true);
+    if (blank.ok) {
+      assert.equal(blank.value.backendHost, DEFAULT_ROUTE_BACKEND_HOST);
     }
   });
 
