@@ -13,7 +13,8 @@ if [[ -z "${CONTROL_HOST}" ]]; then
 fi
 
 REPO="${AERODECK_GITHUB_REPO:-mangatohjunior/aerodeck}"
-RUNNER_VERSION="${AERODECK_RUNNER_VERSION:-2.322.0}"
+LATEST_VERSION="$(gh api repos/actions/runner/releases/latest --jq '.tag_name | ltrimstr("v")' 2>/dev/null || true)"
+RUNNER_VERSION="${AERODECK_RUNNER_VERSION:-${LATEST_VERSION:-2.338.0}}"
 RUNNER_DIR="${AERODECK_RUNNER_DIR:-$HOME/actions-runner-aerodeck}"
 RUNNER_NAME="${AERODECK_RUNNER_NAME:-aerodeck-local}"
 
