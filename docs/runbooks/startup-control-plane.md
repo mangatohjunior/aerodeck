@@ -21,7 +21,7 @@ Port **8000** is VPC-only. Probe from the Droplet, not from your laptop.
 From PowerShell:
 
 ```powershell
-ssh -i $env:USERPROFILE\.ssh\aerodeck_ed25519 root@174.138.9.16
+ssh -i $env:USERPROFILE\.ssh\aerodeck_ed25519 root@188.166.67.201
 ```
 
 Replace the IPv4 if `terraform output droplet_ipv4` differs.
@@ -61,35 +61,27 @@ skipped the push. Actions → **Control plane image** → re-run the latest
 **main** workflow. Confirm DigitalOcean → Container Registry → `aerodeck`
 shows `control-plane` tags `main` and a git SHA. Then `docker pull` again.
 
-## 5. Install the start scripts from the image
+## 5. Install the standup scripts from the image
 
-The scripts are in the image at `/app/scripts/`. Use those. An old file at
-`/root/start-on-droplet.sh` (copied earlier with `scp`) curls `:8000` once
-and exits with `curl: (7) ... after 0 ms` while uvicorn is still binding.
-
-On the Droplet, after the pull in step 4:
+The standup scripts live in the image under `/app/scripts/`. Extract all of
+them at once so `start-on-droplet.sh`, `enroll-console-client.sh`, and
+`publish-console-route.py` are ready on the Droplet:
 
 ```bash
 IMAGE=$(tr -d '[:space:]' < /etc/aerodeck/control-plane-image)
-docker run --rm --entrypoint cat "$IMAGE" /app/scripts/start-on-droplet.sh > /root/start-on-droplet.sh
-docker run --rm --entrypoint cat "$IMAGE" /app/scripts/rewrite_do_postgres_url.py > /root/rewrite_do_postgres_url.py
-sed -i 's/\r$//' /root/start-on-droplet.sh /root/rewrite_do_postgres_url.py
-chmod +x /root/start-on-droplet.sh
+mkdir -p /root/aerodeck
+for f in start-on-droplet.sh rewrite_do_postgres_url.py enroll-console-client.sh dashboard_env.py; do
+  docker run --rm --entrypoint cat "$IMAGE" "/app/scripts/$f" > "/root/$f"
+done
+docker run --rm --entrypoint cat "$IMAGE" /app/scripts/publish-console-route.py > /root/aerodeck/publish-console-route.py
+sed -i 's/\r$//' /root/start-on-droplet.sh /root/rewrite_do_postgres_url.py /root/enroll-console-client.sh /root/dashboard_env.py /root/aerodeck/publish-console-route.py
+chmod +x /root/start-on-droplet.sh /root/enroll-console-client.sh
 grep -n 'waiting up to 30s' /root/start-on-droplet.sh
 ```
 
-`grep` must print a line. The script then waits up to 30s and does not print
-`curl: (7)` while uvicorn is binding.
-
-Laptop `scp` still works when SSH is open, but the image copy is the one
-that matches the tag you just pulled.
-
-On the Droplet, strip CR if you still see `set: pipefail: invalid option name`:
-
-```bash
-sed -i 's/\r$//' /root/start-on-droplet.sh /root/rewrite_do_postgres_url.py
-chmod +x /root/start-on-droplet.sh
-```
+`grep` must print a line. The script waits up to 30s for `:8000` and passes
+`AERODECK_ENV` into `aerodeck-migrate` so Alembic does not inherit the
+Dockerfile's `AERODECK_ENV=production` default on `dev`.
 
 Run with `sudo bash`, not `sh`.
 
@@ -121,12 +113,13 @@ sudo bash /root/start-on-droplet.sh 'postgresql://doadmin:PASSWORD@private-…:2
 The script:
 
 1. Writes `/etc/aerodeck/control-plane.env` (mode `600`).
-2. Runs `alembic upgrade head` (expect `0001` … `0007`).
+2. Runs `alembic upgrade head` (expect `0001` … `0014`).
 3. Starts `aerodeck-api` (`uvicorn` on `0.0.0.0:8000`, `--network host`).
 4. Waits for `/healthz`, then starts `aerodeck-worker`.
 
-Alembic needs `AERODECK_AUTH_SIGNING_KEY` as well as the database URL; the
-script generates one on first run and reuses it after that.
+Alembic needs `AERODECK_AUTH_SIGNING_KEY` and `AERODECK_ENV` as well as the
+database URL; the script generates a signing key on first run and reuses it
+after that.
 
 The script rewrites core keys but **keeps** extra `AERODECK_*` values already
 in the env file (Traefik token, DigitalOcean DNS, Let's Encrypt, IaC worker).
@@ -153,31 +146,28 @@ Expect `aerodeck-api`, `aerodeck-worker`, and `aerodeck-redis` **Up**.
 `curl` to `:8000` from the laptop will time out. That is the cloud firewall,
 not a dead process.
 
-The script prints `waiting up to 30s for the API on :8000`, then the JSON
-from `/healthz` and `/readyz`. `curl: (7) ... after 0 ms` means
-`/root/start-on-droplet.sh` is still the old copy. Repeat step 5 from the
-image, then run the script again. `docker logs aerodeck-api` shows
-`Uvicorn running on http://0.0.0.0:8000` once it has bound.
-
 ## 9. Optional: API clients
 
 `/healthz` and `/readyz` need no auth. Every `/api/v1` resource, including
 reads, needs a bearer from `POST /api/v1/auth/token`. Set
 `AERODECK_AUTH_CLIENTS` to SHA-256 hex digests of client secrets (never the
-secrets). Procedure: [control-plane.md](control-plane.md).
+secrets). Procedure: [dashboard-console.md](dashboard-console.md) (`enroll-console-client.sh`).
 
 ## Troubleshooting
 
 1. **`pipefail: invalid option name`** — CRLF. Repeat step 5 `sed`.
 2. **`auth_signing_key Field required`** — ran `docker … alembic` without the
    env file. Use the start script.
-3. **`getaddrinfo` / DNS** — URI is hostname-only or a stray quote. Repeat
+3. **`AERODECK_ENV staging and production require AERODECK_ACME_ISSUER=letsencrypt`** —
+   `/root/start-on-droplet.sh` is missing `-e AERODECK_ENV` on `aerodeck-migrate`.
+   Re-extract `start-on-droplet.sh` from the image (step 5).
+4. **`getaddrinfo` / DNS** — URI is hostname-only or a stray quote. Repeat
    step 6 with the full private URI, then:
    `python3 -c "import os,urllib.parse; u=urllib.parse.urlparse(os.environ['AERODECK_DATABASE_URL']); print(u.scheme, u.hostname, u.port)"`
    Host must be `private-…`, port `25060`.
-4. **`control-plane:main: not found`** — step 4.
-5. **Docker login password** — DigitalOcean token, not Docker Hub.
-6. **Ping to the Droplet times out** — ICMP is VPC-only. Use SSH, not ping.
+5. **`control-plane:main: not found`** — step 4.
+6. **Docker login password** — DigitalOcean token, not Docker Hub.
+7. **Ping to the Droplet times out** — ICMP is VPC-only. Use SSH, not ping.
 
 ## Related
 
