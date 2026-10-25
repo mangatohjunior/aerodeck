@@ -1,0 +1,68 @@
+# Next.js Dashboard Guardrails
+
+These rules apply to `apps/dashboard`. They are non-negotiable unless an ADR
+in `docs/adr/` explicitly supersedes them. Keep in sync with
+`.cursor/rules/nextjs-dashboard.mdc`.
+
+## 1. Stack
+
+- **Next.js App Router only.** No `pages/` directory, no `getServerSideProps`, no `getInitialProps`.
+- TypeScript strict. Path alias `@/*` → `src/*`.
+- Styling: Tailwind CSS. Components: **shadcn/ui** (`Button`, `Card`, `Input`, `Label`, `Badge`, `Separator`, and later additions). Do not invent a parallel component kit.
+- Icons: `lucide-react`. Do not add a second icon package.
+- Fonts: the project Geist / Geist Mono CSS variables already wired in `src/app/layout.tsx`.
+
+## 2. Layout & routing
+
+```
+apps/dashboard/src/
+├── app/                    # routes, layout, globals.css
+├── components/             # feature components + components/ui (shadcn)
+└── lib/                    # utils, mock clients, typed domain objects
+```
+
+- Operator routes live under `app/(console)`. Shell (sidebar + main) wraps only that group. Navigation is explicit: Overview, Deploy, Deployments, Projects, Sandboxes.
+- Public routes live under `app/(public)` (`/about`, `/policy`, `/register`, `/login`). They use a header + footer shell — never the operator sidebar. Register and Login legal copy must link to `/policy`.
+- Register POSTs `/api/console/register` when the console client is set, otherwise `/api/mock/v1/auth/register`, then redirects to `/login?registered=1`. No token in `localStorage`.
+- Login POSTs `/api/mock/v1/auth/login` and receives an httpOnly `aerodeck_session` cookie. When the console client is set, that route checks `POST /api/v1/console-users/login` and then issues the cookie. A wrong password and an unknown email return the same error. Without the client, login uses the mock store. Logout POSTs `/api/mock/v1/auth/logout`. When the console client is set, sign-in stores the session with `POST /api/v1/console-sessions`. Sign-out revokes that control-plane session before clearing the cookie; a mock-store cookie (for example mock Google) clears locally and does not call revoke. A failed revoke leaves the cookie in place. A dashboard restart still resolves the cookie. A resolve failure other than not-found returns 502 from console routes and does not throw into the shell. `GET /api/mock/v1/auth/me` returns the current user, 401, or 502. Do not put JWTs in query strings or `localStorage`.
+- Continue with Google hits `GET /api/mock/v1/auth/google/start` then the callback. No Google API key. Real Google OAuth (PKCE) runs only when both `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` are set in the dashboard env — never put the secret in client code. `enroll-console-client.sh` keeps those two lines. Mock Google links to an existing email/password user with the same email when either value is unset. When both Google values and the console client are set, the callback stores that verified email with `POST /api/v1/console-users/google` and then issues `aerodeck_session`. The mock subject is not written to the control plane. A mock Google cookie stays in the dashboard process even when the console client is set.
+- Console routes (`/`, `/deploy`, `/deployments`, `/projects`, `/sandboxes`) require a valid session. Signed-out visits redirect to `/login`. Signed-in visits to `/login` or `/register` redirect to Overview. Public `/about` and `/policy` stay open. A 401 from `/auth/me` is signed out, not a crash. Do not `await connection()` in the public layout.
+- Interactive deploy state lives in Client Components. Do not mark the root layout `"use client"` just to hold form state.
+- Responsive: console sidebar is a fixed column on `md+`; hamburger + overlay on smaller viewports. Public nav uses the same split (inline links on `md+`, hamburger on smaller viewports).
+
+## 3. Control-plane calls
+
+The browser never calls FastAPI. The session cookie stays on this origin. Control-plane bearers and client secrets stay on the server.
+
+- `GET /api/console/projects` requires `aerodeck_session`. The route handler then calls `GET /api/v1/projects` with an enrolled client (`CONTROL_PLANE_URL`, `CONTROL_PLANE_CLIENT_ID`, `CONTROL_PLANE_CLIENT_SECRET`). Those names must not be `NEXT_PUBLIC_*`.
+- `POST /api/console/projects` uses the same session and client to call `POST /api/v1/projects`. Without the client, create returns 404 and the Projects form stays hidden so the seed list is unchanged. A duplicate slug returns 409.
+- `POST /api/console/environments` uses the same session and client to call `POST /api/v1/projects/{project_id}/environments` (slug, name, kind, DigitalOcean region). Without the client, create returns 404 and the environment form stays hidden. Unknown project → 404; duplicate slug in the project → 409.
+- `GET /api/console/projects/{id}` returns that project, its environments, and its routes when the console client is set. Without the client, a seed project returns with empty environment and route lists. Unknown id → 404. Deployment environment links go to `/projects/{id}#environments`; the Routes section is `#routes`. Route rows expose hostname and enabled state only (no backend host or secrets).
+- `PATCH` / `DELETE /api/console/projects/{id}` and `PATCH` / `DELETE /api/console/projects/{id}/environments/{environmentId}` mutate through the enrolled client. Without the client, mutations return 404. Project update is name/description only; environment update is name/kind/region. Deletes clear deployment environment links on the control plane.
+- `GET /api/console/sandboxes` uses the same session and client. It lists `GET /api/v1/projects/{project_id}/sandboxes` for each project on that page.
+- When those variables are unset, list routes return the in-memory seed and `source: "mock"`.
+- Logout stays on `/api/mock/v1/auth/logout`. When the console client is set and the cookie is a control-plane session, that handler revokes `POST /api/v1/console-sessions/logout` and clears the cookie only after revoke succeeds. A mock-store cookie skips revoke and clears locally. Login still posts to `/api/mock/v1/auth/login`; the handler checks the control plane when the console client is set.
+- **Forbidden in client components:** `fetch` to the FastAPI origin, `EventSource` against control-plane `/api/v1`, and JWTs in `localStorage` or query strings.
+- Clicking **Deploy** POSTs `/api/console/deployments` when the console client is set. That route calls `POST /api/v1/deployments` with the enrolled bearer, then opens `/deployments/{id}`. List and read use the same console prefix. Without the client, create, list, and read stay on `/api/mock/v1/deployments`.
+- `GET /api/console/jobs/{id}` requires a session and the enrolled client, then calls `GET /api/v1/jobs/{id}`. Without the client it returns 404. Deployment detail polls this when `provision_job_id` is set (modest interval); mock detail hides the job panel.
+- `POST /api/console/projects/{id}/environments/{environmentId}/reconcile` requires a session and the enrolled client, then calls `POST /api/v1/projects/{id}/environments/{environmentId}/reconcile` and returns `202` with the accepted `job_id`. Without the client it returns 404. Queue down → `503` `queue_unavailable`. Project environment rows expose **Reconcile** only when the detail source is control-plane.
+- Register POSTs `{ email, password }` to `/api/console/register` when the console client is set. That route calls `POST /api/v1/console-users` with the enrolled bearer. The response has no password and no hash. Without the client, register stays on `/api/mock/v1/auth/register`.
+- The **Terminal** consumes `text/event-stream`. With the console client set, that is same-origin `GET /api/console/deployments/{id}/logs`, which attaches the enrolled bearer to `GET /api/v1/deployments/{id}/logs`. Without the client, it stays on `/api/mock/v1/deployments/{id}/logs`. The control-plane stub lines are `Initializing Terraform...`, `Provisioning K3s...`, and `Done`. An unknown id returns 404 and does not stream. When the client is set, `Done` POSTs `/api/console/deployments/{id}/succeeded`, which calls `POST /api/v1/deployments/{id}/succeeded`. Without the client, the mock log route still marks the row succeeded. The browser must not open an `EventSource` against the FastAPI origin.
+
+## 4. UI conventions
+
+- New Deployment: GitHub URL `Input` + **Deploy** `Button` inside a `Card`. Validate `github.com` / `www.github.com` owner/repo locally before the mock POST.
+- Deployment Status: id, repo, started-at, status `Badge`, and the Terminal (black background, monospace green text, `role="log"`).
+- Empty / error / submitting states are first-class. Do not leave a spinner as the only feedback.
+- No hardcoded secrets, tokens, or DigitalOcean credentials in client code or `.env*` committed to git.
+
+## 5. Data types
+
+- Domain types (`Deployment`, `DeploymentStatus`, log events) live in `src/lib/`, not inline in JSX.
+- Prefer discriminated unions for view state (`"new" | "status"`) over boolean flags.
+- Do not reuse API response shapes from the control plane until the wire-up Story; keep the mock types small and documented.
+
+## 6. Testing & verification
+
+- Behaviour changes are verified in the browser (form → mock POST → status → streamed lines → Succeeded) and on a narrow viewport (hamburger nav).
+- When a test runner is added, mock the lib client; do not hit localhost:8000 from unit tests.
