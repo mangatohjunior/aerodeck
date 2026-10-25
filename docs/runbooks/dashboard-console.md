@@ -187,11 +187,18 @@ self-hosted runner lets `.github/workflows/dashboard-image.yml` automatically
 SSH into the Droplet and run `/root/start-dashboard-on-droplet.sh` after every
 `main` image push:
 
-1. In GitHub: **Settings → Actions → Runners → New self-hosted runner**.
-   Choose **Windows** (or Linux/WSL) and run the shown `config` and `run`
-   commands on your local machine (ensure Git Bash `bash`, `ssh`, and `scp` are
-   on `PATH`, and `~/.ssh/aerodeck_ed25519` is present).
-2. In GitHub: **Settings → Secrets and variables → Actions → Variables**, add:
+1. From Git Bash on your local machine (requires `gh` CLI authenticated), run
+   `apps/control-plane/scripts/setup-local-runner.sh` with the control Droplet
+   public IPv4 to set `CONTROL_DROPLET_HOST`, set
+   `DEPLOY_DASHBOARD_SELF_HOSTED=true`, download the GitHub Actions runner into
+   `~/actions-runner-aerodeck`, and register it with `--labels self-hosted`:
+   ```bash
+   bash apps/control-plane/scripts/setup-local-runner.sh 188.166.67.201
+   cd ~/actions-runner-aerodeck && ./run.cmd
+   ```
+2. Or configure manually in GitHub (**Settings → Actions → Runners → New
+   self-hosted runner**) and **Settings → Secrets and variables → Actions →
+   Variables**:
    - `DEPLOY_DASHBOARD_SELF_HOSTED` = `true`
    - `CONTROL_DROPLET_HOST` = `<control-public-ipv4>` (for example `188.166.67.201`)
    - *(Optional)* `CONTROL_SSH_KEY_PATH` if your key is not at `~/.ssh/aerodeck_ed25519`.
