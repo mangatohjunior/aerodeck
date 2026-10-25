@@ -61,7 +61,7 @@ def test_select_digests_rejects_keep_below_one() -> None:
         mod.select_digests_to_delete([], keep=0)
 
 
-def test_prune_repository_deletes_old_digests_and_triggers_gc() -> None:
+def test_prune_repository_deletes_tags_and_digests() -> None:
     mod = _load_script()
     calls: list[tuple[str, str]] = []
 
@@ -80,7 +80,7 @@ def test_prune_repository_deletes_old_digests_and_triggers_gc() -> None:
                     {
                         "digest": "sha256:222",
                         "updated_at": "2026-10-23T00:00:00Z",
-                        "tags": ["old2"],
+                        "tags": ["dashboard-main"],
                     },
                     {
                         "digest": "sha256:333",
@@ -97,8 +97,9 @@ def test_prune_repository_deletes_old_digests_and_triggers_gc() -> None:
             return 201, b"{}"
         raise AssertionError(f"unexpected call {method} {url}")
 
-    deleted = mod.prune_repository(fake_send, "aerodeck", "dashboard", keep=2)
+    deleted = mod.prune_repository(fake_send, "aerodeck", "control-plane", keep=2)
     assert deleted == ["sha256:111"]
+    assert any(method == "DELETE" and "tags/old1" in url for method, url in calls)
     assert any(
         method == "DELETE" and "sha256%3A111" in url for method, url in calls
     )
@@ -106,6 +107,21 @@ def test_prune_repository_deletes_old_digests_and_triggers_gc() -> None:
         method == "POST" and url.endswith("/garbage-collection")
         for method, url in calls
     )
+
+
+def test_delete_repository_digest_handles_412_precondition_failed() -> None:
+    mod = _load_script()
+
+    def send_412(
+        method: str, url: str, body: bytes | None = None
+    ) -> tuple[int, bytes]:
+        _ = (method, url, body)
+        return 412, b'{"errors":[{"code":"PRECONDITION_FAILED"}]}'
+
+    result = mod.delete_repository_digest(
+        send_412, "aerodeck", "control-plane", "sha256:123"
+    )
+    assert result is False
 
 
 def test_prune_repository_handles_missing_repo_and_busy_gc() -> None:

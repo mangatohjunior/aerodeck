@@ -126,13 +126,35 @@ def select_digests_to_delete(
     return [item.digest for item in ordered if item.digest not in retained]
 
 
+def delete_repository_tag(
+    send: HttpMethod,
+    registry: str,
+    repository: str,
+    tag: str,
+) -> bool:
+    """Delete a tag; returns True on 200/202/204 or False on 404."""
+    reg = urllib.parse.quote(registry, safe="")
+    repo = urllib.parse.quote(repository, safe="")
+    t = urllib.parse.quote(tag, safe="")
+    urls = (
+        f"{DO_API_BASE}/registries/{reg}/repositories/{repo}/tags/{t}",
+        f"{DO_API_BASE}/registry/{reg}/repositories/{repo}/tags/{t}",
+    )
+    status = 404
+    for url in urls:
+        status, _ = send("DELETE", url, None)
+        if status != 404:
+            break
+    return status in (200, 202, 204)
+
+
 def delete_repository_digest(
     send: HttpMethod,
     registry: str,
     repository: str,
     digest: str,
 ) -> bool:
-    """Delete a manifest digest; returns True when deleted (204) or False on 404."""
+    """Delete a manifest digest; returns True when deleted (204) or False on 404/412."""
     reg = urllib.parse.quote(registry, safe="")
     repo = urllib.parse.quote(repository, safe="")
     dig = urllib.parse.quote(digest, safe="")
@@ -145,7 +167,7 @@ def delete_repository_digest(
         status, _ = send("DELETE", url, None)
         if status != 404:
             break
-    if status == 404:
+    if status in (404, 412):
         return False
     if status not in (200, 202, 204):
         raise RuntimeError(
@@ -184,12 +206,18 @@ def prune_repository(
 ) -> list[str]:
     """Delete old digests in `registry/repository` beyond `keep` and trigger GC."""
     manifests = list_repository_manifests(send, registry, repository)
+    by_digest = {m.digest: m for m in manifests}
     to_delete = select_digests_to_delete(manifests, keep)
     deleted: list[str] = []
     for digest in to_delete:
+        entry = by_digest.get(digest)
+        if entry is not None:
+            for tag in entry.tags:
+                if tag not in PROTECTED_TAGS:
+                    delete_repository_tag(send, registry, repository, tag)
         if delete_repository_digest(send, registry, repository, digest):
             deleted.append(digest)
-    if deleted:
+    if deleted or to_delete:
         trigger_garbage_collection(send, registry)
     return deleted
 
