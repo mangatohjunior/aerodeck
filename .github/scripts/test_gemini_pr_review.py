@@ -158,12 +158,35 @@ def test_workflow_and_guardrail_files() -> None:
             raise AssertionError(f"Expected non-empty guardrail file at {rel}")
 
 
+def test_select_supported_model() -> None:
+    """Selects a generateContent-capable text Gemini model and skips non-text models."""
+    payload: dict[str, object] = {
+        "models": [
+            {
+                "name": "models/gemini-embedding-001",
+                "supportedGenerationMethods": ["embedContent"],
+            },
+            {
+                "name": "models/gemini-2.5-flash-tts",
+                "supportedGenerationMethods": ["generateContent"],
+            },
+            {
+                "name": "models/gemini-2.0-flash",
+                "supportedGenerationMethods": ["generateContent", "countTokens"],
+            },
+        ]
+    }
+    chosen = reviewer.select_supported_model(payload, failed_model="gemini-2.5-flash")
+    assert chosen == "gemini-2.0-flash"
+
+
 def main() -> None:
     """Run all unit checks."""
     test_normalize_review_markdown()
     test_parse_gemini_response()
     test_collect_changed_file_context_and_prompts()
     test_call_gemini_with_retry()
+    test_select_supported_model()
     test_workflow_and_guardrail_files()
     print("Gemini PR review script and guardrails verified")
 
