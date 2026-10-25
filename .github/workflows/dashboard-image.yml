@@ -12,6 +12,7 @@ on:
   pull_request:
     paths:
       - "apps/dashboard/**"
+      - "apps/control-plane/scripts/prune_docr_images.py"
       - "apps/control-plane/scripts/start-dashboard-on-droplet.sh"
       - ".github/workflows/dashboard-image.yml"
       - "packages/iac-engine/tests/test_image_publish.py"
@@ -19,6 +20,7 @@ on:
     branches: [main]
     paths:
       - "apps/dashboard/**"
+      - "apps/control-plane/scripts/prune_docr_images.py"
       - "apps/control-plane/scripts/start-dashboard-on-droplet.sh"
       - ".github/workflows/dashboard-image.yml"
       - "packages/iac-engine/tests/test_image_publish.py"

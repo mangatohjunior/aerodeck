@@ -1,10 +1,15 @@
 #!/usr/bin/env python3
-"""Prune old DigitalOcean Container Registry (DOCR) image digests and start GC.
+"""Prune old DigitalOcean Container Registry (DOCR) image digests.
 
 Starter registries allow only 1 repository and ~5 images total. Both
 `control-plane` (`:main`) and `dashboard` (`:dashboard-main`) share the
 `control-plane` repository; this script keeps protected tags (`main`,
-`dashboard-main`) plus the newest `--keep` digests and starts online GC.
+`dashboard-main`) plus the newest `--keep` digests.
+
+Online GC (`POST /v2/registries/{registry}/garbage-collection`) operates across
+the entire registry and puts it in read-only mode for up to 15 minutes, blocking
+concurrent pushes (`unauthorized:`). It is therefore opt-in via `--gc` for
+off-peak maintenance, not executed on regular CI image pushes.
 """
 
 from __future__ import annotations
@@ -203,8 +208,9 @@ def prune_repository(
     registry: str,
     repository: str,
     keep: int,
+    run_gc: bool = False,
 ) -> list[str]:
-    """Delete old digests in `registry/repository` beyond `keep` and trigger GC."""
+    """Delete old digests in `registry/repository` beyond `keep`."""
     manifests = list_repository_manifests(send, registry, repository)
     by_digest = {m.digest: m for m in manifests}
     to_delete = select_digests_to_delete(manifests, keep)
@@ -217,7 +223,7 @@ def prune_repository(
                     delete_repository_tag(send, registry, repository, tag)
         if delete_repository_digest(send, registry, repository, digest):
             deleted.append(digest)
-    if deleted or to_delete:
+    if run_gc and (deleted or to_delete):
         trigger_garbage_collection(send, registry)
     return deleted
 
@@ -240,6 +246,12 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default=DEFAULT_KEEP,
         help="Maximum manifests to keep in this repository (default: 2)",
     )
+    parser.add_argument(
+        "--gc",
+        action="store_true",
+        dest="run_gc",
+        help="Trigger online registry garbage collection (locks writes for up to 15 min)",
+    )
     return parser.parse_args(argv)
 
 
@@ -256,7 +268,9 @@ def main(argv: list[str] | None = None) -> int:
         print("DOCR_TOKEN / DIGITALOCEAN_TOKEN is not set; skipping DOCR prune.")
         return 0
     send = _make_http_sender(token)
-    deleted = prune_repository(send, registry, args.repository, args.keep)
+    deleted = prune_repository(
+        send, registry, args.repository, args.keep, run_gc=args.run_gc
+    )
     print(
         f"DOCR {registry}/{args.repository}: deleted {len(deleted)} old digest(s) "
         f"(keep={args.keep})."
