@@ -41,7 +41,7 @@ case "${uname_s}" in
     ;;
 esac
 
-if [[ ! -f "${CONFIG_CMD}" ]]; then
+if [[ ! -f "${ARCHIVE}" || ! -f "${CONFIG_CMD}" ]]; then
   URL="https://github.com/actions/runner/releases/download/v${RUNNER_VERSION}/${ARCHIVE}"
   echo "downloading ${URL}"
   curl -fL -o "${ARCHIVE}" "${URL}"
