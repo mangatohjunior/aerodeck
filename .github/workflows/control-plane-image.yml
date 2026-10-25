@@ -109,7 +109,7 @@ jobs:
           python3 apps/control-plane/scripts/prune_docr_images.py \
             --registry "${registry}" \
             --repository "${IMAGE_REPO}" \
-            --keep 1
+            --keep 2
           docker push "${image}:${GITHUB_SHA}"
           docker push "${image}:main"
           python3 apps/control-plane/scripts/prune_docr_images.py \

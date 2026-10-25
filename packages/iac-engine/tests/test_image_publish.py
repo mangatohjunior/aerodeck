@@ -39,7 +39,12 @@ def _code_lines(text: str) -> str:
     return "\n".join(lines)
 
 
-def _check_docr_workflow(text: str, name: str, path_glob: str) -> None:
+def _check_docr_workflow(
+    text: str,
+    name: str,
+    path_glob: str,
+    floating_tag: str,
+) -> None:
     if "pull_request_target" in text:
         raise SystemExit(f"{name} must not use pull_request_target")
     if "ghcr.io" in text:
@@ -52,7 +57,7 @@ def _check_docr_workflow(text: str, name: str, path_glob: str) -> None:
         "github.event_name != 'pull_request'",
         "github.ref == 'refs/heads/main'",
         "${GITHUB_SHA}",
-        "${image}:main",
+        floating_tag,
         "secrets.DOCR_TOKEN",
         "secrets.DIGITALOCEAN_TOKEN",
         "prune_docr_images.py",
@@ -93,8 +98,18 @@ def _check_dockerfiles() -> None:
 def main() -> None:
     if "ghcr.io" in VARS:
         raise SystemExit("publish to DigitalOcean Container Registry, not GHCR")
-    _check_docr_workflow(WORKFLOW, "control-plane-image.yml", "apps/control-plane/**")
-    _check_docr_workflow(DASHBOARD_WORKFLOW, "dashboard-image.yml", "apps/dashboard/**")
+    _check_docr_workflow(
+        WORKFLOW,
+        "control-plane-image.yml",
+        "apps/control-plane/**",
+        "${image}:main",
+    )
+    _check_docr_workflow(
+        DASHBOARD_WORKFLOW,
+        "dashboard-image.yml",
+        "apps/dashboard/**",
+        "${image}:dashboard-main",
+    )
     _check_dockerfiles()
 
     _must(DOCKERFILE, "USER aerodeck", "Dockerfile")
