@@ -3,18 +3,22 @@ name: Dashboard image
 # Build apps/dashboard on every PR that touches it. Push to DigitalOcean
 # Container Registry only from main: an immutable git-SHA tag plus a floating
 # `main` tag, pruning older digests so the Starter registry stays within its
-# 5-image cap. Pull requests never push `main` (or any other tag).
+# 5-image cap. When DEPLOY_DASHBOARD_SELF_HOSTED=true and CONTROL_DROPLET_HOST
+# are set, a self-hosted runner on the operator machine pulls the image on the
+# control Droplet and restarts aerodeck-dashboard.
 
 on:
   pull_request:
     paths:
       - "apps/dashboard/**"
+      - "apps/control-plane/scripts/start-dashboard-on-droplet.sh"
       - ".github/workflows/dashboard-image.yml"
       - "packages/iac-engine/tests/test_image_publish.py"
   push:
     branches: [main]
     paths:
       - "apps/dashboard/**"
+      - "apps/control-plane/scripts/start-dashboard-on-droplet.sh"
       - ".github/workflows/dashboard-image.yml"
       - "packages/iac-engine/tests/test_image_publish.py"
   workflow_dispatch:
@@ -111,3 +115,39 @@ jobs:
             --registry "${registry}" \
             --repository "${IMAGE_REPO}" \
             --keep 2
+
+  deploy:
+    name: deploy to control Droplet
+    needs: push
+    if: >-
+      github.event_name != 'pull_request'
+      && github.ref == 'refs/heads/main'
+      && vars.DEPLOY_DASHBOARD_SELF_HOSTED == 'true'
+      && vars.CONTROL_DROPLET_HOST != ''
+    runs-on: self-hosted
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Pull image and restart aerodeck-dashboard on Droplet
+        shell: bash
+        env:
+          DOCR_TOKEN: ${{ secrets.DOCR_TOKEN }}
+          DIGITALOCEAN_TOKEN: ${{ secrets.DIGITALOCEAN_TOKEN }}
+          CONTROL_DROPLET_HOST: ${{ vars.CONTROL_DROPLET_HOST }}
+          CONTROL_SSH_KEY_PATH: ${{ vars.CONTROL_SSH_KEY_PATH }}
+        run: |
+          set -euo pipefail
+          token="${DOCR_TOKEN:-${DIGITALOCEAN_TOKEN:-}}"
+          registry="${DOCR_NAME:-aerodeck}"
+          image="registry.digitalocean.com/${registry}/${IMAGE_REPO}:main"
+          key_path="${CONTROL_SSH_KEY_PATH:-$HOME/.ssh/aerodeck_ed25519}"
+          ssh_opts=(-i "${key_path}" -o StrictHostKeyChecking=accept-new -o ServerAliveInterval=15)
+          scp "${ssh_opts[@]}" \
+            apps/control-plane/scripts/start-dashboard-on-droplet.sh \
+            "root@${CONTROL_DROPLET_HOST}:/root/start-dashboard-on-droplet.sh"
+          printf '%s' "${token}" | ssh "${ssh_opts[@]}" "root@${CONTROL_DROPLET_HOST}" \
+            "umask 077; tok=\$(cat); chmod +x /root/start-dashboard-on-droplet.sh; DOCR_TOKEN=\"\${tok}\" bash /root/start-dashboard-on-droplet.sh '${image}'"
