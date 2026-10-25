@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "tsx --test src/lib/control-plane.test.ts src/lib/session-lookup.test.ts src/lib/deploy-create.test.ts src/lib/environment-option.test.ts src/lib/provision-log-contract.test.ts src/lib/deployment-environment-label.test.ts src/lib/project-input.test.ts src/lib/project-create.test.ts src/lib/project-update.test.ts src/lib/environment-input.test.ts src/lib/environment-create.test.ts src/lib/environment-update.test.ts src/lib/environment-list.test.ts src/lib/environment-reconcile.test.ts src/lib/route-input.test.ts src/lib/route-create-dns.test.ts src/lib/route-certificate.test.ts src/lib/project-detail-path.test.ts src/lib/console-json-body.test.ts src/lib/provision-job.test.ts"
+    "test": "tsx --test src/lib/control-plane.test.ts src/lib/session-lookup.test.ts src/lib/deploy-create.test.ts src/lib/environment-option.test.ts src/lib/provision-log-contract.test.ts src/lib/deployment-environment-label.test.ts src/lib/project-input.test.ts src/lib/project-create.test.ts src/lib/project-update.test.ts src/lib/environment-input.test.ts src/lib/environment-create.test.ts src/lib/environment-update.test.ts src/lib/environment-list.test.ts src/lib/environment-reconcile.test.ts src/lib/route-input.test.ts src/lib/route-create-dns.test.ts src/lib/route-certificate.test.ts src/lib/sandbox-input.test.ts src/lib/sandbox-create.test.ts src/lib/project-detail-path.test.ts src/lib/console-json-body.test.ts src/lib/provision-job.test.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",
