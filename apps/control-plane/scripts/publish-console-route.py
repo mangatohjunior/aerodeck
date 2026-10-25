@@ -22,7 +22,7 @@ from pathlib import Path
 API = "http://127.0.0.1:8000"
 ENV_FILE = Path("/etc/aerodeck/dashboard.env")
 HOSTNAME = "dev.app.aero-deck.app"
-BACKEND_HOST = "10.40.0.2"
+BACKEND_HOST = "10.41.0.2"
 BACKEND_PORT = 3000
 PROJECT_SLUG = "console"
 ENVIRONMENT_SLUG = "dev"
