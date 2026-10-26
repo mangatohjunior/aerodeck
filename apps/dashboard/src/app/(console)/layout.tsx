@@ -2,7 +2,6 @@ import { Suspense } from "react";
 
 import { ConsoleSession } from "@/components/console-session";
 
-export const dynamic = "force-dynamic";
 
 function ConsoleFallback() {
   return (
