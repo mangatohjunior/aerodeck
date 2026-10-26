@@ -56,8 +56,8 @@ jobs:
               echo '--- CONTAINER STATUS ---'
               docker ps -a --format 'table {{.Names}}\t{{.Status}}\t{{.Image}}\t{{.Ports}}'
               echo ''
-              echo '--- AERODECK-API FILTERED LOGS (LAST 60 LINES) ---'
-              docker logs --tail 500 aerodeck-api 2>&1 | grep -v '/healthz' | grep -v 'edge/traefik' | tail -n 60 || true
+              echo '--- AERODECK-API LOGS (LAST 40 LINES) ---'
+              docker logs --tail 40 aerodeck-api 2>&1 || true
               echo ''
               echo '--- AERODECK-DASHBOARD LOGS (LAST 60 LINES) ---'
               docker logs --tail 60 aerodeck-dashboard 2>&1 || true
@@ -65,8 +65,8 @@ jobs:
               echo '--- AERODECK-WORKER LOGS (LAST 60 LINES) ---'
               docker logs --tail 60 aerodeck-worker 2>&1 || true
               echo ''
-              echo '--- RECENT DEPLOYMENTS IN DB ---'
-              echo 'aW1wb3J0IGFzeW5jaW8KZnJvbSBhcHAuY29yZS5jb25maWcgaW1wb3J0IGdldF9zZXR0aW5ncwpmcm9tIGFwcC5jb3JlLmRiIGltcG9ydCBjcmVhdGVfZW5naW5lCmZyb20gc3FsYWxjaGVteSBpbXBvcnQgdGV4dAoKYXN5bmMgZGVmIG1haW4oKToKICAgIHNldHRpbmdzID0gZ2V0X3NldHRpbmdzKCkKICAgIGlmIG5vdCBzZXR0aW5ncy5kYXRhYmFzZV91cmw6CiAgICAgICAgcHJpbnQoIm5vIGRhdGFiYXNlX3VybCIpCiAgICAgICAgcmV0dXJuCiAgICBlbmdpbmUgPSBjcmVhdGVfZW5naW5lKHNldHRpbmdzLmRhdGFiYXNlX3VybCkKICAgIGFzeW5jIHdpdGggZW5naW5lLmNvbm5lY3QoKSBhcyBjb25uOgogICAgICAgIHJlcyA9IGF3YWl0IGNvbm4uZXhlY3V0ZSh0ZXh0KCJTRUxFQ1QgaWQsIHN0YXR1cywgcmVwb191cmwsIHByb3Zpc2lvbl9qb2JfaWQsIGNyZWF0ZWRfYXQgRlJPTSBkZXBsb3ltZW50cyBPUkRFUiBCWSBjcmVhdGVkX2F0IERFU0MgTElNSVQgNSIpKQogICAgICAgIHJvd3MgPSByZXMuZmV0Y2hhbGwoKQogICAgICAgIGlmIG5vdCByb3dzOgogICAgICAgICAgICBwcmludCgiTm8gZGVwbG95bWVudHMgZm91bmQgaW4gZGF0YWJhc2UgdGFibGUuIikKICAgICAgICBmb3Igcm93IGluIHJvd3M6CiAgICAgICAgICAgIHByaW50KGRpY3Qocm93Ll9tYXBwaW5nKSkKCmFzeW5jaW8ucnVuKG1haW4oKSkK' | base64 -d | docker exec -i aerodeck-api python3 2>&1 || true
+              echo '--- DB TABLES (PROJECTS, ENVIRONMENTS, DEPLOYMENTS) ---'
+              echo 'aW1wb3J0IGFzeW5jaW8KZnJvbSBhcHAuY29yZS5jb25maWcgaW1wb3J0IGdldF9zZXR0aW5ncwpmcm9tIGFwcC5jb3JlLmRiIGltcG9ydCBjcmVhdGVfZW5naW5lCmZyb20gc3FsYWxjaGVteSBpbXBvcnQgdGV4dAoKYXN5bmMgZGVmIG1haW4oKToKICAgIHNldHRpbmdzID0gZ2V0X3NldHRpbmdzKCkKICAgIGlmIG5vdCBzZXR0aW5ncy5kYXRhYmFzZV91cmw6CiAgICAgICAgcHJpbnQoIm5vIGRhdGFiYXNlX3VybCIpCiAgICAgICAgcmV0dXJuCiAgICBlbmdpbmUgPSBjcmVhdGVfZW5naW5lKHNldHRpbmdzLmRhdGFiYXNlX3VybCkKICAgIGFzeW5jIHdpdGggZW5naW5lLmNvbm5lY3QoKSBhcyBjb25uOgogICAgICAgIHByaW50KCItLS0gUFJPSkVDVFMgLS0tIikKICAgICAgICBwX3JlcyA9IGF3YWl0IGNvbm4uZXhlY3V0ZSh0ZXh0KCJTRUxFQ1QgaWQsIHNsdWcsIG5hbWUgRlJPTSBwcm9qZWN0cyBPUkRFUiBCWSBjcmVhdGVkX2F0IERFU0MgTElNSVQgNSIpKQogICAgICAgIGZvciByb3cgaW4gcF9yZXMuZmV0Y2hhbGwoKToKICAgICAgICAgICAgcHJpbnQoZGljdChyb3cuX21hcHBpbmcpKQogICAgICAgIHByaW50KCItLS0gRU5WSVJPTk1FTlRTIC0tLSIpCiAgICAgICAgZV9yZXMgPSBhd2FpdCBjb25uLmV4ZWN1dGUodGV4dCgiU0VMRUNUIGlkLCBwcm9qZWN0X2lkLCBzbHVnLCBuYW1lLCBraW5kIEZST00gZW52aXJvbm1lbnRzIE9SREVSIEJZIGNyZWF0ZWRfYXQgREVTQyBMSU1JVCA1IikpCiAgICAgICAgZm9yIHJvdyBpbiBlX3Jlcy5mZXRjaGFsbCgpOgogICAgICAgICAgICBwcmludChkaWN0KHJvdy5fbWFwcGluZykpCiAgICAgICAgcHJpbnQoIi0tLSBERVBMT1lNRU5UUyAtLS0iKQogICAgICAgIGRfcmVzID0gYXdhaXQgY29ubi5leGVjdXRlKHRleHQoIlNFTEVDVCBpZCwgc3RhdHVzLCByZXBvX3VybCwgcHJvamVjdF9pZCwgZW52aXJvbm1lbnRfaWQsIHByb3Zpc2lvbl9qb2JfaWQsIGNyZWF0ZWRfYXQgRlJPTSBkZXBsb3ltZW50cyBPUkRFUiBCWSBjcmVhdGVkX2F0IERFU0MgTElNSVQgNSIpKQogICAgICAgIHJvd3MgPSBkX3Jlcy5mZXRjaGFsbCgpCiAgICAgICAgaWYgbm90IHJvd3M6CiAgICAgICAgICAgIHByaW50KCJObyBkZXBsb3ltZW50cyBmb3VuZC4iKQogICAgICAgIGZvciByb3cgaW4gcm93czoKICAgICAgICAgICAgcHJpbnQoZGljdChyb3cuX21hcHBpbmcpKQoKYXN5bmNpby5ydW4obWFpbigpKQ== | base64 -d | docker exec -i aerodeck-api python3 2>&1 || true
               echo ''
               echo '--- REDIS KEYS ---'
               docker exec aerodeck-redis redis-cli keys '*' 2>&1 || true
@@ -74,8 +74,13 @@ jobs:
           elif [ "${ACTION}" = "restart-all" ]; then
             echo "=== RESTARTING ALL CONTROL PLANE SERVICES ON ${CONTROL_DROPLET_HOST} ==="
             ssh "${ssh_opts[@]}" "root@${CONTROL_DROPLET_HOST}" "
+              echo 'logging into DOCR...'
+              token=\"\$(set -a; [ -f /etc/aerodeck/control-plane.env ] && source /etc/aerodeck/control-plane.env; printf '%s' \"\${AERODECK_DIGITALOCEAN_TOKEN:-}\")\"
+              if [ -n \"\${token}\" ]; then
+                printf '%s' \"\${token}\" | docker login registry.digitalocean.com --username \"\${token}\" --password-stdin >/dev/null 2>&1 || true
+              fi
               echo 'pulling latest control-plane image...'
-              docker pull registry.digitalocean.com/aerodeck/control-plane:main || true
+              docker pull registry.digitalocean.com/aerodeck/control-plane:main
               echo 'restarting control-plane API + worker...'
               if [ -f /root/start-on-droplet.sh ]; then
                 bash /root/start-on-droplet.sh
@@ -92,8 +97,13 @@ jobs:
           elif [ "${ACTION}" = "restart-worker" ]; then
             echo "=== RESTARTING AERODECK-WORKER ON ${CONTROL_DROPLET_HOST} ==="
             ssh "${ssh_opts[@]}" "root@${CONTROL_DROPLET_HOST}" "
+              echo 'logging into DOCR...'
+              token=\"\$(set -a; [ -f /etc/aerodeck/control-plane.env ] && source /etc/aerodeck/control-plane.env; printf '%s' \"\${AERODECK_DIGITALOCEAN_TOKEN:-}\")\"
+              if [ -n \"\${token}\" ]; then
+                printf '%s' \"\${token}\" | docker login registry.digitalocean.com --username \"\${token}\" --password-stdin >/dev/null 2>&1 || true
+              fi
               echo 'pulling latest control-plane image...'
-              docker pull registry.digitalocean.com/aerodeck/control-plane:main || true
+              docker pull registry.digitalocean.com/aerodeck/control-plane:main
               if [ -f /root/aerodeck/configure-iac-worker.sh ]; then
                 bash /root/aerodeck/configure-iac-worker.sh
               else
