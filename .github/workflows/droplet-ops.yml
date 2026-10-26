@@ -1,0 +1,97 @@
+name: Droplet Operations & Diagnostics
+
+# Diagnostic and operational maintenance workflow for the AeroDeck dev Droplet.
+# Runs on the self-hosted runner and connects to the Droplet via SSH.
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "Operation to perform"
+        required: true
+        type: choice
+        default: "diagnose"
+        options:
+          - "diagnose"
+          - "restart-all"
+          - "restart-worker"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: droplet-ops-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  ops:
+    name: droplet operations
+    runs-on: self-hosted
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Execute action on Droplet
+        shell: bash
+        env:
+          MSYS_NO_PATHCONV: "1"
+          CONTROL_DROPLET_HOST: ${{ vars.CONTROL_DROPLET_HOST }}
+          CONTROL_SSH_KEY_PATH: ${{ vars.CONTROL_SSH_KEY_PATH }}
+          ACTION: ${{ inputs.action }}
+        run: |
+          set -euo pipefail
+          if [ -z "${CONTROL_DROPLET_HOST:-}" ]; then
+            echo "::error::CONTROL_DROPLET_HOST variable is not set."
+            exit 1
+          fi
+          key_path="${CONTROL_SSH_KEY_PATH:-$HOME/.ssh/aerodeck_ed25519}"
+          ssh_opts=(-i "${key_path}" -o StrictHostKeyChecking=accept-new -o ServerAliveInterval=15)
+
+          if [ "${ACTION}" = "diagnose" ]; then
+            echo "=== RUNNING DIAGNOSTICS ON ${CONTROL_DROPLET_HOST} ==="
+            ssh "${ssh_opts[@]}" "root@${CONTROL_DROPLET_HOST}" "
+              echo '--- CONTAINER STATUS ---'
+              docker ps -a --format 'table {{.Names}}\t{{.Status}}\t{{.Image}}\t{{.Ports}}'
+              echo ''
+              echo '--- AERODECK-API LOGS (LAST 40 LINES) ---'
+              docker logs --tail 40 aerodeck-api 2>&1 || true
+              echo ''
+              echo '--- AERODECK-WORKER LOGS (LAST 40 LINES) ---'
+              docker logs --tail 40 aerodeck-worker 2>&1 || true
+              echo ''
+              echo '--- AERODECK-DASHBOARD LOGS (LAST 40 LINES) ---'
+              docker logs --tail 40 aerodeck-dashboard 2>&1 || true
+              echo ''
+              echo '--- REDIS PING ---'
+              docker exec aerodeck-redis redis-cli ping 2>&1 || true
+            "
+          elif [ "${ACTION}" = "restart-all" ]; then
+            echo "=== RESTARTING ALL CONTROL PLANE SERVICES ON ${CONTROL_DROPLET_HOST} ==="
+            ssh "${ssh_opts[@]}" "root@${CONTROL_DROPLET_HOST}" "
+              echo 'restarting control-plane API + worker...'
+              if [ -f /root/start-on-droplet.sh ]; then
+                bash /root/start-on-droplet.sh
+              fi
+              echo 'restarting dashboard...'
+              if [ -f /root/aerodeck/start-dashboard-on-droplet.sh ]; then
+                bash /root/aerodeck/start-dashboard-on-droplet.sh
+              elif [ -f /root/start-dashboard-on-droplet.sh ]; then
+                bash /root/start-dashboard-on-droplet.sh
+              fi
+              echo '--- UPDATED CONTAINER STATUS ---'
+              docker ps -a --format 'table {{.Names}}\t{{.Status}}\t{{.Image}}\t{{.Ports}}'
+            "
+          elif [ "${ACTION}" = "restart-worker" ]; then
+            echo "=== RESTARTING AERODECK-WORKER ON ${CONTROL_DROPLET_HOST} ==="
+            ssh "${ssh_opts[@]}" "root@${CONTROL_DROPLET_HOST}" "
+              if [ -f /root/aerodeck/configure-iac-worker.sh ]; then
+                bash /root/aerodeck/configure-iac-worker.sh
+              else
+                docker restart aerodeck-worker
+              fi
+              docker ps -a --filter name=aerodeck-worker
+            "
+          fi
