@@ -1,20 +1,17 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
-import { connection } from "next/server";
 
 import { GuestOnly } from "@/components/guest-only";
 import { LoginForm } from "@/components/login-form";
 import { PageHeader } from "@/components/page-header";
 import { readControlPlaneConfig } from "@/lib/control-plane";
 
-
 export const metadata: Metadata = {
   title: "Login",
   description: "Sign in to AeroDeck with email and password.",
 };
 
-export default async function LoginPage() {
-  await connection();
+export default function LoginPage() {
   const controlPlane = readControlPlaneConfig() !== null;
   return (
     <div className="mx-auto w-full max-w-md px-4 py-10 md:px-8 md:py-16">
