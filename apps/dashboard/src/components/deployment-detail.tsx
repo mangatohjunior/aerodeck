@@ -18,10 +18,14 @@ export function DeploymentDetail({
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    Promise.all([fetchDeployment(id, controlPlane), fetchLogSource()])
-      .then(([nextDeployment, source]) => {
-        setDeployment(nextDeployment);
+    fetchLogSource()
+      .then(async (source) => {
         setLogSource(source);
+        const nextDeployment = await fetchDeployment(
+          id,
+          controlPlane || source === "control-plane",
+        );
+        setDeployment(nextDeployment);
       })
       .catch((cause: unknown) => {
         setError(cause instanceof Error ? cause.message : "Deployment not found.");

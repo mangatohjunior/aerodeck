@@ -6,6 +6,8 @@ import { PageHeader } from "@/components/page-header";
 import { RegisterForm } from "@/components/register-form";
 import { readControlPlaneConfig } from "@/lib/control-plane";
 
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: "Register",
   description: "Create an AeroDeck account with email and password.",

@@ -2,7 +2,7 @@
 
 import { Loader2, Rocket } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 
 import { EnvironmentSelect } from "@/components/environment-select";
 import { Button } from "@/components/ui/button";
@@ -16,13 +16,28 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { createDeployment, ProvisionEnqueueFailed } from "@/lib/api";
+import { createDeployment, fetchLogSource, ProvisionEnqueueFailed } from "@/lib/api";
 import { environmentOptionKey } from "@/lib/environment-option";
 import { parseGithubRepo } from "@/lib/github";
 import { useDeployEnvironments } from "@/lib/use-deploy-environments";
 
 export function NewDeploymentForm({ controlPlane = false }: { controlPlane?: boolean }) {
   const router = useRouter();
+  const [effectiveControlPlane, setEffectiveControlPlane] = useState(controlPlane);
+  const isControlPlane = controlPlane || effectiveControlPlane;
+
+  useEffect(() => {
+    if (!controlPlane) {
+      fetchLogSource()
+        .then((source) => {
+          if (source === "control-plane") {
+            setEffectiveControlPlane(true);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [controlPlane]);
+
   const [repoUrl, setRepoUrl] = useState("");
   const {
     environmentKey,
@@ -31,7 +46,7 @@ export function NewDeploymentForm({ controlPlane = false }: { controlPlane?: boo
     environmentsError,
     loadingEnvironments,
     reload,
-  } = useDeployEnvironments(controlPlane);
+  } = useDeployEnvironments(isControlPlane);
   const [error, setError] = useState<string | null>(null);
   const [repoInvalid, setRepoInvalid] = useState(false);
   const [environmentRequired, setEnvironmentRequired] = useState(false);
@@ -54,7 +69,7 @@ export function NewDeploymentForm({ controlPlane = false }: { controlPlane?: boo
     }
 
     let target: { projectId: string; environmentId: string } | undefined;
-    if (controlPlane) {
+    if (isControlPlane) {
       const selected = environments.find(
         (row) => environmentOptionKey(row) === environmentKey,
       );
@@ -69,7 +84,7 @@ export function NewDeploymentForm({ controlPlane = false }: { controlPlane?: boo
     setSubmitting(true);
     try {
       const deployment =
-        controlPlane && target
+        isControlPlane && target
           ? await createDeployment(repoUrl, true, target)
           : await createDeployment(repoUrl, false);
       router.push(`/deployments/${deployment.id}`);
@@ -90,7 +105,7 @@ export function NewDeploymentForm({ controlPlane = false }: { controlPlane?: boo
     !submitting &&
     !enqueueBlocked &&
     repoUrl.trim().length > 0 &&
-    (!controlPlane || (environmentKey.length > 0 && !loadingEnvironments));
+    (!isControlPlane || (environmentKey.length > 0 && !loadingEnvironments));
 
   return (
     <Card className="overflow-hidden ring-primary/15">
@@ -98,7 +113,7 @@ export function NewDeploymentForm({ controlPlane = false }: { controlPlane?: boo
       <CardHeader className="border-b">
         <CardTitle>Repository</CardTitle>
         <CardDescription>
-          {controlPlane
+          {isControlPlane
             ? "HTTPS GitHub URL and an existing environment. The dashboard server stores the deployment and queues provision."
             : "HTTPS GitHub URL. Validated in the browser, then POSTed to /api/mock/v1/deployments."}
         </CardDescription>
@@ -129,7 +144,7 @@ export function NewDeploymentForm({ controlPlane = false }: { controlPlane?: boo
             />
             <p className="text-xs text-muted-foreground">Example: https://github.com/org/app.git</p>
           </div>
-          {controlPlane ? (
+          {isControlPlane ? (
             <EnvironmentSelect
               environments={environments}
               environmentKey={environmentKey}

@@ -2,6 +2,8 @@ import { NewDeploymentForm } from "@/components/new-deployment-form";
 import { PageHeader } from "@/components/page-header";
 import { readControlPlaneConfig } from "@/lib/control-plane";
 
+export const dynamic = "force-dynamic";
+
 export default function DeployPage() {
   const controlPlane = readControlPlaneConfig() !== null;
   return (
