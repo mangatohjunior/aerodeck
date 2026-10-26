@@ -56,17 +56,40 @@ jobs:
               echo '--- CONTAINER STATUS ---'
               docker ps -a --format 'table {{.Names}}\t{{.Status}}\t{{.Image}}\t{{.Ports}}'
               echo ''
-              echo '--- AERODECK-API LOGS (LAST 40 LINES) ---'
-              docker logs --tail 40 aerodeck-api 2>&1 || true
+              echo '--- AERODECK-API FILTERED LOGS (LAST 60 LINES) ---'
+              docker logs --tail 500 aerodeck-api 2>&1 | grep -v '/healthz' | grep -v 'edge/traefik' | tail -n 60 || true
               echo ''
-              echo '--- AERODECK-WORKER LOGS (LAST 40 LINES) ---'
-              docker logs --tail 40 aerodeck-worker 2>&1 || true
+              echo '--- AERODECK-DASHBOARD LOGS (LAST 60 LINES) ---'
+              docker logs --tail 60 aerodeck-dashboard 2>&1 || true
               echo ''
-              echo '--- AERODECK-DASHBOARD LOGS (LAST 40 LINES) ---'
-              docker logs --tail 40 aerodeck-dashboard 2>&1 || true
+              echo '--- AERODECK-WORKER LOGS (LAST 60 LINES) ---'
+              docker logs --tail 60 aerodeck-worker 2>&1 || true
               echo ''
-              echo '--- REDIS PING ---'
-              docker exec aerodeck-redis redis-cli ping 2>&1 || true
+              echo '--- RECENT DEPLOYMENTS IN DB ---'
+              docker exec aerodeck-api python3 -c \"
+import asyncio
+from app.core.config import get_settings
+from app.core.db import create_engine
+from sqlalchemy import text
+
+async def main():
+    settings = get_settings()
+    if not settings.database_url:
+        print('no database_url configured')
+        return
+    engine = create_engine(settings.database_url)
+    async with engine.connect() as conn:
+        res = await conn.execute(text('SELECT id, status, repo_url, created_at FROM deployments ORDER BY created_at DESC LIMIT 5'))
+        rows = res.fetchall()
+        if not rows:
+            print('No deployments found in database table.')
+        for row in rows:
+            print(dict(row._mapping))
+asyncio.run(main())
+\" 2>&1 || true
+              echo ''
+              echo '--- REDIS KEYS ---'
+              docker exec aerodeck-redis redis-cli keys '*' 2>&1 || true
             "
           elif [ "${ACTION}" = "restart-all" ]; then
             echo "=== RESTARTING ALL CONTROL PLANE SERVICES ON ${CONTROL_DROPLET_HOST} ==="
