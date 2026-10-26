@@ -8,7 +8,7 @@ import { PageHeader } from "@/components/page-header";
 import { LinkButton } from "@/components/link-button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import { fetchDeployments } from "@/lib/api";
+import { fetchDeployments, fetchLogSource } from "@/lib/api";
 import { formatInstant } from "@/lib/format";
 import { useEnvironmentCatalog } from "@/lib/use-environment-catalog";
 import type { Deployment } from "@/lib/types";
@@ -16,13 +16,28 @@ import type { Deployment } from "@/lib/types";
 export function DeploymentsList({ controlPlane = false }: { controlPlane?: boolean }) {
   const [rows, setRows] = useState<Deployment[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [effectiveControlPlane, setEffectiveControlPlane] = useState(controlPlane);
+  const isControlPlane = controlPlane || effectiveControlPlane;
+
+  useEffect(() => {
+    if (!controlPlane) {
+      fetchLogSource()
+        .then((source) => {
+          if (source === "control-plane") {
+            setEffectiveControlPlane(true);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [isControlPlane]);
+
   const needsCatalog =
-    controlPlane && rows.some((row) => Boolean(row.project_id && row.environment_id));
+    isControlPlane && rows.some((row) => Boolean(row.project_id && row.environment_id));
   const environments = useEnvironmentCatalog(needsCatalog);
 
   useEffect(() => {
     let cancelled = false;
-    fetchDeployments(controlPlane)
+    fetchDeployments(isControlPlane)
       .then((items) => {
         if (!cancelled) {
           setRows(items);
@@ -36,7 +51,7 @@ export function DeploymentsList({ controlPlane = false }: { controlPlane?: boole
     return () => {
       cancelled = true;
     };
-  }, [controlPlane]);
+  }, [isControlPlane]);
 
   return (
     <div className="mx-auto w-full max-w-4xl">
@@ -44,7 +59,7 @@ export function DeploymentsList({ controlPlane = false }: { controlPlane?: boole
         eyebrow="History"
         title="Deployments"
         description={
-          controlPlane
+          isControlPlane
             ? "Stored by the control plane. A dashboard restart keeps this list."
             : "In-memory mock list. Restarting next dev clears it."
         }
@@ -60,7 +75,7 @@ export function DeploymentsList({ controlPlane = false }: { controlPlane?: boole
           <CardContent className="pt-4">
             {rows.length === 0 ? (
               <p className="text-sm text-muted-foreground">
-                {controlPlane
+                {isControlPlane
                   ? "No deployments yet. Create one from Deploy."
                   : "No deployments this session. Create one from Deploy."}
               </p>
