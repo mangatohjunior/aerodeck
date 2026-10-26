@@ -1,3 +1,4 @@
+import { connection } from "next/server";
 import { redirect } from "next/navigation";
 
 import { AppShell } from "@/components/app-shell";
@@ -10,6 +11,7 @@ export async function ConsoleSession({
 }: {
   children: React.ReactNode;
 }) {
+  await connection();
   const session = await readSession();
   if (session.status === "anonymous") {
     redirect("/login");

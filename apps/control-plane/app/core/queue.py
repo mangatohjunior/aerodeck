@@ -22,6 +22,7 @@ def create_celery_app(settings: Settings) -> Celery:
             "schedule": float(settings.sandbox_reap_interval_seconds),
         }
     app.conf.update(
+        beat_schedule_filename="/tmp/celerybeat-schedule",
         task_default_queue=settings.job_queue,
         task_serializer="json",
         result_serializer="json",

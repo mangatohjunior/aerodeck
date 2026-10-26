@@ -66,27 +66,7 @@ jobs:
               docker logs --tail 60 aerodeck-worker 2>&1 || true
               echo ''
               echo '--- RECENT DEPLOYMENTS IN DB ---'
-              docker exec aerodeck-api python3 -c \"
-                import asyncio
-                from app.core.config import get_settings
-                from app.core.db import create_engine
-                from sqlalchemy import text
-                
-                async def main():
-                    settings = get_settings()
-                    if not settings.database_url:
-                        print('no database_url configured')
-                        return
-                    engine = create_engine(settings.database_url)
-                    async with engine.connect() as conn:
-                        res = await conn.execute(text('SELECT id, status, repo_url, created_at FROM deployments ORDER BY created_at DESC LIMIT 5'))
-                        rows = res.fetchall()
-                        if not rows:
-            print('No deployments found in database table.')
-                        for row in rows:
-            print(dict(row._mapping))
-                asyncio.run(main())
-                \" 2>&1 || true
+              docker exec aerodeck-api python3 -c 'import asyncio; from app.core.config import get_settings; from app.core.db import create_engine; from sqlalchemy import text; main = lambda: asyncio.run(run_query()); async def run_query(): s = get_settings(); e = create_engine(s.database_url); c = await e.connect(); res = await c.execute(text("SELECT id, status, repo_url, provision_job_id, created_at FROM deployments ORDER BY created_at DESC LIMIT 5")); rows = res.fetchall(); [print(dict(r._mapping)) for r in rows] if rows else print("No deployments found in database table."); await c.close(); main()' 2>&1 || true
               echo ''
               echo '--- REDIS KEYS ---'
               docker exec aerodeck-redis redis-cli keys '*' 2>&1 || true
