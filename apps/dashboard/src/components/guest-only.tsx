@@ -1,3 +1,4 @@
+import { connection } from "next/server";
 import { redirect } from "next/navigation";
 
 import { ConsoleUnavailable } from "@/components/console-unavailable";
@@ -8,6 +9,7 @@ export async function GuestOnly({
 }: {
   children: React.ReactNode;
 }) {
+  await connection();
   const session = await readSession();
   if (session.status === "user") {
     redirect("/");

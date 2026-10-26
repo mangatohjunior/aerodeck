@@ -83,6 +83,8 @@ export class ControlPlaneError extends Error {
   }
 }
 
+const defaultNow = () => (typeof performance !== "undefined" ? performance.now() : Date.now());
+
 export function clearControlPlaneTokenCache(): void {
   tokens.clear();
 }
@@ -107,7 +109,7 @@ export async function listControlPlaneProjects(
   options: ListOptions = {},
 ): Promise<ControlPlaneProjectPage> {
   const fetchImpl = options.fetch ?? fetch;
-  const now = options.now ?? Date.now;
+  const now = options.now ?? defaultNow;
   const accessToken = await accessTokenFor(config, fetchImpl, now);
   const items: Project[] = [];
   let offset = 0;
@@ -159,7 +161,7 @@ export async function createControlPlaneProject(
   options: ListOptions = {},
 ): Promise<Project> {
   const fetchImpl = options.fetch ?? fetch;
-  const now = options.now ?? Date.now;
+  const now = options.now ?? defaultNow;
   const accessToken = await accessTokenFor(config, fetchImpl, now);
   const body: Record<string, string> = {
     slug: input.slug,
@@ -203,7 +205,7 @@ export async function getControlPlaneProject(
     throw new ControlPlaneError("control plane project id was not a uuid");
   }
   const fetchImpl = options.fetch ?? fetch;
-  const now = options.now ?? Date.now;
+  const now = options.now ?? defaultNow;
   const accessToken = await accessTokenFor(config, fetchImpl, now);
   const response = await fetchImpl(
     `${config.baseUrl}/api/v1/projects/${encodeURIComponent(projectId)}`,
@@ -247,7 +249,7 @@ export async function createControlPlaneEnvironment(
   }
   const project = await getControlPlaneProject(config, input.projectId, options);
   const fetchImpl = options.fetch ?? fetch;
-  const now = options.now ?? Date.now;
+  const now = options.now ?? defaultNow;
   const accessToken = await accessTokenFor(config, fetchImpl, now);
   const response = await fetchImpl(
     `${config.baseUrl}/api/v1/projects/${encodeURIComponent(input.projectId)}/environments`,
@@ -412,7 +414,7 @@ export async function listControlPlaneSandboxes(
 ): Promise<ControlPlaneSandboxPage> {
   const projects = await listControlPlaneProjects(config, options);
   const fetchImpl = options.fetch ?? fetch;
-  const now = options.now ?? Date.now;
+  const now = options.now ?? defaultNow;
   const accessToken = await accessTokenFor(config, fetchImpl, now);
   const items: Sandbox[] = [];
   for (const project of projects.items) {
@@ -439,7 +441,7 @@ export async function createControlPlaneSandbox(
     throw new ControlPlaneError("control plane sandbox project id was not a uuid");
   }
   const fetchImpl = options.fetch ?? fetch;
-  const now = options.now ?? Date.now;
+  const now = options.now ?? defaultNow;
   const accessToken = await accessTokenFor(config, fetchImpl, now);
   const response = await fetchImpl(
     `${config.baseUrl}/api/v1/projects/${encodeURIComponent(input.projectId)}/sandboxes`,
@@ -511,7 +513,7 @@ export async function openControlPlaneDeploymentLogs(
     throw new ControlPlaneError("control plane deployment id was not a uuid");
   }
   const fetchImpl = options.fetch ?? fetch;
-  const now = options.now ?? Date.now;
+  const now = options.now ?? defaultNow;
   const accessToken = await accessTokenFor(config, fetchImpl, now);
   const response = await fetchImpl(
     `${config.baseUrl}/api/v1/deployments/${encodeURIComponent(deploymentId)}/logs`,
@@ -545,7 +547,7 @@ async function postDeploymentStatus(
     throw new ControlPlaneError("control plane deployment id was not a uuid");
   }
   const fetchImpl = options.fetch ?? fetch;
-  const now = options.now ?? Date.now;
+  const now = options.now ?? defaultNow;
   const accessToken = await accessTokenFor(config, fetchImpl, now);
   const response = await fetchImpl(
     `${config.baseUrl}/api/v1/deployments/${encodeURIComponent(deploymentId)}/${outcome}`,
@@ -702,7 +704,7 @@ export async function listControlPlaneDeployments(
   options: ListOptions = {},
 ): Promise<Deployment[]> {
   const fetchImpl = options.fetch ?? fetch;
-  const now = options.now ?? Date.now;
+  const now = options.now ?? defaultNow;
   const accessToken = await accessTokenFor(config, fetchImpl, now);
   const items: Deployment[] = [];
   let offset = 0;
@@ -743,7 +745,7 @@ export async function createControlPlaneDeployment(
   options: ListOptions & { projectId?: string; environmentId?: string } = {},
 ): Promise<Deployment> {
   const fetchImpl = options.fetch ?? fetch;
-  const now = options.now ?? Date.now;
+  const now = options.now ?? defaultNow;
   const projectId = options.projectId;
   const environmentId = options.environmentId;
   const hasProject = typeof projectId === "string" && projectId.length > 0;
@@ -784,7 +786,7 @@ export async function listControlPlaneEnvironments(
 ): Promise<EnvironmentOption[]> {
   const projects = await listControlPlaneProjects(config, options);
   const fetchImpl = options.fetch ?? fetch;
-  const now = options.now ?? Date.now;
+  const now = options.now ?? defaultNow;
   const accessToken = await accessTokenFor(config, fetchImpl, now);
   const items: EnvironmentOption[] = [];
   for (const project of projects.items) {
@@ -814,7 +816,7 @@ export async function getControlPlaneProjectDetail(
 ): Promise<ControlPlaneProjectDetail> {
   const project = await getControlPlaneProject(config, projectId, options);
   const fetchImpl = options.fetch ?? fetch;
-  const now = options.now ?? Date.now;
+  const now = options.now ?? defaultNow;
   const accessToken = await accessTokenFor(config, fetchImpl, now);
   // Environments stay required; routes are best-effort so a routes outage does not hide the project.
   const [environments, routesResult] = await Promise.all([
@@ -867,7 +869,7 @@ export async function createControlPlaneRoute(
     throw new ControlPlaneError("control plane route ids were not uuids");
   }
   const fetchImpl = options.fetch ?? fetch;
-  const now = options.now ?? Date.now;
+  const now = options.now ?? defaultNow;
   const accessToken = await accessTokenFor(config, fetchImpl, now);
   const response = await fetchImpl(
     `${config.baseUrl}/api/v1/projects/${encodeURIComponent(input.projectId)}/routes`,
@@ -902,7 +904,7 @@ export async function getControlPlaneRouteDns(
     throw new ControlPlaneError("control plane route dns ids were not uuids");
   }
   const fetchImpl = options.fetch ?? fetch;
-  const now = options.now ?? Date.now;
+  const now = options.now ?? defaultNow;
   const accessToken = await accessTokenFor(config, fetchImpl, now);
   const response = await fetchImpl(
     `${config.baseUrl}/api/v1/projects/${encodeURIComponent(projectId)}/routes/${encodeURIComponent(routeId)}/dns`,
@@ -947,7 +949,7 @@ async function requestControlPlaneRouteCertificate(
     throw new ControlPlaneError("control plane route certificate ids were not uuids");
   }
   const fetchImpl = options.fetch ?? fetch;
-  const now = options.now ?? Date.now;
+  const now = options.now ?? defaultNow;
   const accessToken = await accessTokenFor(config, fetchImpl, now);
   const suffix = method === "POST" ? "/certificate/issue" : "/certificate";
   const response = await fetchImpl(
@@ -1123,7 +1125,7 @@ async function controlPlaneRequest<T>(
   options: ListOptions = {},
 ): Promise<T> {
   const fetchImpl = options.fetch ?? fetch;
-  const now = options.now ?? Date.now;
+  const now = options.now ?? defaultNow;
   const accessToken = await accessTokenFor(config, fetchImpl, now);
   const headers: Record<string, string> = {
     accept: "application/json",
@@ -1187,7 +1189,7 @@ export async function getControlPlaneEnvironment(
     throw new ControlPlaneError("control plane environment ids were not uuids");
   }
   const fetchImpl = options.fetch ?? fetch;
-  const now = options.now ?? Date.now;
+  const now = options.now ?? defaultNow;
   const accessToken = await accessTokenFor(config, fetchImpl, now);
   const response = await fetchImpl(
     `${config.baseUrl}/api/v1/projects/${encodeURIComponent(projectId)}/environments/${encodeURIComponent(environmentId)}`,
@@ -1228,7 +1230,7 @@ export async function provisionControlPlaneEnvironment(
     throw new ControlPlaneError("control plane provision ids were not uuids");
   }
   const fetchImpl = options.fetch ?? fetch;
-  const now = options.now ?? Date.now;
+  const now = options.now ?? defaultNow;
   const accessToken = await accessTokenFor(config, fetchImpl, now);
   const response = await fetchImpl(
     `${config.baseUrl}/api/v1/projects/${encodeURIComponent(projectId)}/environments/${encodeURIComponent(environmentId)}/provision`,
@@ -1257,7 +1259,7 @@ export async function reconcileControlPlaneEnvironment(
     throw new ControlPlaneError("control plane reconcile ids were not uuids");
   }
   const fetchImpl = options.fetch ?? fetch;
-  const now = options.now ?? Date.now;
+  const now = options.now ?? defaultNow;
   const accessToken = await accessTokenFor(config, fetchImpl, now);
   const response = await fetchImpl(
     `${config.baseUrl}/api/v1/projects/${encodeURIComponent(projectId)}/environments/${encodeURIComponent(environmentId)}/reconcile`,
@@ -1375,7 +1377,7 @@ export async function getControlPlaneDeployment(
     throw new ControlPlaneError("control plane deployment id was not a uuid");
   }
   const fetchImpl = options.fetch ?? fetch;
-  const now = options.now ?? Date.now;
+  const now = options.now ?? defaultNow;
   const accessToken = await accessTokenFor(config, fetchImpl, now);
   const response = await fetchImpl(
     `${config.baseUrl}/api/v1/deployments/${encodeURIComponent(deploymentId)}`,
@@ -1405,7 +1407,7 @@ export async function getControlPlaneJob(
     throw new ControlPlaneError("control plane job id was not a uuid");
   }
   const fetchImpl = options.fetch ?? fetch;
-  const now = options.now ?? Date.now;
+  const now = options.now ?? defaultNow;
   const accessToken = await accessTokenFor(config, fetchImpl, now);
   const response = await fetchImpl(
     `${config.baseUrl}/api/v1/jobs/${encodeURIComponent(jobId)}`,
@@ -1800,7 +1802,7 @@ async function authorizedPost(
   options: ListOptions,
 ): Promise<Response> {
   const fetchImpl = options.fetch ?? fetch;
-  const now = options.now ?? Date.now;
+  const now = options.now ?? defaultNow;
   const accessToken = await accessTokenFor(config, fetchImpl, now);
   return fetchImpl(`${config.baseUrl}${path}`, {
     method: "POST",
