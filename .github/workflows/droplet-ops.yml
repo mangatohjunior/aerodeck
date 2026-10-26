@@ -66,7 +66,7 @@ jobs:
               docker logs --tail 60 aerodeck-worker 2>&1 || true
               echo ''
               echo '--- RECENT DEPLOYMENTS IN DB ---'
-              docker exec aerodeck-api python3 -c 'import asyncio; from app.core.config import get_settings; from app.core.db import create_engine; from sqlalchemy import text; main = lambda: asyncio.run(run_query()); async def run_query(): s = get_settings(); e = create_engine(s.database_url); c = await e.connect(); res = await c.execute(text("SELECT id, status, repo_url, provision_job_id, created_at FROM deployments ORDER BY created_at DESC LIMIT 5")); rows = res.fetchall(); [print(dict(r._mapping)) for r in rows] if rows else print("No deployments found in database table."); await c.close(); main()' 2>&1 || true
+              echo 'aW1wb3J0IGFzeW5jaW8KZnJvbSBhcHAuY29yZS5jb25maWcgaW1wb3J0IGdldF9zZXR0aW5ncwpmcm9tIGFwcC5jb3JlLmRiIGltcG9ydCBjcmVhdGVfZW5naW5lCmZyb20gc3FsYWxjaGVteSBpbXBvcnQgdGV4dAoKYXN5bmMgZGVmIG1haW4oKToKICAgIHNldHRpbmdzID0gZ2V0X3NldHRpbmdzKCkKICAgIGlmIG5vdCBzZXR0aW5ncy5kYXRhYmFzZV91cmw6CiAgICAgICAgcHJpbnQoIm5vIGRhdGFiYXNlX3VybCIpCiAgICAgICAgcmV0dXJuCiAgICBlbmdpbmUgPSBjcmVhdGVfZW5naW5lKHNldHRpbmdzLmRhdGFiYXNlX3VybCkKICAgIGFzeW5jIHdpdGggZW5naW5lLmNvbm5lY3QoKSBhcyBjb25uOgogICAgICAgIHJlcyA9IGF3YWl0IGNvbm4uZXhlY3V0ZSh0ZXh0KCJTRUxFQ1QgaWQsIHN0YXR1cywgcmVwb191cmwsIHByb3Zpc2lvbl9qb2JfaWQsIGNyZWF0ZWRfYXQgRlJPTSBkZXBsb3ltZW50cyBPUkRFUiBCWSBjcmVhdGVkX2F0IERFU0MgTElNSVQgNSIpKQogICAgICAgIHJvd3MgPSByZXMuZmV0Y2hhbGwoKQogICAgICAgIGlmIG5vdCByb3dzOgogICAgICAgICAgICBwcmludCgiTm8gZGVwbG95bWVudHMgZm91bmQgaW4gZGF0YWJhc2UgdGFibGUuIikKICAgICAgICBmb3Igcm93IGluIHJvd3M6CiAgICAgICAgICAgIHByaW50KGRpY3Qocm93Ll9tYXBwaW5nKSkKCmFzeW5jaW8ucnVuKG1haW4oKSkK' | base64 -d | docker exec -i aerodeck-api python3 2>&1 || true
               echo ''
               echo '--- REDIS KEYS ---'
               docker exec aerodeck-redis redis-cli keys '*' 2>&1 || true
@@ -74,6 +74,8 @@ jobs:
           elif [ "${ACTION}" = "restart-all" ]; then
             echo "=== RESTARTING ALL CONTROL PLANE SERVICES ON ${CONTROL_DROPLET_HOST} ==="
             ssh "${ssh_opts[@]}" "root@${CONTROL_DROPLET_HOST}" "
+              echo 'pulling latest control-plane image...'
+              docker pull registry.digitalocean.com/aerodeck/control-plane:main || true
               echo 'restarting control-plane API + worker...'
               if [ -f /root/start-on-droplet.sh ]; then
                 bash /root/start-on-droplet.sh
@@ -90,6 +92,8 @@ jobs:
           elif [ "${ACTION}" = "restart-worker" ]; then
             echo "=== RESTARTING AERODECK-WORKER ON ${CONTROL_DROPLET_HOST} ==="
             ssh "${ssh_opts[@]}" "root@${CONTROL_DROPLET_HOST}" "
+              echo 'pulling latest control-plane image...'
+              docker pull registry.digitalocean.com/aerodeck/control-plane:main || true
               if [ -f /root/aerodeck/configure-iac-worker.sh ]; then
                 bash /root/aerodeck/configure-iac-worker.sh
               else
