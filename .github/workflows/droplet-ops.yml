@@ -52,7 +52,7 @@ jobs:
 
           if [ "${ACTION}" = "diagnose" ]; then
             echo "=== RUNNING DIAGNOSTICS ON ${CONTROL_DROPLET_HOST} ==="
-            ssh "${ssh_opts[@]}" "root@${CONTROL_DROPLET_HOST}" "
+            ssh "${ssh_opts[@]}" "root@${CONTROL_DROPLET_HOST}" 'bash -s' << 'EOF'
               echo '--- CONTAINER STATUS ---'
               docker ps -a --format 'table {{.Names}}\t{{.Status}}\t{{.Image}}\t{{.Ports}}'
               echo ''
@@ -66,18 +66,48 @@ jobs:
               docker logs --tail 60 aerodeck-worker 2>&1 || true
               echo ''
               echo '--- DB TABLES (PROJECTS, ENVIRONMENTS, DEPLOYMENTS) ---'
-              echo 'aW1wb3J0IGFzeW5jaW8KZnJvbSBhcHAuY29yZS5jb25maWcgaW1wb3J0IGdldF9zZXR0aW5ncwpmcm9tIGFwcC5jb3JlLmRiIGltcG9ydCBjcmVhdGVfZW5naW5lCmZyb20gc3FsYWxjaGVteSBpbXBvcnQgdGV4dAoKYXN5bmMgZGVmIG1haW4oKToKICAgIHNldHRpbmdzID0gZ2V0X3NldHRpbmdzKCkKICAgIGlmIG5vdCBzZXR0aW5ncy5kYXRhYmFzZV91cmw6CiAgICAgICAgcHJpbnQoIm5vIGRhdGFiYXNlX3VybCIpCiAgICAgICAgcmV0dXJuCiAgICBlbmdpbmUgPSBjcmVhdGVfZW5naW5lKHNldHRpbmdzLmRhdGFiYXNlX3VybCkKICAgIGFzeW5jIHdpdGggZW5naW5lLmNvbm5lY3QoKSBhcyBjb25uOgogICAgICAgIHByaW50KCItLS0gUFJPSkVDVFMgLS0tIikKICAgICAgICBwX3JlcyA9IGF3YWl0IGNvbm4uZXhlY3V0ZSh0ZXh0KCJTRUxFQ1QgaWQsIHNsdWcsIG5hbWUgRlJPTSBwcm9qZWN0cyBPUkRFUiBCWSBjcmVhdGVkX2F0IERFU0MgTElNSVQgNSIpKQogICAgICAgIGZvciByb3cgaW4gcF9yZXMuZmV0Y2hhbGwoKToKICAgICAgICAgICAgcHJpbnQoZGljdChyb3cuX21hcHBpbmcpKQogICAgICAgIHByaW50KCItLS0gRU5WSVJPTk1FTlRTIC0tLSIpCiAgICAgICAgZV9yZXMgPSBhd2FpdCBjb25uLmV4ZWN1dGUodGV4dCgiU0VMRUNUIGlkLCBwcm9qZWN0X2lkLCBzbHVnLCBuYW1lLCBraW5kIEZST00gZW52aXJvbm1lbnRzIE9SREVSIEJZIGNyZWF0ZWRfYXQgREVTQyBMSU1JVCA1IikpCiAgICAgICAgZm9yIHJvdyBpbiBlX3Jlcy5mZXRjaGFsbCgpOgogICAgICAgICAgICBwcmludChkaWN0KHJvdy5fbWFwcGluZykpCiAgICAgICAgcHJpbnQoIi0tLSBERVBMT1lNRU5UUyAtLS0iKQogICAgICAgIGRfcmVzID0gYXdhaXQgY29ubi5leGVjdXRlKHRleHQoIlNFTEVDVCBpZCwgc3RhdHVzLCByZXBvX3VybCwgcHJvamVjdF9pZCwgZW52aXJvbm1lbnRfaWQsIHByb3Zpc2lvbl9qb2JfaWQsIGNyZWF0ZWRfYXQgRlJPTSBkZXBsb3ltZW50cyBPUkRFUiBCWSBjcmVhdGVkX2F0IERFU0MgTElNSVQgNSIpKQogICAgICAgIHJvd3MgPSBkX3Jlcy5mZXRjaGFsbCgpCiAgICAgICAgaWYgbm90IHJvd3M6CiAgICAgICAgICAgIHByaW50KCJObyBkZXBsb3ltZW50cyBmb3VuZC4iKQogICAgICAgIGZvciByb3cgaW4gcm93czoKICAgICAgICAgICAgcHJpbnQoZGljdChyb3cuX21hcHBpbmcpKQoKYXN5bmNpby5ydW4obWFpbigpKQ== | base64 -d | docker exec -i aerodeck-api python3 2>&1 || true
+              docker exec -i aerodeck-api python3 << 'PYEOF' || true
+import asyncio
+from app.core.config import get_settings
+from app.core.db import create_engine
+from sqlalchemy import text
+
+async def main():
+    settings = get_settings()
+    if not settings.database_url:
+        print("no database_url")
+        return
+    engine = create_engine(settings.database_url)
+    async with engine.connect() as conn:
+        print("--- PROJECTS ---")
+        p_res = await conn.execute(text("SELECT id, slug, name FROM projects ORDER BY created_at DESC LIMIT 5"))
+        for row in p_res.fetchall():
+            print(dict(row._mapping))
+        print("--- ENVIRONMENTS ---")
+        e_res = await conn.execute(text("SELECT id, project_id, slug, name, kind FROM environments ORDER BY created_at DESC LIMIT 5"))
+        for row in e_res.fetchall():
+            print(dict(row._mapping))
+        print("--- DEPLOYMENTS ---")
+        d_res = await conn.execute(text("SELECT id, status, repo_url, project_id, environment_id, provision_job_id, created_at FROM deployments ORDER BY created_at DESC LIMIT 5"))
+        rows = d_res.fetchall()
+        if not rows:
+            print("No deployments found.")
+        for row in rows:
+            print(dict(row._mapping))
+
+asyncio.run(main())
+PYEOF
               echo ''
               echo '--- REDIS KEYS ---'
               docker exec aerodeck-redis redis-cli keys '*' 2>&1 || true
-            "
+EOF
           elif [ "${ACTION}" = "restart-all" ]; then
             echo "=== RESTARTING ALL CONTROL PLANE SERVICES ON ${CONTROL_DROPLET_HOST} ==="
-            ssh "${ssh_opts[@]}" "root@${CONTROL_DROPLET_HOST}" "
+            ssh "${ssh_opts[@]}" "root@${CONTROL_DROPLET_HOST}" 'bash -s' << 'EOF'
               echo 'logging into DOCR...'
-              token=\"\$(set -a; [ -f /etc/aerodeck/control-plane.env ] && source /etc/aerodeck/control-plane.env; printf '%s' \"\${AERODECK_DIGITALOCEAN_TOKEN:-}\")\"
-              if [ -n \"\${token}\" ]; then
-                printf '%s' \"\${token}\" | docker login registry.digitalocean.com --username \"\${token}\" --password-stdin >/dev/null 2>&1 || true
+              token="$(set -a; [ -f /etc/aerodeck/control-plane.env ] && source /etc/aerodeck/control-plane.env; printf '%s' "${AERODECK_DIGITALOCEAN_TOKEN:-}")"
+              if [ -n "${token}" ]; then
+                printf '%s' "${token}" | docker login registry.digitalocean.com --username "${token}" --password-stdin >/dev/null 2>&1 || true
               fi
               echo 'pulling latest control-plane image...'
               docker pull registry.digitalocean.com/aerodeck/control-plane:main
@@ -93,14 +123,14 @@ jobs:
               fi
               echo '--- UPDATED CONTAINER STATUS ---'
               docker ps -a --format 'table {{.Names}}\t{{.Status}}\t{{.Image}}\t{{.Ports}}'
-            "
+EOF
           elif [ "${ACTION}" = "restart-worker" ]; then
             echo "=== RESTARTING AERODECK-WORKER ON ${CONTROL_DROPLET_HOST} ==="
-            ssh "${ssh_opts[@]}" "root@${CONTROL_DROPLET_HOST}" "
+            ssh "${ssh_opts[@]}" "root@${CONTROL_DROPLET_HOST}" 'bash -s' << 'EOF'
               echo 'logging into DOCR...'
-              token=\"\$(set -a; [ -f /etc/aerodeck/control-plane.env ] && source /etc/aerodeck/control-plane.env; printf '%s' \"\${AERODECK_DIGITALOCEAN_TOKEN:-}\")\"
-              if [ -n \"\${token}\" ]; then
-                printf '%s' \"\${token}\" | docker login registry.digitalocean.com --username \"\${token}\" --password-stdin >/dev/null 2>&1 || true
+              token="$(set -a; [ -f /etc/aerodeck/control-plane.env ] && source /etc/aerodeck/control-plane.env; printf '%s' "${AERODECK_DIGITALOCEAN_TOKEN:-}")"
+              if [ -n "${token}" ]; then
+                printf '%s' "${token}" | docker login registry.digitalocean.com --username "${token}" --password-stdin >/dev/null 2>&1 || true
               fi
               echo 'pulling latest control-plane image...'
               docker pull registry.digitalocean.com/aerodeck/control-plane:main
@@ -110,5 +140,5 @@ jobs:
                 docker restart aerodeck-worker
               fi
               docker ps -a --filter name=aerodeck-worker
-            "
+EOF
           fi

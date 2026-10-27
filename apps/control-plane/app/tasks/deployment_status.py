@@ -10,6 +10,8 @@ import asyncio
 import uuid
 from collections.abc import Awaitable, Callable
 
+from sqlalchemy.pool import NullPool
+
 from app.core.config import get_settings
 from app.core.db import SessionLocal, bind_engine, create_engine, unbind_engine
 from app.core.logging import get_logger
@@ -91,7 +93,7 @@ def mark_deployment_failed_sync(deployment_id: uuid.UUID) -> None:
         owns_engine = False
         engine = None
         if SessionLocal.kw.get("bind") is None:
-            engine = create_engine(settings.database_url)
+            engine = create_engine(settings.database_url, poolclass=NullPool)
             bind_engine(engine)
             owns_engine = True
         try:

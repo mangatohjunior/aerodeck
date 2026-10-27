@@ -1,8 +1,11 @@
+import { connection } from "next/server";
+
 import { NewDeploymentForm } from "@/components/new-deployment-form";
 import { PageHeader } from "@/components/page-header";
 import { readControlPlaneConfig } from "@/lib/control-plane";
 
-export default function DeployPage() {
+export default async function DeployPage() {
+  await connection();
   const controlPlane = readControlPlaneConfig() !== null;
   return (
     <div className="mx-auto w-full max-w-xl">

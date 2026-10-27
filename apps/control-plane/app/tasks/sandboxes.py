@@ -10,6 +10,7 @@ import asyncio
 
 from celery import shared_task
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.pool import NullPool
 
 from app.core.config import Settings, get_settings
 from app.core.db import SessionLocal, bind_engine, create_engine, unbind_engine
@@ -58,7 +59,7 @@ async def reap_expired_once(
         if not cfg.database_url:
             logger.info("sandbox reap skipped: AERODECK_DATABASE_URL is unset")
             return {"reaped": 0}
-        engine = create_engine(cfg.database_url)
+        engine = create_engine(cfg.database_url, poolclass=NullPool)
         bind_engine(engine)
         owns_engine = True
     try:

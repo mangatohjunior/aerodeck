@@ -17,7 +17,7 @@ from app.core.errors import DatabaseUnavailableError
 SessionLocal = async_sessionmaker(expire_on_commit=False, autoflush=False)
 
 
-def create_engine(database_url: str) -> AsyncEngine:
+def create_engine(database_url: str, *, poolclass: type | None = None) -> AsyncEngine:
     if database_url.startswith("sqlite"):
         # Test-only. One shared connection so an in-memory database survives
         # across sessions; SQLite is never used outside the test suite.
@@ -36,7 +36,10 @@ def create_engine(database_url: str) -> AsyncEngine:
             cursor.close()
 
         return engine
-    return create_async_engine(database_url, pool_pre_ping=True)
+    kwargs: dict[str, object] = {"pool_pre_ping": True}
+    if poolclass is not None:
+        kwargs["poolclass"] = poolclass
+    return create_async_engine(database_url, **kwargs)
 
 
 def bind_engine(engine: AsyncEngine) -> None:
