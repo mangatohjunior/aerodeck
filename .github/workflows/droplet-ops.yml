@@ -31,6 +31,53 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Authorize runner IP in DigitalOcean firewall
+        shell: bash
+        env:
+          DIGITALOCEAN_TOKEN: ${{ secrets.DIGITALOCEAN_TOKEN }}
+        run: |
+          if [ -z "${DIGITALOCEAN_TOKEN:-}" ]; then
+            exit 0
+          fi
+          python - << 'PY'
+          import json, os, time, urllib.request
+          token = os.environ["DIGITALOCEAN_TOKEN"]
+          ip = urllib.request.urlopen("https://api.ipify.org", timeout=10).read().decode().strip()
+          cidr = f"{ip}/32"
+          req = urllib.request.Request(
+              "https://api.digitalocean.com/v2/firewalls",
+              headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+          )
+          data = json.loads(urllib.request.urlopen(req, timeout=15).read().decode())
+          for fw in data.get("firewalls", []):
+              if "control-fw" not in fw.get("name", ""):
+                  continue
+              addrs = [
+                  a
+                  for r in fw.get("inbound_rules", [])
+                  if str(r.get("ports")) == "22"
+                  for a in r.get("sources", {}).get("addresses", [])
+              ]
+              if cidr not in addrs:
+                  rule_req = urllib.request.Request(
+                      f"https://api.digitalocean.com/v2/firewalls/{fw['id']}/rules",
+                      data=json.dumps({
+                          "inbound_rules": [{
+                              "protocol": "tcp",
+                              "ports": "22",
+                              "sources": {"addresses": [cidr]},
+                          }]
+                      }).encode(),
+                      headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+                      method="POST",
+                  )
+                  urllib.request.urlopen(rule_req, timeout=15)
+                  print(f"Added {cidr} to firewall {fw['name']}; waiting 5s for propagation...")
+                  time.sleep(5)
+              else:
+                  print(f"{cidr} already allowed in {fw['name']}")
+          PY
+
       - name: Execute action on Droplet
         shell: bash
         env:
@@ -53,19 +100,19 @@ jobs:
               echo "--- CONTAINER STATUS ---"
               docker ps -a --format "table {{.Names}}\t{{.Status}}\t{{.Image}}\t{{.Ports}}"
               echo ""
-              echo "--- AERODECK-API LOGS (LAST 40 LINES) ---"
-              docker logs --tail 40 aerodeck-api 2>&1 || true
+              echo "--- AERODECK-API LOGS (LAST 80 LINES) ---"
+              docker logs --tail 80 aerodeck-api 2>&1 || true
               echo ""
-              echo "--- AERODECK-DASHBOARD LOGS (LAST 60 LINES) ---"
-              docker logs --tail 60 aerodeck-dashboard 2>&1 || true
+              echo "--- AERODECK-DASHBOARD LOGS (LAST 80 LINES) ---"
+              docker logs --tail 80 aerodeck-dashboard 2>&1 || true
               echo ""
-              echo "--- AERODECK-WORKER LOGS (LAST 60 LINES) ---"
-              docker logs --tail 60 aerodeck-worker 2>&1 || true
+              echo "--- AERODECK-WORKER LOGS (LAST 80 LINES) ---"
+              docker logs --tail 80 aerodeck-worker 2>&1 || true
               echo ""
               echo "--- DB TABLES (PROJECTS, ENVIRONMENTS, DEPLOYMENTS) ---"
-              printf "%s" "''' + b64 + '''" | base64 -d | docker exec -i aerodeck-api python3 || true
+              printf "%s" "aW1wb3J0IGFzeW5jaW8sIG9zLCBhc3luY3BnCmFzeW5jIGRlZiBtYWluKCk6CiAgICB1ID0gb3MuZW52aXJvblsnQUVST0RFQ0tfREFUQUJBU0VfVVJMJ10ucmVwbGFjZSgncG9zdGdyZXNxbCthc3luY3BnOi8vJywgJ3Bvc3RncmVzcWw6Ly8nKQogICAgYyA9IGF3YWl0IGFzeW5jcGcuY29ubmVjdCh1KQogICAgZm9yIHQgaW4gWydwcm9qZWN0cycsICdlbnZpcm9ubWVudHMnLCAnZGVwbG95bWVudHMnXToKICAgICAgICByb3dzID0gYXdhaXQgYy5mZXRjaChmJ1NFTEVDVCAqIEZST00ge3R9IE9SREVSIEJZIGNyZWF0ZWRfYXQgREVTQyBMSU1JVCAxMCcgaWYgdCAhPSAnZGVwbG95bWVudHMnIGVsc2UgJ1NFTEVDVCBpZCwgcmVwb191cmwsIHN0YXR1cywgcHJvamVjdF9pZCwgZW52aXJvbm1lbnRfaWQsIHByb3Zpc2lvbl9qb2JfaWQsIHN0YXJ0ZWRfYXQgRlJPTSBkZXBsb3ltZW50cyBPUkRFUiBCWSBzdGFydGVkX2F0IERFU0MgTElNSVQgMTAnKQogICAgICAgIHByaW50KGYnPT09IHt0fSAoe2xlbihyb3dzKX0pID09PScpCiAgICAgICAgZm9yIHIgaW4gcm93czoKICAgICAgICAgICAgcHJpbnQoZGljdChyKSkKICAgIGF3YWl0IGMuY2xvc2UoKQphc3luY2lvLnJ1bihtYWluKCkpCg==" | base64 -d | docker exec -i aerodeck-api python3 || true
               echo ""
-              echo "--- REDIS KEYS ---"
+              echo "--- REDIS KEYS & LOG STREAMS ---"
               docker exec aerodeck-redis redis-cli keys "*" 2>&1 || true
             '
           elif [ "${ACTION}" = "restart-all" ]; then
