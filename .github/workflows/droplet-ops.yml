@@ -98,25 +98,39 @@ jobs:
             echo "=== RUNNING DIAGNOSTICS ON ${CONTROL_DROPLET_HOST} ==="
             ssh "${ssh_opts[@]}" "root@${CONTROL_DROPLET_HOST}" '
               echo "--- CONTAINER STATUS ---"
-              docker ps -a --format "table {{.Names}}\t{{.Status}}\t{{.Image}}\t{{.Ports}}"
+              docker ps -a --format "table {{.Names}}\t{{.Status}}\t{{.Image}}\t{{.CreatedAt}}"
               echo ""
-              echo "--- AERODECK-API LOGS (LAST 80 LINES) ---"
-              docker logs --tail 80 aerodeck-api 2>&1 || true
+              echo "--- SCRIPTS & CONFIG FILES ---"
+              ls -la /root /root/aerodeck /etc/aerodeck 2>&1 || true
               echo ""
-              echo "--- AERODECK-DASHBOARD LOGS (LAST 80 LINES) ---"
-              docker logs --tail 80 aerodeck-dashboard 2>&1 || true
+              echo "--- AERODECK-API FILTERED LOGS (LAST 80 LINES) ---"
+              docker logs aerodeck-api 2>&1 | grep -v -E "/api/v1/edge/traefik|/healthz" | tail -n 80 || true
               echo ""
-              echo "--- AERODECK-WORKER LOGS (LAST 80 LINES) ---"
-              docker logs --tail 80 aerodeck-worker 2>&1 || true
+              echo "--- AERODECK-DASHBOARD FILTERED LOGS (LAST 80 LINES) ---"
+              docker logs aerodeck-dashboard 2>&1 | grep -v -E "Received \"x\"|failed-to-find-server-action|chunks/ssr" | tail -n 80 || true
+              echo ""
+              echo "--- AERODECK-WORKER FILTERED LOGS (LAST 80 LINES) ---"
+              docker logs aerodeck-worker 2>&1 | grep -v -E "reap-expired-sandboxes|sandbox reap stopped|reap_expired\[" | tail -n 80 || true
               echo ""
               echo "--- DB TABLES (PROJECTS, ENVIRONMENTS, DEPLOYMENTS) ---"
-              printf "%s" "aW1wb3J0IGFzeW5jaW8sIG9zLCBhc3luY3BnCmFzeW5jIGRlZiBtYWluKCk6CiAgICB1ID0gb3MuZW52aXJvblsnQUVST0RFQ0tfREFUQUJBU0VfVVJMJ10ucmVwbGFjZSgncG9zdGdyZXNxbCthc3luY3BnOi8vJywgJ3Bvc3RncmVzcWw6Ly8nKQogICAgYyA9IGF3YWl0IGFzeW5jcGcuY29ubmVjdCh1KQogICAgZm9yIHQgaW4gWydwcm9qZWN0cycsICdlbnZpcm9ubWVudHMnLCAnZGVwbG95bWVudHMnXToKICAgICAgICByb3dzID0gYXdhaXQgYy5mZXRjaChmJ1NFTEVDVCAqIEZST00ge3R9IE9SREVSIEJZIGNyZWF0ZWRfYXQgREVTQyBMSU1JVCAxMCcgaWYgdCAhPSAnZGVwbG95bWVudHMnIGVsc2UgJ1NFTEVDVCBpZCwgcmVwb191cmwsIHN0YXR1cywgcHJvamVjdF9pZCwgZW52aXJvbm1lbnRfaWQsIHByb3Zpc2lvbl9qb2JfaWQsIHN0YXJ0ZWRfYXQgRlJPTSBkZXBsb3ltZW50cyBPUkRFUiBCWSBzdGFydGVkX2F0IERFU0MgTElNSVQgMTAnKQogICAgICAgIHByaW50KGYnPT09IHt0fSAoe2xlbihyb3dzKX0pID09PScpCiAgICAgICAgZm9yIHIgaW4gcm93czoKICAgICAgICAgICAgcHJpbnQoZGljdChyKSkKICAgIGF3YWl0IGMuY2xvc2UoKQphc3luY2lvLnJ1bihtYWluKCkpCg==" | base64 -d | docker exec -i aerodeck-api python3 || true
+              printf "%s" "aW1wb3J0IGFzeW5jaW8KZnJvbSBzcWxhbGNoZW15IGltcG9ydCB0ZXh0CmZyb20gc3FsYWxjaGVteS5wb29sIGltcG9ydCBOdWxsUG9vbApmcm9tIGFwcC5jb3JlLmNvbmZpZyBpbXBvcnQgZ2V0X3NldHRpbmdzCmZyb20gYXBwLmNvcmUuZGIgaW1wb3J0IGNyZWF0ZV9lbmdpbmUKCmFzeW5jIGRlZiBtYWluKCk6CiAgICBzID0gZ2V0X3NldHRpbmdzKCkKICAgIHByaW50KCcgc2V0dGluZ3M6IGlhY193b3JrZXI9Jywgcy5pYWNfd29ya2VyLCAnaWFjX2FwcGx5PScsIHMuaWFjX2FwcGx5LCAncmVkaXNfdXJsPScsIGJvb2wocy5yZWRpc191cmwpKQogICAgZSA9IGNyZWF0ZV9lbmdpbmUocy5kYXRhYmFzZV91cmwsIHBvb2xjbGFzcz1OdWxsUG9vbCkKICAgIGFzeW5jIHdpdGggZS5jb25uZWN0KCkgYXMgYzoKICAgICAgICBmb3IgcSwgbGFiZWwgaW4gWwogICAgICAgICAgICAoJ1NFTEVDVCBpZCwgc2x1ZywgbmFtZSwgY3JlYXRlZF9hdCBGUk9NIHByb2plY3RzIE9SREVSIEJZIGNyZWF0ZWRfYXQgREVTQyBMSU1JVCAxMCcsICdwcm9qZWN0cycpLAogICAgICAgICAgICAoJ1NFTEVDVCBpZCwgcHJvamVjdF9pZCwgc2x1ZywgbmFtZSwga2luZCwgcmVnaW9uIEZST00gZW52aXJvbm1lbnRzIE9SREVSIEJZIGNyZWF0ZWRfYXQgREVTQyBMSU1JVCAxMCcsICdlbnZpcm9ubWVudHMnKSwKICAgICAgICAgICAgKCdTRUxFQ1QgaWQsIHJlcG9fdXJsLCBzdGF0dXMsIHByb2plY3RfaWQsIGVudmlyb25tZW50X2lkLCBwcm92aXNpb25fam9iX2lkLCBzdGFydGVkX2F0IEZST00gZGVwbG95bWVudHMgT1JERVIgQlkgc3RhcnRlZF9hdCBERVNDIExJTUlUIDE1JywgJ2RlcGxveW1lbnRzJyksCiAgICAgICAgXToKICAgICAgICAgICAgcmVzID0gYXdhaXQgYy5leGVjdXRlKHRleHQocSkpCiAgICAgICAgICAgIHJvd3MgPSBbZGljdChyLl9tYXBwaW5nKSBmb3IgciBpbiByZXNdCiAgICAgICAgICAgIHByaW50KGYnPT09IHtsYWJlbH0gKHtsZW4ocm93cyl9KSA9PT0nKQogICAgICAgICAgICBmb3IgciBpbiByb3dzOgogICAgICAgICAgICAgICAgcHJpbnQocikKICAgIGF3YWl0IGUuZGlzcG9zZSgpCgphc3luY2lvLnJ1bihtYWluKCkpCg==" | base64 -d | docker exec -i aerodeck-api python3 || true
               echo ""
-              echo "--- REDIS KEYS & LOG STREAMS ---"
-              docker exec aerodeck-redis redis-cli keys "*" 2>&1 || true
+              echo "--- REDIS DEPLOYMENT LOG KEYS ---"
+              for k in $(docker exec aerodeck-redis redis-cli keys "aerodeck:deployment-logs:*"); do
+                echo "KEY: $k"
+                docker exec aerodeck-redis redis-cli lrange "$k" 0 -1
+              done
             '
           elif [ "${ACTION}" = "restart-all" ]; then
             echo "=== RESTARTING ALL CONTROL PLANE SERVICES ON ${CONTROL_DROPLET_HOST} ==="
+            ssh "${ssh_opts[@]}" "root@${CONTROL_DROPLET_HOST}" "mkdir -p /root/aerodeck"
+            scp "${ssh_opts[@]}" \
+              apps/control-plane/scripts/start-on-droplet.sh \
+              apps/control-plane/scripts/rewrite_do_postgres_url.py \
+              apps/control-plane/scripts/configure-iac-worker.sh \
+              apps/control-plane/scripts/start-dashboard-on-droplet.sh \
+              apps/control-plane/scripts/publish-console-route.py \
+              "root@${CONTROL_DROPLET_HOST}:/root/aerodeck/"
             ssh "${ssh_opts[@]}" "root@${CONTROL_DROPLET_HOST}" '
               echo "logging into DOCR..."
               token="$(set -a; [ -f /etc/aerodeck/control-plane.env ] && source /etc/aerodeck/control-plane.env; printf "%s" "${AERODECK_DIGITALOCEAN_TOKEN:-}")"
@@ -126,20 +140,18 @@ jobs:
               echo "pulling latest control-plane image..."
               docker pull registry.digitalocean.com/aerodeck/control-plane:main
               echo "restarting control-plane API + worker..."
-              if [ -f /root/start-on-droplet.sh ]; then
-                bash /root/start-on-droplet.sh
-              fi
+              bash /root/aerodeck/start-on-droplet.sh
               echo "restarting dashboard..."
-              if [ -f /root/aerodeck/start-dashboard-on-droplet.sh ]; then
-                bash /root/aerodeck/start-dashboard-on-droplet.sh
-              elif [ -f /root/start-dashboard-on-droplet.sh ]; then
-                bash /root/start-dashboard-on-droplet.sh
-              fi
+              bash /root/aerodeck/start-dashboard-on-droplet.sh
               echo "--- UPDATED CONTAINER STATUS ---"
-              docker ps -a --format "table {{.Names}}\t{{.Status}}\t{{.Image}}\t{{.Ports}}"
+              docker ps -a --format "table {{.Names}}\t{{.Status}}\t{{.Image}}\t{{.CreatedAt}}"
             '
           elif [ "${ACTION}" = "restart-worker" ]; then
             echo "=== RESTARTING AERODECK-WORKER ON ${CONTROL_DROPLET_HOST} ==="
+            ssh "${ssh_opts[@]}" "root@${CONTROL_DROPLET_HOST}" "mkdir -p /root/aerodeck"
+            scp "${ssh_opts[@]}" \
+              apps/control-plane/scripts/configure-iac-worker.sh \
+              "root@${CONTROL_DROPLET_HOST}:/root/aerodeck/"
             ssh "${ssh_opts[@]}" "root@${CONTROL_DROPLET_HOST}" '
               echo "logging into DOCR..."
               token="$(set -a; [ -f /etc/aerodeck/control-plane.env ] && source /etc/aerodeck/control-plane.env; printf "%s" "${AERODECK_DIGITALOCEAN_TOKEN:-}")"
@@ -148,11 +160,7 @@ jobs:
               fi
               echo "pulling latest control-plane image..."
               docker pull registry.digitalocean.com/aerodeck/control-plane:main
-              if [ -f /root/aerodeck/configure-iac-worker.sh ]; then
-                bash /root/aerodeck/configure-iac-worker.sh
-              else
-                docker restart aerodeck-worker
-              fi
+              bash /root/aerodeck/configure-iac-worker.sh
               docker ps -a --filter name=aerodeck-worker
             '
           fi
